@@ -1,0 +1,65 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d9bf0"/>
+      <stop offset="100%" stop-color="#0d8bf0"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="32" fill="url(#g)"/>
+  <path d="M92 36H36c-7 0-12 5-12 12v44l16-16h52c7 0 12-5 12-12V48c0-7-5-12-12-12z" fill="white"/>
+  <circle cx="46" cy="64" r="6" fill="#1d9bf0"/>
+  <circle cx="64" cy="64" r="6" fill="#1d9bf0"/>
+  <circle cx="82" cy="64" r="6" fill="#1d9bf0"/>
+</svg>
+
+
+Ga naar: https://svg-to-png.com
+Plak dit SVG (mooi minimalistisch speech-bubble + Nostr λ):
+
+
+
+NostrComments adds a fully decentralized, censorship-resistant comment section to any website using the Nostr protocol.
+
+Features
+• Works on every site (nu.nl, YouTube, Reddit, Twitter…)
+• Connect with Alby, nos2x, GetAlby, etc.
+• Up/downvotes, search, sorting, pagination
+• No servers, no moderation, no deletion — ever
+• 100% open source (MIT)
+
+Ga naar: https://addons.mozilla.org/en-US/developers/addon/submit/
+Kies “Upload New Add-on”
+Sleep je NostrComments.xpi in het vak
+Vul in:Name: NostrComments
+Slug: nostrcomments (wordt de URL)
+Summary: Comment freely on every website — without censorship
+Description (kopieer dit):
+
+NostrComments adds a fully decentralized, censorship-resistant comment section to any website using the Nostr protocol.
+
+Features
+• Works on every site (nu.nl, YouTube, Reddit, Twitter…)
+• Connect with Alby, nos2x, GetAlby, etc.
+• Up/downvotes, search, sorting, pagination
+• No servers, no moderation, no deletion — ever
+• 100% open source (MIT)
+
+Categories: Social & Communication + Privacy & Security
+License: MIT License
+Source code: https://github.com/JOUWUSERNAME/NostrComments
+
+Privacy & policy (super simpel)“This add-on does not collect any data”
+Link naar je GitHub repo als source
+
+SubmitKlik “Submit Version”
+Review duurt normaal 3–10 dagen (meestal sneller bij kleine, open-source add-ons)
+
+
+# Verwijder oude remote (als die er nog is)
+git remote remove origin
+
+# Voeg nieuwe remote toe
+git remote add origin https://github.com/JOUWNIEUWUSERNAME/NostrComments.git
+
+# Push (force als je schoon wil)
+git push -u origin main --force
