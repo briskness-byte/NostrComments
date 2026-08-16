@@ -69,6 +69,22 @@ Please do not report these as new; they are documented decisions, with the reaso
   exactly the way an attacker would. The rule adopted instead is that nothing sensitive is left in
   the DOM — the private key is held in a variable, and the identity strings and Settings lists are
   written only while the panel is open and cleared when it closes.
+- **A page can read what you type into the comment box, if it sets out to.** Two ways, both measured
+  rather than assumed: a `keydown` listener registered in the capture phase sees every key before
+  anything in the shadow tree does, and the value of the box can be read straight out of the open
+  shadow root. Since 23.0.7 keystrokes are not passed on to ordinary listeners, which stops a site's
+  shortcuts firing on what you write — that is a fix for interference, not a boundary against
+  eavesdropping, and it was described too strongly when it shipped.
+
+  This is not closable from inside the page. The content script runs at `document_end`, so a script
+  in `<head>` has already had its turn; and even first place would not help against a page that
+  reads the box directly. **The only real remedy is not drawing the compose box in the page at all**
+  — an extension popup, a sidebar, or a frame on the extension's own origin, where the page has no
+  reach. That is the same direction as the planned move of the relay connection out of the page.
+
+  Until then: what you type in a comment box on a hostile site should be treated as visible to that
+  site. It is going to be published anyway; the exposure is that they see it before you press Post,
+  and that they see a draft you decide not to send.
 - **The relays you configure learn which pages you read.** That is inherent to a comment system
   keyed to URLs, not an oversight, and it is stated plainly in
   [PRIVACY.md](PRIVACY.md) before anybody installs it.
