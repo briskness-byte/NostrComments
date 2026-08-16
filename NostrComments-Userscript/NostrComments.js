@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NostrComments
 // @namespace    https://github.com/briskness-byte/NostrComments
-// @version      23.0.6
+// @version      23.0.7
 // @description  Comment freely on every website — without censorship
 // @author       Built on Nostr
 // @license      MIT
@@ -1398,6 +1398,38 @@
             const first = f[0], last = f[f.length - 1];
             if (e.shiftKey && s.activeElement === first) { e.preventDefault(); last.focus(); }
             else if (!e.shiftKey && s.activeElement === last) { e.preventDefault(); first.focus(); }
+        });
+
+        // The panel types into somebody else's document. Sites with keyboard shortcuts read keys off
+        // document and cancel them — space is the usual one — and the character then never reaches
+        // the box. Reported from real use on a Nostr client where the space bar did nothing.
+        //
+        // Two halves, because either alone is not enough. Stopping propagation keeps the page from
+        // acting on what is typed here. But a listener registered in the capture phase runs before
+        // anything in this shadow tree and cannot be stopped from inside it, so when the default has
+        // already been cancelled by the time the event arrives, the character is inserted by hand.
+        const keyEditable = el => !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !el.disabled && !el.readOnly;
+        const keyPrintable = e => !!e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+        const keyInsert = (el, ch) => {
+            const a = typeof el.selectionStart === 'number' ? el.selectionStart : el.value.length;
+            const b = typeof el.selectionEnd === 'number' ? el.selectionEnd : a;
+            el.value = el.value.slice(0, a) + ch + el.value.slice(b);
+            try { el.selectionStart = el.selectionEnd = a + ch.length; } catch (_) {}
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+        ['keydown', 'keypress', 'keyup'].forEach(type => {
+            s.addEventListener(type, e => {
+                if (modal.style.display === 'none') return;
+                if (type === 'keydown') {
+                    // Escape closed the panel through a listener on document, which stopping
+                    // propagation would cut off whenever focus sat inside the panel.
+                    if (e.key === 'Escape') closeModal();
+                    else if (e.defaultPrevented && keyPrintable(e) && keyEditable(s.activeElement)) {
+                        keyInsert(s.activeElement, e.key);
+                    }
+                }
+                e.stopPropagation();
+            });
         });
 
         // Relay config

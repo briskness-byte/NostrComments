@@ -277,10 +277,12 @@ export async function startRelay({ port, onEvent, requireAuth = false, replyDela
     };
 }
 
-export async function startSite({ port, title = 'QA', heading = 'QA page' }) {
+export async function startSite({ port, title = 'QA', heading = 'QA page', script = '' }) {
+    // `script` runs in the page itself, for suites that need a host document which does something
+    // to the panel rather than merely sitting under it — a keyboard shortcut handler, say.
     const server = http.createServer((_, res) => {
         res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(`<!doctype html><html><head><title>${title}</title></head><body style="font:16px sans-serif;padding:40px"><h1>${heading}</h1><p>Article body text.</p></body></html>`);
+        res.end(`<!doctype html><html><head><title>${title}</title></head><body style="font:16px sans-serif;padding:40px"><h1>${heading}</h1><p>Article body text.</p>${script ? `<script>${script}</script>` : ''}</body></html>`);
     });
     await new Promise(r => server.listen(port, '127.0.0.1', r));
     return { url: `http://127.0.0.1:${port}/`, close: () => server.close() };

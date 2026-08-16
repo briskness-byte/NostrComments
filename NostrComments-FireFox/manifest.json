@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NostrComments",
-  "version": "23.0.6",
+  "version": "23.0.7",
   "description": "Comment freely on every website — without censorship",
   "icons": {
     "48": "icon48.png",

@@ -301,6 +301,28 @@ guards that already held and have to keep holding.
 node tests/browser-signerdead.mjs
 ```
 
+`browser-keyboard.mjs` covers typing into the panel on a page that binds keys itself. The panel
+renders inside somebody else's document, so its keystrokes travel through whatever that page
+listens for. Reported from real use on a Nostr client where the space bar did nothing inside the
+comment box: the site reads space off `document` and cancels it, and the character goes with it.
+Most clients bind space, and so do GitHub, YouTube and Reddit.
+
+Two different failures hide behind one symptom, so the suite's page installs two listeners. A
+capture-phase listener that cancels space runs before anything in the shadow tree and cannot be
+stopped from inside it, so the character has to be reinserted afterwards; a bubble-phase listener
+can be stopped, and is, because a page has no business acting on what is typed into a comment box
+on top of it. The third assertion keeps the fix honest — keys pressed in the page itself must still
+reach the page, since blocking everything would pass the first two and break the site.
+
+Keys go through the WebDriver actions endpoint rather than a constructed `KeyboardEvent`: a
+synthetic event has no default action, so it would insert nothing whether the fix is present or
+not, and the suite would pass against both. Two of its six checks fail against the code before the
+fix.
+
+```sh
+node tests/browser-keyboard.mjs
+```
+
 `browser-relaystate.mjs` covers what the relay list says each relay is doing. Sockets fail quietly
 in this codebase — `onerror` closes, `onclose` retries and gives up after six attempts — so a relay
 that never answered looked exactly like one with nothing to say, and the only symptom was a thinner
