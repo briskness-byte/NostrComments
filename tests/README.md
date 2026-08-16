@@ -342,6 +342,26 @@ the code before the fix; the other nine hold.
 node tests/browser-pagekey.mjs
 ```
 
+`browser-xss.mjs` is written from the attacker's seat. Everything the panel draws comes from
+strangers — comment text, the name on a profile, the address of an avatar — and none of it is
+escaped anywhere, because none of it is ever parsed as markup: the DOM is built with `createElement`
+and `textContent`, and the one template that is parsed is a static literal with no interpolation.
+
+That holds today, and nothing made it hold. A single `innerHTML` added in passing would undo all of
+it silently, which is the same shape as two defects this codebase has already shipped — signature
+verification sat dead for eleven versions, and the contrast suite passed for eleven more while
+measuring the wrong four elements.
+
+The suite publishes eight payloads and a hostile profile, then checks three separate things: that
+nothing executed, that the markup was never built at all (a `<script>` inserted through `innerHTML`
+never runs, so counting execution alone would miss an inert parse), and that each payload is on
+screen as text. Replacing one `textContent` with `innerHTML` fails four of its checks; loosening the
+`https?://` requirement in the link pattern fails three others.
+
+```sh
+node tests/browser-xss.mjs
+```
+
 `browser-relaystate.mjs` covers what the relay list says each relay is doing. Sockets fail quietly
 in this codebase — `onerror` closes, `onclose` retries and gives up after six attempts — so a relay
 that never answered looked exactly like one with nothing to say, and the only symptom was a thinner

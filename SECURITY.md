@@ -93,4 +93,6 @@ There is a published audit with findings, fixes, and the things deliberately not
 The test suite is dependency-free and runs the shipped code: `node tests/run.mjs`. Several suites
 are written from the attacker's seat — `tests/browser-keyexposure.mjs` sweeps every input value,
 attribute and text node in the shadow root for the private key and the password, and
-`tests/browser-signer.mjs` installs a signer that claims one key and signs with another.
+`tests/browser-signer.mjs` installs a signer that claims one key and signs with another, and
+`tests/browser-xss.mjs` publishes hostile comments and a hostile profile and checks that none of
+it is ever parsed as markup.
