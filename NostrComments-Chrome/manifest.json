@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "NostrComments",
+  "version": "23.0.6",
+  "description": "Comment freely on every website — without censorship",
+  "license": "MIT",
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_title": "NostrComments",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "injected.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ],
+      "use_dynamic_url": true
+    }
+  ]
+}

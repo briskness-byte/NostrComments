@@ -1,0 +1,22 @@
+# Build outputs — regenerable via build.sh; publish downloads via GitHub Releases.
+dist/
+*.zip
+*.xpi
+
+# Screenshot harness: the source is tracked, everything a run generates is not.
+# `ext/` is a copy of the extension rebuilt on every run, `profile/` is a browser profile,
+# and `out/` and `events.json` are reproduced by `node all.mjs`.
+screenshot-kit/ext/
+screenshot-kit/profile/
+screenshot-kit/out/
+screenshot-kit/events.json
+
+# Signing keys never belong in here. This is a guard, not a wall — the key itself should live
+# outside the repository, because a rule in a file cannot stop `git add -f`, a backup script, or
+# the next tool that walks this directory.
+*.pem
+*.crx
+# The public half too. It is not a secret — Chrome derives it from any packed .crx — but
+# nothing here reads it, and a .pub sitting in the root of a security-sensitive project
+# invites the wrong question from anyone skimming.
+*.pub

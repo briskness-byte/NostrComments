@@ -1,0 +1,16 @@
+# The "Sponsor this project" button on the repository page.
+#
+# custom: takes plain URLs, so this needs no GitHub Sponsors account — that route requires Stripe
+# Connect with identity verification, which is not compatible with publishing under a pseudonym.
+# Same reason the AMO "Contributions URL" field is left empty; see LISTINGS.md.
+#
+# This is also the answer to "can the licence require a link to my donation addresses". It can, but
+# it would stop being MIT, and a custom licence with an advertising clause puts the NLnet and
+# OpenSats applications at risk for the sake of binding forkers who do not exist. A button on every
+# page of the repository reaches far more people than a licence header nobody reads.
+# One entry for now. The README section it points at lists the Lightning address, the on-chain
+# address and Geyser, so it stays correct without this file being touched every time one changes.
+# A direct Geyser project URL can be added as a second entry when there is one; up to four are
+# allowed. Do not leave a placeholder here — an unresolvable URL is a broken Sponsor button.
+custom:
+  - "https://github.com/briskness-byte/NostrComments#support"
