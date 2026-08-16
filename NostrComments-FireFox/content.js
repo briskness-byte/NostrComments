@@ -306,6 +306,7 @@
         #input-wrapper{position:relative;margin:12px 0}
         #input{width:100%;min-height:88px;padding:14px 14px 46px;border:2px solid #e2e8f0;border-radius:14px;font-size:15px;background:#fafbfc;resize:none;box-sizing:border-box}
         #send{position:absolute;bottom:10px;right:10px;padding:10px 24px;border-radius:10px}
+        #pagekey{display:none;font-size:12px;color:#5b5b60;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:8px;padding:6px 10px;margin:10px 0 0;cursor:help;overflow-wrap:anywhere}
         #list{max-height:40vh;overflow-y:auto;background:#f8f9fa;padding:12px;border-radius:14px;margin:10px 0}
         .c{background:white;padding:14px;margin:8px 0;border-radius:12px;border-left:5px solid #1d9bf0;box-shadow:0 2px 8px rgba(0,0,0,0.07);color:#222;word-break:break-word}
         .c.reply{margin-left:28px;border-left:4px solid #90caf9}
@@ -389,6 +390,7 @@
         .reply-btn.muted{opacity:.55}
         #m.dark-mode #p{background:#18181b;color:#e4e4e7}
         #m.dark-mode h2{color:#93c5fd}
+        #m.dark-mode #pagekey{color:#a1a1aa;background:#1c1c1f;border-color:#3f3f46}
         #m.dark-mode #list{background:#09090b}
         #m.dark-mode .c{background:#27272a;box-shadow:none;color:#e4e4e7;border-left-color:#3b82f6}
         #m.dark-mode .c.own{border-left-color:#4ade80}
@@ -613,6 +615,7 @@
         </select>
         </div>
         <div id="onboard"></div>
+        <div id="pagekey"></div>
         <div id="list"></div>
         <button id="loadMore">Load more</button>
         <div id="msg"></div>
@@ -1829,6 +1832,26 @@
             }
         }
         let pageUrl = normalizeUrl(location.href);
+
+        // A thread is filed under the normalised address, not under what is in the address bar, and
+        // the two disagree more often than it looks: an anchor is dropped, tracking parameters are
+        // removed, query parameters are sorted. Somebody who followed a link to #section-3 is
+        // reading one part of an article and commenting on all of it, and nothing said so.
+        //
+        // Only shown when they actually differ. On most pages they do not, and a line repeating the
+        // address bar is the kind of clutter that teaches people to stop reading the panel.
+        const shortKey = u => {
+            const bare = u.replace(/^https?:\/\//, '');
+            return bare.length <= 58 ? bare : bare.slice(0, 30) + '…' + bare.slice(-24);
+        };
+        function paintPageKey() {
+            const el = s.getElementById('pagekey');
+            if (!el) return;
+            if (pageUrl === location.href) { el.style.display = 'none'; el.textContent = ''; el.removeAttribute('title'); return; }
+            el.textContent = 'Thread for ' + shortKey(pageUrl);
+            el.title = pageUrl + '\n\nAnchors and tracking parameters are left out, so everyone reading this page lands in the same thread.';
+            el.style.display = 'block';
+        }
         // One filter per kind, each with its own budget, rather than one filter for all three.
         // A relay honours `limit` by returning the newest events that match, so a shared budget
         // is spent by whichever kind is most numerous — and reactions outnumber comments by a
@@ -3516,6 +3539,7 @@
         // (Re)load the comment thread for the current pageUrl. Re-runnable on SPA navigation:
         // a generation token discards stale relay/verification callbacks from the previous page.
         function loadPage() {
+            paintPageKey();
             const gen = ++pageGen;
             _wsPool.forEach(w => { try { w.close(); } catch(_) {} });
             _wsPool = [];
@@ -3686,6 +3710,10 @@
             // Debounce navigation so rapidly clicking through pages (YouTube/Reddit) doesn't spawn
             // a burst of loadPage()/relay connections; only the settled URL loads.
             const onNav = () => {
+                // Clicking an anchor changes the address bar and nothing else: the thread is the
+                // same, so there is nothing to reload — but that is the moment the two addresses
+                // start disagreeing, which is exactly when the line has something to say.
+                paintPageKey();
                 if (normalizeUrl(location.href) === pageUrl) return;
                 clearTimeout(_navTimer);
                 _navTimer = setTimeout(() => {

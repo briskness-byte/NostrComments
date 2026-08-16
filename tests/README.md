@@ -323,6 +323,25 @@ fix.
 node tests/browser-keyboard.mjs
 ```
 
+`browser-pagekey.mjs` covers the line naming the address a thread is filed under. A thread is keyed
+to `normalizeUrl(location.href)`, not to what is in the address bar, and the two disagree more often
+than it looks: anchors are dropped, tracking parameters removed, query parameters sorted. Somebody
+who followed a link to `#section-3` is reading one part of an article and commenting on all of it,
+and nothing said so.
+
+The line appears only when the two differ, so the suite proves both halves — that it shows up when
+it matters and stays away when it does not. A line repeating the address bar on every ordinary page
+is the clutter that teaches people to stop reading the panel.
+
+The anchor case is checked after a click rather than on load. Clicking a same-page anchor is the one
+navigation that changes nothing the panel would otherwise react to — same thread, no reload — and
+the early return in the navigation watcher used to skip the repaint. That single check fails against
+the code before the fix; the other nine hold.
+
+```sh
+node tests/browser-pagekey.mjs
+```
+
 `browser-relaystate.mjs` covers what the relay list says each relay is doing. Sockets fail quietly
 in this codebase — `onerror` closes, `onclose` retries and gives up after six attempts — so a relay
 that never answered looked exactly like one with nothing to say, and the only symptom was a thinner
