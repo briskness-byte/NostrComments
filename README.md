@@ -144,7 +144,11 @@ and nothing is held back. If it is useful to you, there is a one-line **Support 
 row at the bottom of the comment panel — a zap or two, and an arrow that opens the rest — sending
 sats straight from your wallet to mine over Lightning. No account, no server in between.
 
-You can also zap directly:
+If you have no wallet open and would rather scan something, there is a payment page at
+<https://coinos.io/slurpnc> — same wallet as the Lightning address below, showing a QR code and
+taking any amount.
+
+Or send to one of these directly:
 
 - **Lightning:** `slurpnc@coinos.io`
 - **Nostr:** `npub1ewxm82gprxwkh9qznauyey6vwx62xetpsux3prnmddkyevasatgswmds9e`
