@@ -313,7 +313,7 @@ export const BADGE = `${ROOT}
   const ncText = el => el ? el.textContent : null;
   const ncShown = el => !!el && getComputedStyle(el).display !== 'none';`;
 
-export async function startBrowser({ cdPort, extPath = EXT, prefix = 'ncqa-', windowSize = '1000,1700', onClose = () => {} }) {
+export async function startBrowser({ cdPort, extPath = EXT, prefix = 'ncqa-', windowSize = '1000,1700', onClose = () => {}, resolverRules = [] }) {
     if (BROWSER === 'firefox') return startFirefox({ cdPort, prefix, onClose });
     // Chrome derives its crashpad database from HOME; a locked-down HOME makes the crash handler
     // abort the browser before the debugging port opens, which reads as "chromium is not installed".
@@ -335,7 +335,10 @@ export async function startBrowser({ cdPort, extPath = EXT, prefix = 'ncqa-', wi
         // Suites that need a picture to render cannot serve it from 127.0.0.1: the extension refuses
         // an address literal, because that is how a stranger's profile would aim a request at the
         // reader's own network. So a name is mapped onto loopback and the suites use that.
-        `--host-resolver-rules=MAP ${TESTHOST} 127.0.0.1`,
+        // Suites may add their own, which is how one can claim a domain that answers on a port:
+        // `MAP name:443 127.0.0.1:8087` sends an https lookup at a local server. Firefox has no
+        // equivalent, so a suite needing that has to say so itself.
+        `--host-resolver-rules=${['MAP ' + TESTHOST + ' 127.0.0.1', ...resolverRules].join(',')}`,
         `--user-data-dir=${path.join(W, 'cd')}`, `--load-extension=${extPath}`, `--disable-extensions-except=${extPath}`,
         `--window-size=${windowSize}`] } } } });
     if (!sess.value?.sessionId) {

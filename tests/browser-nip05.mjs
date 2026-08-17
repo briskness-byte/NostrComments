@@ -15,7 +15,7 @@
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
-import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, makeCert, ROOT } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, makeCert, ROOT, BROWSER } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9526);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8088);
@@ -50,7 +50,15 @@ const ALICE = newKey(), ALICE_PUB = _secp.pubKey(ALICE);
 const now = Math.floor(Date.now() / 1000);
 
 await new Promise(r => wellKnown.listen(WELLKNOWN_PORT, '127.0.0.1', r));
-const DOMAIN = `127.0.0.1:${WELLKNOWN_PORT}`;
+// A name, not 127.0.0.1:8087. Since 23.0.8 the extension accepts only plain domain names here — an
+// address literal or a port is how a profile would aim a lookup at the reader's own network — so a
+// claim carrying either is refused before any request goes out, and this suite would be asserting
+// against a guard rather than against the feature.
+//
+// The name is mapped onto the local server below, port and all. Only Chromium can do that; Firefox
+// resolves names to localhost but cannot redirect a port, so the suite says so and stops rather than
+// reporting failures that are about the harness.
+const DOMAIN = 'nip05.example';
 
 stored.push(await sign(ALICE, {
     kind: 0, created_at: now - 400, tags: [],
@@ -61,7 +69,16 @@ stored.push(await sign(ALICE, {
     content: 'A comment by somebody who claims a verified name.',
 }));
 
+if (BROWSER === 'firefox') {
+    console.log('\nSkipped on Firefox: this suite needs a hostname redirected to a local port, which');
+    console.log('only Chromium can do. The host check itself is covered for all three builds by');
+    console.log('nip05host.test.mjs, which runs in `node tests/run.mjs`.');
+    wellKnown.close(); site.close(); relay.close();
+    process.exit(0);
+}
+
 const { js, wait, goto, finish } = await startBrowser({
+    resolverRules: [`MAP ${DOMAIN}:443 127.0.0.1:${WELLKNOWN_PORT}`],
     cdPort: CD_PORT, prefix: 'ncnip05-',
     onClose: () => { site.close(); relay.close(); wellKnown.close(); fs.rmSync(wkCert, { recursive: true, force: true }); },
 });
