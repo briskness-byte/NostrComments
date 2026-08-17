@@ -80,6 +80,8 @@ export function extensionCode(extPath = EXT) {
     const normalizeUrl = eval(src.slice(t0, t1) + '; normalizeUrl');
     const b0 = src.indexOf('        function toBech32(hrp, hex) {'), b1 = src.indexOf('        function fromBech32', b0);
     const toBech32 = eval(src.slice(b0, b1) + '; toBech32');
+    const n0 = src.indexOf('// nip05Host: start'), n1 = src.indexOf('// nip05Host: end', n0);
+    const nip05Host = eval(src.slice(n0, n1) + '; nip05Host');
 
     const enc = new TextEncoder();
     const sign = async (priv, ev) => {
@@ -94,7 +96,7 @@ export function extensionCode(extPath = EXT) {
         return _secp.b2h(idb) === ev.id && await _secp.verify(ev.pubkey, idb, ev.sig);
     };
     const newKey = () => _secp.b2h(crypto.getRandomValues(new Uint8Array(32)));
-    return { _secp, normalizeUrl, toBech32, sign, verify, newKey, enc };
+    return { _secp, normalizeUrl, toBech32, nip05Host, sign, verify, newKey, enc };
 }
 
 export function reporter() {

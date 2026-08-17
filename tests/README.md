@@ -362,6 +362,20 @@ screen as text. Replacing one `textContent` with `innerHTML` fails four of its c
 node tests/browser-xss.mjs
 ```
 
+`nip05host.test.mjs` covers which hosts a NIP-05 identifier may send the reader's browser to. The
+identifier comes from somebody else's profile, and checking it means fetching from the domain it
+names. The pattern that used to guard that allowed a port, an IPv6 literal and every bare address,
+so a profile could name `192.168.1.1` or `127.0.0.1` and have a reader's own browser knock on their
+network. The response is unreadable across origins, but whether anything answers and how fast is not
+something the author of a comment should be able to collect.
+
+Domains only, therefore: anything that is not a plain domain name is refused rather than parsed
+carefully. Twenty-nine cases, and the suite is worth its length because a plausible-looking fix
+fails it — the one CodeQL's autofix proposed blocked ports and brackets but allowed every private
+address and named `localhost` as explicitly permitted, which is seven failures here.
+
+It runs as part of `node tests/run.mjs`.
+
 `browser-relaystate.mjs` covers what the relay list says each relay is doing. Sockets fail quietly
 in this codebase — `onerror` closes, `onclose` retries and gives up after six attempts — so a relay
 that never answered looked exactly like one with nothing to say, and the only symptom was a thinner

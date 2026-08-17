@@ -1968,13 +1968,49 @@
         // commented — and hands it the reader's IP. That is a third party this extension otherwise
         // never touches, so it is a choice rather than a default.
         let nip05Check = _st.nostrcomments_nip05 === true;
+        // NIP-05 identifiers name a domain, so anything that is not a plain domain name is refused
+        // rather than carefully parsed. The pattern below used to be the only check, and it let
+        // through more than it looks: a port, an IPv6 literal in brackets, and any bare address —
+        // 192.168.1.1, 127.0.0.1, localhost, 169.254.169.254.
+        //
+        // That turns a profile into a way of knocking on the reader's own network. The answer is
+        // unreadable across origins, but whether something answers at all, and how quickly, is not
+        // information the author of a comment should be able to collect. Refusing every address
+        // literal is both simpler and stricter than listing the ranges that matter, and it costs
+        // nothing: an address is never a valid NIP-05 domain.
+        //
+        // nip05Host: start
+        function nip05Host(raw) {
+            if (typeof raw !== 'string' || !raw || raw.length > 253) return null;
+            const h = raw.toLowerCase();
+            // Anything that could steer the authority of the URL rather than name a host.
+            if (/[:@[\]/\\?#%]/.test(h)) return null;
+            if (h.startsWith('.') || h.endsWith('.') || h.includes('..')) return null;
+            const labels = h.split('.');
+            // One label is localhost and its kind; a NIP-05 domain always has a public suffix.
+            if (labels.length < 2) return null;
+            const tld = labels[labels.length - 1];
+            // A numeric last label means an IPv4 address, and .local is mDNS on the local network.
+            if (!/^[a-z][a-z0-9-]*$/.test(tld) || tld === 'local' || tld === 'localhost') return null;
+            for (const l of labels) if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(l)) return null;
+            // Last word to the URL parser: it must read this back as exactly this host, no port.
+            try { const u = new URL('https://' + h + '/'); if (u.hostname !== h || u.port) return null; }
+            catch (_) { return null; }
+            return h;
+        }
+        // nip05Host: end
+
         async function verifyNip05(pubkey) {
             if (!nip05Check || nip05ok.has(pubkey)) return;
             const m = /^([^@\s]+)@([^@\s/]+)$/.exec(nip05s.get(pubkey) || '');
             if (!m) return;
+            const host = nip05Host(m[2]);
+            // Recorded as failed rather than left pending: a claim that cannot be checked must not
+            // sit there looking like one that is still being checked.
+            if (!host) { nip05ok.set(pubkey, false); scheduleRender(); return; }
             nip05ok.set(pubkey, null);
             try {
-                const res = await fetch(`https://${m[2]}/.well-known/nostr.json?name=${encodeURIComponent(m[1])}`);
+                const res = await fetch(`https://${host}/.well-known/nostr.json?name=${encodeURIComponent(m[1])}`);
                 const data = await res.json();
                 nip05ok.set(pubkey, data?.names?.[m[1]] === pubkey);
             } catch(e) { nip05ok.set(pubkey, false); }
