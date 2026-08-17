@@ -123,6 +123,14 @@ extension at one you run yourself.
 
 ### Pictures load from wherever they are hosted
 
+**You can switch this off.** In ⚙ Settings, *Load pictures automatically* holds every picture and
+avatar behind its host name until you click it. It is on by default, because a thread of grey boxes
+is a worse thing to read — but it is one checkbox, and it applies to avatars as well as to pictures
+written into comments. Clicking one fetches that one and nothing else.
+
+Note what it does not do: it does not protect the person who clicks. It is a decision point, not a
+shield.
+
 Profile pictures and images linked inside comments are fetched by your browser from
 whichever server the person who posted them chose. That server sees your IP address and
 your browser's user agent, in the same way it would if you opened the image yourself.

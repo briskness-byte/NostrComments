@@ -9,7 +9,7 @@
     async function init() {
 
         // Load all persistent storage up front (cross-origin, unlike localStorage)
-        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme']);
+        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg']);
         let hasConsent = _st.nostrcomments_consent === true;
         let encPriv = _isEncPriv(_st.nostrcomments_privkey) ? _st.nostrcomments_privkey : null;
         let keyBackedUp = _st.nostrcomments_keybackup === true;
@@ -306,6 +306,12 @@
         #input-wrapper{position:relative;margin:12px 0}
         #input{width:100%;min-height:88px;padding:14px 14px 46px;border:2px solid #e2e8f0;border-radius:14px;font-size:15px;background:#fafbfc;resize:none;box-sizing:border-box}
         #send{position:absolute;bottom:10px;right:10px;padding:10px 24px;border-radius:10px}
+        .nc-hold{display:flex;align-items:center;gap:10px;max-width:100%;margin:8px 0;padding:10px 12px;background:#f4f4f5;border:1px dashed #c8c8cd;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;color:#5b5b60;text-align:left}
+        .nc-hold:hover{border-color:#0b70b4}
+        .nc-hold-host{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .nc-hold-act{flex:none;font-weight:600;color:#0b70b4}
+        #m.dark-mode .nc-hold{background:#1c1c1f;border-color:#3f3f46;color:#a1a1aa}
+        #m.dark-mode .nc-hold-act{color:#93c5fd}
         #pagekey{display:none;font-size:12px;color:#5b5b60;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:8px;padding:6px 10px;margin:10px 0 0;cursor:help;overflow-wrap:anywhere}
         #list{max-height:40vh;overflow-y:auto;background:#f8f9fa;padding:12px;border-radius:14px;margin:10px 0}
         .c{background:white;padding:14px;margin:8px 0;border-radius:12px;border-left:5px solid #1d9bf0;box-shadow:0 2px 8px rgba(0,0,0,0.07);color:#222;word-break:break-word}
@@ -584,6 +590,11 @@
         <input id="muteword-input" placeholder="word or phrase">
         <button id="muteword-add-btn">Add</button>
         </div>
+        </div>
+        <div style="margin-top:14px">
+        <strong style="font-size:15px;color:#333">Pictures</strong>
+        <label id="autoimg-label" style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="autoimg-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Load pictures automatically</span></label>
+        <p style="font-size:12px;color:#777;margin:6px 0 0;line-height:1.45">On by default. A picture is fetched from wherever the person who posted it chose, which tells that server your IP address — and nobody moderates a thread here, so you may not want every picture arriving unasked. Turn this off and each one waits behind its host name until you ask for it. Avatars wait too.</p>
         </div>
         <div style="margin-top:14px">
         <strong style="font-size:15px;color:#333">Verified names</strong>
@@ -2026,6 +2037,38 @@
         }
         // safeMediaUrl: end
 
+        // Pictures are fetched from wherever their author chose, which hands that server the
+        // reader's IP — and nothing here is moderated, so a thread can carry a picture nobody should
+        // have downloaded. Automatic loading makes both of those the reader's problem before they
+        // have seen anything.
+        //
+        // On by default all the same: a thread of grey boxes is a worse product, and this has not
+        // happened yet. What matters is that the way out is one checkbox and is easy to find.
+        //
+        // Note what this is not. Somebody who clicks is exactly as exposed as before. It is a
+        // decision point, not a shield, and it should never be described as one.
+        let autoImages = _st.nostrcomments_autoimg !== false;
+
+        function pictureHolder(url, reveal) {
+            const box = document.createElement('button');
+            box.type = 'button';
+            box.className = 'nc-hold';
+            // A button rather than a div: keyboard and screen readers get it for nothing.
+            let host = '';
+            try { host = new URL(url).hostname; } catch (_) {}
+            const who = document.createElement('span');
+            who.className = 'nc-hold-host';
+            // The host is the whole point of the placeholder — it is what lets somebody decide.
+            who.textContent = host || 'picture';
+            const act = document.createElement('span');
+            act.className = 'nc-hold-act';
+            act.textContent = 'Show picture';
+            box.append(who, act);
+            box.title = url;
+            box.onclick = () => reveal(box);
+            return box;
+        }
+
         async function verifyNip05(pubkey) {
             if (!nip05Check || nip05ok.has(pubkey)) return;
             const m = /^([^@\s]+)@([^@\s/]+)$/.exec(nip05s.get(pubkey) || '');
@@ -2042,6 +2085,15 @@
             } catch(e) { nip05ok.set(pubkey, false); }
             scheduleRender();
         }
+        const autoImgToggle = s.getElementById('autoimg-toggle');
+        autoImgToggle.checked = autoImages;
+        autoImgToggle.onchange = () => {
+            autoImages = autoImgToggle.checked;
+            chrome.storage.local.set({nostrcomments_autoimg: autoImages});
+            render();
+            showMsg(autoImages ? 'Pictures load automatically again'
+                               : 'Pictures wait — each one shows its host until you ask for it');
+        };
         const nip05Toggle = s.getElementById('nip05-toggle');
         nip05Toggle.checked = nip05Check;
         nip05Toggle.onchange = () => {
@@ -2880,6 +2932,7 @@
                         // a picture is the point; hiding that it was written is not.
                         const media = safeMediaUrl(url);
                         if (media && /\.(jpe?g|png|gif|webp|svg)(\?.*)?$/i.test(url)) {
+                            const buildImg = () => {
                             const img = document.createElement('img');
                             // The server hosting this picture was chosen by whoever posted the
                             // comment, not by the reader — and without this it is told, in the
@@ -2899,12 +2952,19 @@
                             img.className = 'nc-img';
                             img.onclick = () => window.open(url, '_blank');
                             img.onerror = () => { const a = document.createElement('a'); a.href = url; a.textContent = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; img.replaceWith(a); };
-                            frag.appendChild(img);
+                            return img;
+                            };
+                            // Nothing is requested until the element exists, so building it lazily
+                            // is what keeps the network quiet rather than any flag read later.
+                            frag.appendChild(autoImages ? buildImg() : pictureHolder(media, box => box.replaceWith(buildImg())));
                         } else if (media && /\.(mp4|mov|webm)(\?.*)?$/i.test(url)) {
-                            const vid = document.createElement('video');
-                            vid.src = media; vid.controls = true;
-                            vid.className = 'nc-vid';
-                            frag.appendChild(vid);
+                            const buildVid = () => {
+                                const vid = document.createElement('video');
+                                vid.src = media; vid.controls = true;
+                                vid.className = 'nc-vid';
+                                return vid;
+                            };
+                            frag.appendChild(autoImages ? buildVid() : pictureHolder(media, box => box.replaceWith(buildVid())));
                         } else {
                             const a = document.createElement('a'); a.href = url; a.textContent = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; frag.appendChild(a);
                         }
@@ -2958,7 +3018,10 @@
             profileLink.target = '_blank'; profileLink.rel = 'noopener noreferrer';
             profileLink.className = 'nc-plink';
             const avatarUrl = avatars.get(ev.pubkey);
-            if (avatarUrl) {
+            // An avatar is the worse of the two: it is fetched on every page where its owner has
+            // commented, so one host collects a reading list rather than a single visit. With
+            // pictures held back it is simply left out — a comment without one already looks fine.
+            if (avatarUrl && autoImages) {
                 const img = document.createElement('img');
                 img.className = 'avatar'; img.alt = name;
                 // Same reasoning as the inline pictures: an avatar is fetched on every page where

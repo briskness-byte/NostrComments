@@ -342,6 +342,26 @@ the code before the fix; the other nine hold.
 node tests/browser-pagekey.mjs
 ```
 
+`browser-pictures.mjs` covers the switch that holds pictures back until they are asked for. A
+picture in a comment is fetched from wherever its author chose, which hands that server the reader's
+IP address — and nothing here is moderated, so a thread can carry a picture nobody should have
+downloaded. Automatic loading makes both of those the reader's problem before they have seen
+anything. The switch is on by default; a thread of grey boxes is a worse product, and what matters
+is that the way out exists and is easy to find.
+
+One assertion carries the suite: with the switch off, the server hosting the picture must see
+nothing. "No `<img>` on screen" would not do — a hidden image, a preload, a lazily-loaded one that
+fires anyway all look right and still make the request. So the picture host counts hits, and the
+count is the test. Sixteen checks, including that clicking one placeholder produces exactly one
+request and leaves the avatar alone.
+
+Avatars are covered because they are the worse half: an avatar is fetched on every page where its
+owner has commented, so one host collects a reading list rather than a single visit.
+
+```sh
+node tests/browser-pictures.mjs
+```
+
 `browser-xss.mjs` is written from the attacker's seat. Everything the panel draws comes from
 strangers — comment text, the name on a profile, the address of an avatar — and none of it is
 escaped anywhere, because none of it is ever parsed as markup: the DOM is built with `createElement`
