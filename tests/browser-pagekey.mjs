@@ -82,6 +82,29 @@ ok('the stripped parameters are not in it', !/utm_/.test(r.text || ''), r.text);
 ok('the full address is in the tooltip', (r.title || '').startsWith(normalizeUrl(BASE)), r.title);
 ok('the tooltip explains why they differ', /same thread/i.test(r.title || ''), r.title);
 
+console.log('\n=== Settings names it whether or not the line is there ===');
+// The line in the thread is right to stay quiet, but it leaves nobody a place to look. Somebody
+// asking "what is sent about this page" should find the answer where they look for settings,
+// not have to land on a page that happens to need the inline line.
+await goto(BASE);
+await wait(3500);
+await js(`${ROOT} s.getElementById('m').style.display='grid'; s.getElementById('settings').style.display='block'; return 1;`);
+await wait(800);
+let set = JSON.parse(await js(`${ROOT}
+  const p = s.getElementById('site-thread'), c = s.getElementById('site-thread-url');
+  return JSON.stringify({ shown: !!p && p.offsetParent !== null, url: c ? c.textContent : null,
+                          inline: (() => { const e = s.getElementById('pagekey'); return !!e && e.offsetParent !== null; })() });`));
+ok('Settings shows the thread address on a plain page', set.shown === true, set);
+ok('and it is the full address', set.url === normalizeUrl(BASE), set.url);
+ok('while the thread itself still says nothing', set.inline === false, set);
+
+await goto(BASE + '?utm_source=newsletter');
+await wait(3500);
+await js(`${ROOT} s.getElementById('m').style.display='grid'; s.getElementById('settings').style.display='block'; return 1;`);
+await wait(800);
+set = JSON.parse(await js(`${ROOT} const c = s.getElementById('site-thread-url'); return JSON.stringify({ url: c ? c.textContent : null });`));
+ok('and it drops the tracking parameter there too', set.url === normalizeUrl(BASE), set.url);
+
 console.log('\n=== clicking an anchor is the case that used to be missed ===');
 await goto(BASE);
 await wait(3500);

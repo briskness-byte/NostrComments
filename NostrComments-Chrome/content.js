@@ -312,6 +312,10 @@
         .nc-hold-act{flex:none;font-weight:600;color:#0b70b4}
         #m.dark-mode .nc-hold{background:#1c1c1f;border-color:#3f3f46;color:#a1a1aa}
         #m.dark-mode .nc-hold-act{color:#93c5fd}
+        #site-thread{font-size:12px;color:#5b5b60;margin:14px 0 0;line-height:1.55}
+        #site-thread code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:#14171a;background:#e2e6ec;border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
+        #m.dark-mode #site-thread{color:#a1a1aa}
+        #m.dark-mode #site-thread code{color:#e4e4e7;background:#27272a}
         #pagekey{display:none;font-size:12px;color:#5b5b60;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:8px;padding:6px 10px;margin:10px 0 0;cursor:help;overflow-wrap:anywhere}
         #list{max-height:40vh;overflow-y:auto;background:#f8f9fa;padding:12px;border-radius:14px;margin:10px 0}
         .c{background:white;padding:14px;margin:8px 0;border-radius:12px;border-left:5px solid #1d9bf0;box-shadow:0 2px 8px rgba(0,0,0,0.07);color:#222;word-break:break-word}
@@ -612,6 +616,7 @@
         <button class="btnpos" data-c="br" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↘ Bottom right</button>
         </div>
         <button id="site-disable-btn" style="margin-top:14px;padding:8px 14px;background:none;border:1px solid #e53935;color:#e53935;border-radius:8px;cursor:pointer;font-size:13px">Disable on this site</button>
+        <p id="site-thread">Comments here are filed under <code id="site-thread-url"></code> — this is the address your relays are asked about.</p>
         </div>
         </div>
         <div id="notif-banner"></div>
@@ -1855,6 +1860,12 @@
             return bare.length <= 58 ? bare : bare.slice(0, 30) + '…' + bare.slice(-24);
         };
         function paintPageKey() {
+            // Settings names it every time. The line in the thread appears only when the two
+            // addresses disagree, which is right for the thread and wrong for somebody who came
+            // looking for what is sent about this page: they would have to happen upon a page that
+            // needed the line. Two questions, two places.
+            const full = s.getElementById('site-thread-url');
+            if (full) full.textContent = pageUrl;
             const el = s.getElementById('pagekey');
             if (!el) return;
             if (pageUrl === location.href) { el.style.display = 'none'; el.textContent = ''; el.removeAttribute('title'); return; }
