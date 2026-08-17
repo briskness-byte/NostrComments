@@ -5,6 +5,11 @@
 # checks. Five alerts, none of them about anything a user of this extension could reach. Excluding
 # the directory is better than dismissing them one at a time, because new suites would raise new ones.
 #
+# This replaces GitHub's default setup rather than sitting beside it. Both cannot run: the default
+# setup rejects results from a workflow, with "CodeQL analyses from advanced configurations cannot be
+# processed when the default setup is enabled" — the analysis runs, and its findings are thrown away.
+# Turn the default off under Settings → Code security before relying on this.
+#
 # Switching to a workflow also means the query suite is written down. `security-extended` is a
 # deliberate choice: this is an extension that runs on every page and holds a private key, so the
 # extra queries are worth the extra noise. When a finding is a false positive, dismiss it in the
@@ -34,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Initialise CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
           queries: security-extended
@@ -44,6 +49,6 @@ jobs:
               - docs
 
       - name: Analyse
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: /language:javascript-typescript
