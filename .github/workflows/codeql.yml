@@ -1,0 +1,49 @@
+# Code scanning, configured rather than left on its default.
+#
+# The default setup scans everything, including tests/ — where suites deliberately build strings and
+# compare URLs, which the JavaScript queries read as unsanitised code construction and incomplete URL
+# checks. Five alerts, none of them about anything a user of this extension could reach. Excluding
+# the directory is better than dismissing them one at a time, because new suites would raise new ones.
+#
+# Switching to a workflow also means the query suite is written down. `security-extended` is a
+# deliberate choice: this is an extension that runs on every page and holds a private key, so the
+# extra queries are worth the extra noise. When a finding is a false positive, dismiss it in the
+# Security tab with a reason — that reason is the record, not a comment here.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, because the queries change even when the code does not.
+    - cron: '41 5 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze JavaScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - tests
+              - docs
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:javascript-typescript

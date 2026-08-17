@@ -2013,6 +2013,32 @@
         }
         // nip05Host: end
 
+        // Pictures named by somebody else's profile or comment. The same reasoning as nip05Host and
+        // for the same reason: an address literal is the one form in which a stranger can aim a
+        // request from the reader's browser at the reader's own network. A picture is a GET, and
+        // there are devices on home networks that act on a GET.
+        //
+        // Mixed-content blocking already stops http subresources on an https page, so the window
+        // this closes is narrow — but it costs a few lines, and "a comment made your browser talk to
+        // your router" is not a sentence worth having to write later.
+        //
+        // safeMediaUrl: start
+        function safeMediaUrl(raw) {
+            if (typeof raw !== 'string' || !raw || raw.length > 2048) return null;
+            let u;
+            try { u = new URL(raw.trim()); } catch (_) { return null; }
+            if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+            if (u.username || u.password) return null;
+            const h = u.hostname.toLowerCase();
+            if (!h || h.startsWith('[')) return null;                       // IPv6 literal
+            if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return null;             // IPv4 literal
+            if (!h.includes('.')) return null;                              // localhost and its kind
+            const tld = h.slice(h.lastIndexOf('.') + 1);
+            if (tld === 'local' || tld === 'localhost' || !/^[a-z]/.test(tld)) return null;
+            return u.href;
+        }
+        // safeMediaUrl: end
+
         async function verifyNip05(pubkey) {
             if (!nip05Check || nip05ok.has(pubkey)) return;
             const m = /^([^@\s]+)@([^@\s/]+)$/.exec(nip05s.get(pubkey) || '');
@@ -2141,7 +2167,9 @@
                                 if (ev.pubkey === myPub) { myProfileRaw = { pub: ev.pubkey, data: p }; paintSetName(); }
                                 if (p.lud16) lud16s.set(ev.pubkey, p.lud16);
                                 if (typeof p.nip05 === 'string') { nip05s.set(ev.pubkey, p.nip05); verifyNip05(ev.pubkey); }
-                                if (p.picture) avatars.set(ev.pubkey, p.picture);
+                                // Checked here rather than at each <img>: this map feeds both the
+                                // comment avatars and the identity panel.
+                                if (p.picture) { const pic = safeMediaUrl(p.picture); if (pic) avatars.set(ev.pubkey, pic); }
                                 scheduleRender();
                             } catch(e) {}
                         });
@@ -2831,7 +2859,10 @@
                     else if (m[4] != null) { const a = document.createElement('a'); a.href = m[5]; a.textContent = m[4]; a.target = '_blank'; a.rel = 'noopener noreferrer'; frag.appendChild(a); }
                     else if (m[6] != null) {
                         const url = m[6];
-                        if (/\.(jpe?g|png|gif|webp|svg)(\?.*)?$/i.test(url)) {
+                        // One that does not pass is still shown, as a link. Refusing to render it as
+                        // a picture is the point; hiding that it was written is not.
+                        const media = safeMediaUrl(url);
+                        if (media && /\.(jpe?g|png|gif|webp|svg)(\?.*)?$/i.test(url)) {
                             const img = document.createElement('img');
                             // The server hosting this picture was chosen by whoever posted the
                             // comment, not by the reader — and without this it is told, in the
@@ -2847,14 +2878,14 @@
                             // showing up as text that came and went.
                             img.loading = 'lazy';
                             img.decoding = 'async';
-                            img.src = url;
+                            img.src = media;
                             img.className = 'nc-img';
                             img.onclick = () => window.open(url, '_blank');
                             img.onerror = () => { const a = document.createElement('a'); a.href = url; a.textContent = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; img.replaceWith(a); };
                             frag.appendChild(img);
-                        } else if (/\.(mp4|mov|webm)(\?.*)?$/i.test(url)) {
+                        } else if (media && /\.(mp4|mov|webm)(\?.*)?$/i.test(url)) {
                             const vid = document.createElement('video');
-                            vid.src = url; vid.controls = true;
+                            vid.src = media; vid.controls = true;
                             vid.className = 'nc-vid';
                             frag.appendChild(vid);
                         } else {

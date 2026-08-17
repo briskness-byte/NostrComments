@@ -11,8 +11,8 @@
 import { extensionCode } from './harness.mjs';
 
 export async function run() {
-    const { nip05Host } = extensionCode();
-    const out = { name: 'NIP-05 host validation', pass: 0, fail: 0, lines: [] };
+    const { nip05Host, safeMediaUrl } = extensionCode();
+    const out = { name: 'host and media URL validation', pass: 0, fail: 0, lines: [] };
     const ok = (n, c, e) => c ? (out.pass++, out.lines.push('  ✓ ' + n))
                               : (out.fail++, out.lines.push('  ✗ ' + n + (e !== undefined ? '  → ' + JSON.stringify(e) : '')));
 
@@ -56,6 +56,33 @@ export async function run() {
     // ports and brackets but allowed bare addresses, and named localhost as explicitly permitted.
     ok('an address is never accepted, in any of its forms',
        ['192.168.1.1', '127.0.0.1', '0.0.0.0', '8.8.8.8'].every(a => nip05Host(a) === null));
+
+
+    // Pictures named by a profile or a comment. Same concern, different sink: an <img> is a GET, and
+    // some devices on a home network act on a GET. Not XSS — javascript: does not execute in an
+    // image — so this is about where the request goes, not what comes back.
+    const media = [
+        ['https://example.com/a.png',        true,  'an ordinary picture'],
+        ['http://example.com/a.png',         true,  'plain http, which browsers already block on https pages'],
+        ['https://sub.example.com/a.png?x=1', true, 'a query is fine'],
+        ['http://192.168.1.1/reboot.png',    false, 'a router on the local network'],
+        ['http://127.0.0.1/x.png',           false, 'loopback'],
+        ['http://[::1]/x.png',               false, 'IPv6 loopback'],
+        ['http://localhost/x.png',           false, 'loopback by name'],
+        ['http://printer.local/x.png',       false, 'mDNS'],
+        ['https://user:pw@example.com/a.png', false, 'credentials in the URL'],
+        ['javascript:alert(1)',              false, 'not a fetchable scheme'],
+        ['data:text/html,<script></script>', false, 'nor this one'],
+        ['file:///etc/passwd',               false, 'nor this one'],
+        ['not a url at all',                 false, 'not a URL'],
+        ['',                                 false, 'nothing at all'],
+        [null,                               false, 'not a string'],
+    ];
+    for (const [input, allowed, why] of media) {
+        const got = safeMediaUrl(input);
+        ok(`${allowed ? 'allows' : 'refuses'} ${JSON.stringify(input)} — ${why}`,
+           allowed ? typeof got === 'string' : got === null, got);
+    }
 
     return out;
 }

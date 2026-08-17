@@ -16,7 +16,7 @@
 //
 // Requires: chromium (or Chrome), a matching chromedriver on PATH, openssl, Node 18+.
 import http from 'http';
-import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT, TESTHOST } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9535);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8102);
@@ -32,7 +32,10 @@ const { ok, state } = reporter();
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 const imgHost = http.createServer((_, res) => { res.writeHead(200, { 'Content-Type': 'image/png' }); res.end(PNG); });
 await new Promise(r => imgHost.listen(IMG_PORT, '127.0.0.1', r));
-const IMG = `http://127.0.0.1:${IMG_PORT}`;
+// Not 127.0.0.1: the extension refuses an address literal as a picture host, so that a profile
+// cannot aim a request at the reader's own network. TESTHOST resolves to loopback inside the
+// test browsers and nowhere else.
+const IMG = `http://${TESTHOST}:${IMG_PORT}`;
 
 const relay = await startRelay({ port: RELAY_PORT });
 const { stored } = relay;

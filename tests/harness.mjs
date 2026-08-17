@@ -32,6 +32,10 @@ const ROOTDIR = path.resolve(HERE, '..');
 // at the time ran only against Chromium.
 export const BROWSER = process.env.NC_BROWSER === 'firefox' ? 'firefox' : 'chromium';
 
+// A name that resolves to loopback inside the test browsers, for suites that need a URL the
+// extension will accept as a picture host. Never resolves outside them, deliberately.
+export const TESTHOST = 'images.nctest';
+
 export function findFirefox() {
     if (process.env.FIREFOX) return process.env.FIREFOX;
     // /usr/local/bin/firefox is often a firejail symlink; geckodriver needs the real binary.
@@ -82,6 +86,8 @@ export function extensionCode(extPath = EXT) {
     const toBech32 = eval(src.slice(b0, b1) + '; toBech32');
     const n0 = src.indexOf('// nip05Host: start'), n1 = src.indexOf('// nip05Host: end', n0);
     const nip05Host = eval(src.slice(n0, n1) + '; nip05Host');
+    const m0 = src.indexOf('// safeMediaUrl: start'), m1 = src.indexOf('// safeMediaUrl: end', m0);
+    const safeMediaUrl = eval(src.slice(m0, m1) + '; safeMediaUrl');
 
     const enc = new TextEncoder();
     const sign = async (priv, ev) => {
@@ -96,7 +102,7 @@ export function extensionCode(extPath = EXT) {
         return _secp.b2h(idb) === ev.id && await _secp.verify(ev.pubkey, idb, ev.sig);
     };
     const newKey = () => _secp.b2h(crypto.getRandomValues(new Uint8Array(32)));
-    return { _secp, normalizeUrl, toBech32, nip05Host, sign, verify, newKey, enc };
+    return { _secp, normalizeUrl, toBech32, nip05Host, safeMediaUrl, sign, verify, newKey, enc };
 }
 
 export function reporter() {
@@ -326,6 +332,10 @@ export async function startBrowser({ cdPort, extPath = EXT, prefix = 'ncqa-', wi
         '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run',
         // The throwaway relay is self-signed; without this Chrome refuses the wss:// handshake.
         '--ignore-certificate-errors', '--allow-insecure-localhost',
+        // Suites that need a picture to render cannot serve it from 127.0.0.1: the extension refuses
+        // an address literal, because that is how a stranger's profile would aim a request at the
+        // reader's own network. So a name is mapped onto loopback and the suites use that.
+        `--host-resolver-rules=MAP ${TESTHOST} 127.0.0.1`,
         `--user-data-dir=${path.join(W, 'cd')}`, `--load-extension=${extPath}`, `--disable-extensions-except=${extPath}`,
         `--window-size=${windowSize}`] } } } });
     if (!sess.value?.sessionId) {
@@ -367,7 +377,9 @@ async function startFirefox({ cdPort, prefix, onClose }) {
     if (!up) { console.log(`✗ geckodriver did not come up on port ${cdPort}`); process.exit(1); }
 
     const sess = await wd('POST', '/session', { capabilities: { alwaysMatch: {
-        'moz:firefoxOptions': { binary: findFirefox(), args: ['-headless'] },
+        'moz:firefoxOptions': { binary: findFirefox(), args: ['-headless'],
+            // Firefox's equivalent of Chrome's --host-resolver-rules; see the note there.
+            prefs: { 'network.dns.localDomains': TESTHOST } },
         // The throwaway relay is self-signed; Firefox's equivalent of --ignore-certificate-errors.
         acceptInsecureCerts: true } } });
     if (!sess.value?.sessionId) {
