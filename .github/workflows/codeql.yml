@@ -8,12 +8,13 @@
 # This replaces GitHub's default setup rather than sitting beside it. Both cannot run: the default
 # setup rejects results from a workflow, with "CodeQL analyses from advanced configurations cannot be
 # processed when the default setup is enabled" — the analysis runs, and its findings are thrown away.
-# Turn the default off under Settings → Code security before relying on this.
+# Turn the default off under Settings → Code security → Code scanning before relying on this.
 #
-# Switching to a workflow also means the query suite is written down. `security-extended` is a
-# deliberate choice: this is an extension that runs on every page and holds a private key, so the
-# extra queries are worth the extra noise. When a finding is a false positive, dismiss it in the
-# Security tab with a reason — that reason is the record, not a comment here.
+# Grown from the template GitHub offers when you switch to advanced, with the two things it leaves
+# out put back: paths-ignore, and the query suite. `security-extended` is a deliberate choice — this
+# is an extension that runs on every page and holds a private key, so the extra queries are worth the
+# extra noise. When a finding is a false positive, dismiss it in the Security tab with a reason;
+# that reason is the record, not a comment here.
 
 name: CodeQL
 
@@ -26,29 +27,44 @@ on:
     # Weekly, because the queries change even when the code does not.
     - cron: '41 5 * * 1'
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
   analyze:
-    name: Analyze JavaScript
+    name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
 
-      - name: Initialise CodeQL
+    strategy:
+      # One language failing should not hide the other's findings.
+      fail-fast: false
+      matrix:
+        include:
+          # The workflow files are worth scanning too: this one holds a token permission block, and
+          # a mistake there is not visible by reading the extension.
+          - language: actions
+          - language: javascript-typescript
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
-          languages: javascript-typescript
+          languages: ${{ matrix.language }}
+          # Nothing here is compiled; the sources are what ships.
+          build-mode: none
           queries: security-extended
           config: |
             paths-ignore:
               - tests
               - docs
 
-      - name: Analyse
+      - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
-          category: /language:javascript-typescript
+          category: "/language:${{ matrix.language }}"
