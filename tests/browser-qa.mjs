@@ -275,6 +275,23 @@ const setTheme = async want => {
     return JSON.parse(await js(`${ROOT} return JSON.stringify({ dark: s.getElementById('m').classList.contains('dark-mode') });`)).dark;
 };
 
+// The whole action row under a comment — reply, zap, link, mute, delete — only exists once a
+// comment does, and this suite loads none. So none of it was ever measured, and .reply-btn sat at
+// 3.00:1 while .del-btn and .mute-btn sat at 1.92:1. Third time this shape of gap has cost
+// something: an element that is absent when the suite looks is an element it cannot hold.
+await js(`${ROOT}
+  const c = document.createElement('div');
+  c.className = 'c own';
+  c.append(document.createTextNode('A comment, so the row beneath it exists to be measured.'));
+  const row = document.createElement('div');
+  row.className = 'actions';
+  const mk = (cls, txt) => { const b = document.createElement('button'); b.className = cls; b.textContent = txt; return b; };
+  row.append(mk('vote-btn', '\u2191 5'), mk('reply-btn', '\u21a9 Reply'), mk('zap-btn', '\u26a1'),
+             mk('copy-btn', '\u{1F517}'), mk('mute-btn', '\u{1F6AB} Mute'), mk('del-btn', '\u{1F5D1} Delete'));
+  c.appendChild(row);
+  s.getElementById('list').appendChild(c);
+  return 1;`);
+
 // The reply banner is hidden until a reply arrives, so it was never sampled — and sat at 2.15:1,
 // white on orange, for as long as it existed. Same gap as the note badge below: an element that is
 // display:none when the suite looks is an element the suite cannot hold to anything.

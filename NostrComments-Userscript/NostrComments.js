@@ -349,7 +349,7 @@
         .v:hover{background:#dbeafe;border-color:#93c5fd;color:#1d9bf0}
         .v.mine{background:#dbeafe;border-color:#1d9bf0;color:#0b5c8f}
         .v.mine.down{background:#fde8e8;border-color:#c62828;color:#a01c1c}
-        .reply-btn{font-size:14px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#1d9bf0;font-weight:600}
+        .reply-btn{font-size:14px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#0c75bc;font-weight:600}
         .h{opacity:0.5;font-style:italic;cursor:pointer;padding:30px;background:#f0f0f0;border-radius:16px;text-align:center;font-size:18px}
         .tomb{font-style:italic;background:#f3f4f6;color:#5b616e;border-left-color:#c9ced6;box-shadow:none;font-size:14px}
         #reply-indicator{display:none;background:#e8f4fd;border-radius:10px;padding:10px 14px;margin:8px 0;font-size:14px;color:#1d9bf0;align-items:center;justify-content:space-between;gap:10px}
@@ -398,15 +398,15 @@
         .c a{color:#1d9bf0;text-decoration:none}
         .c a:hover{text-decoration:underline}
         .c code{background:#f0f4f8;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:15px;color:#d63384}
-        .zap-btn{font-size:20px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#f59e0b}
+        .zap-btn{font-size:20px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#b45309}
         .zap-btn:hover{color:#d97706}
-        .del-btn{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#bbb}
+        .del-btn{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#767676}
         .del-btn:hover{color:#c62828}
         .del-btn.armed{color:#c62828;font-weight:700}
         .del-btn:disabled{opacity:.5;cursor:default}
-        .mute-btn{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#bbb}
+        .mute-btn{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#767676}
         .mute-btn:hover{color:#c62828}
-        .copy-btn{font-size:16px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#bbb}
+        .copy-btn{font-size:16px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#767676}
         .copy-btn:hover{color:#555}
         /* Grey rather than another colour — a note is context, not a warning, and the three blues
            already mean comment, reply and yours. .own is declared after it so green still wins:
@@ -461,6 +461,9 @@
         #m.dark-mode #reply-indicator{background:#1c2d40;color:#93c5fd}
         #m.dark-mode #reply-hint{color:#94b4cd}
         #m.dark-mode #donate{color:#a1a1aa}
+        #m.dark-mode .reply-btn{color:#60a5fa}
+        #m.dark-mode .zap-btn{color:#fbbf24}
+        #m.dark-mode .mute-btn{color:#a1a1aa}
         #m.dark-mode .c code{background:#3f3f46;color:#f9a8d4}
         #m.dark-mode #privkey-display{background:#27272a;border-color:#3f3f46;color:#a1a1aa}
         #m.dark-mode #gear-btn{color:#818181}
@@ -475,9 +478,9 @@
         #m.dark-mode .ts{color:#a1a1aa}
         #m.dark-mode .nc-newtag{color:#fbbf24;background:#3a2e13;border-color:#5c4718}
         #m.dark-mode .nc-notetag{color:#a1a1aa;background:#2e2e33;border-color:#3f3f46}
-        #m.dark-mode .copy-btn{color:#71717a}
+        #m.dark-mode .copy-btn{color:#a1a1aa}
         #m.dark-mode .copy-btn:hover{color:#e4e4e7}
-        #m.dark-mode .del-btn{color:#71717a}
+        #m.dark-mode .del-btn{color:#a1a1aa}
         #m.dark-mode .del-btn:hover,#m.dark-mode .del-btn.armed{color:#f87171}
         #m.dark-mode .mute-btn:hover{color:#f87171}
         #m.dark-mode .v{background:#2a2a35;border-color:#4a4a5a;color:#c4c4ce}
