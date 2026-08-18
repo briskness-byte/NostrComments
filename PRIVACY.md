@@ -59,6 +59,17 @@ open on their own, and are described as such:
   your public key, all of it public by design — plus your IP address, as any
   server you contact does. They are told nothing about pages you merely read.
   Switch it off under ⚙ Settings and only the relays you listed are used.
+- **Sharing your own comment (only when you press Share, and confirm):** an
+  ordinary Nostr note is published carrying the text of that comment and a link to
+  the page it was written on. This is the one thing here that goes into the feeds
+  of people who follow you; comments themselves never do. Nothing is shared unless
+  you ask for it, per comment, and the confirm step exists so a stray click cannot
+  broadcast anything.
+- **Your own threads (only when you open ⚙ Settings):** the extension asks your
+  relays for comments written by your public key, so it can list the pages you have
+  commented on. Relays cannot be asked "everything under example.com" — a tag query
+  matches exactly — so the list is built from the other side. It is fetched when
+  Settings opens rather than on every page you read.
 - **Deleting your own comment:** a deletion request naming the comment, signed
   with your key, is published to relays. It is a *request*: relays that honour it
   drop the comment, and some will not. Copies already fetched by other people, or

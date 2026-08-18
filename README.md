@@ -60,6 +60,16 @@ The full policy is in **[PRIVACY.md](PRIVACY.md)**.
 - **Custom relays** — add or remove relays from the Settings panel
 - **Search and sort** — newest, oldest, most upvoted
 - **Paginated** — loads 20 comments at a time
+- **Share a comment to your feed** — publishes it as an ordinary note with a link back, so people
+  who do not have this extension can still see what you wrote. Behind a confirm, and never automatic
+- **Your threads** — Settings lists the pages you have commented on, because a comment is filed
+  under one address and there was otherwise no way back to it
+- **Repeated comments folded** — three or more near-identical comments from one key become one line
+  with the rest a click away. Presentation only; nothing is blocked and nothing is hidden
+- **Pictures can wait** — turn off *Load pictures automatically* and every picture and avatar waits
+  behind the name of the host it would come from until you ask for it
+- **The thread's address** — when it differs from your address bar, because an anchor or a campaign
+  parameter was dropped, the panel says which address the conversation is filed under
 
 ## Installation
 
