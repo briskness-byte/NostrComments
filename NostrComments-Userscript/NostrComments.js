@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NostrComments
 // @namespace    https://github.com/briskness-byte/NostrComments
-// @version      23.0.10
+// @version      23.0.11
 // @description  Comment freely on every website — without censorship
 // @author       Built on Nostr
 // @license      MIT
