@@ -280,6 +280,25 @@ const setTheme = async want => {
     return JSON.parse(await js(`${ROOT} return JSON.stringify({ dark: s.getElementById('m').classList.contains('dark-mode') });`)).dark;
 };
 
+// The reply banner is hidden until a reply arrives, so it was never sampled — and sat at 2.15:1,
+// white on orange, for as long as it existed. Same gap as the note badge below: an element that is
+// display:none when the suite looks is an element the suite cannot hold to anything.
+await js(`${ROOT}
+  const b = s.getElementById('notif-banner');
+  b.textContent = '';
+  const head = document.createElement('div');
+  head.className = 'nb-head';
+  const label = document.createElement('span');
+  label.textContent = '\u{1F514} 2 new replies on your comments';
+  const x = document.createElement('button');
+  x.type = 'button'; x.className = 'nb-x'; x.textContent = '\u00d7';
+  head.append(label, x);
+  const a = document.createElement('a');
+  a.href = 'https://example.com/article'; a.textContent = '2 on example.com/article';
+  b.append(head, a);
+  b.style.display = 'block';
+  return 1;`);
+
 // The "note" badge is only drawn on a comment carried over from the old kind 1 format, and this
 // suite never loads one — which is how its light-mode colour sat at 4.34:1 for eleven versions
 // without anything noticing. Contrast is a property of the stylesheet rather than of how the element

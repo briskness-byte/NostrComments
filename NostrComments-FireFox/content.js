@@ -392,7 +392,15 @@
         #muted-section{display:none;margin-top:14px}
         .muted-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:white;border-radius:8px;margin:5px 0;font-size:14px;color:#444;border:1px solid #eee}
         .unmute-btn{background:none;border:none;color:#1d9bf0;cursor:pointer;font-size:13px;font-weight:600}
-        #notif-banner{display:none;background:#f59e0b;color:white;border-radius:12px;padding:10px 16px;margin:0 0 12px;font-size:15px;font-weight:600;text-align:center}
+        #notif-banner{display:none;background:#fff7e6;border:1px solid #f0b429;border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:14px;color:#6b4a00;text-align:left}
+        #notif-banner .nb-head{display:flex;align-items:center;gap:8px;font-weight:600}
+        #notif-banner .nb-head span{flex:1}
+        #notif-banner .nb-x{flex:none;background:none;border:none;color:#6b4a00;cursor:pointer;font-size:17px;line-height:1;padding:0 2px;font-family:inherit}
+        #notif-banner a{display:block;margin-top:6px;color:#8a5a00;overflow-wrap:anywhere;font-weight:600}
+        #notif-banner .nb-rest{margin-top:6px;opacity:.85}
+        #m.dark-mode #notif-banner{background:#2a2011;border-color:#a97a14;color:#f2d9a3}
+        #m.dark-mode #notif-banner .nb-x{color:#f2d9a3}
+        #m.dark-mode #notif-banner a{color:#ffd88a}
         .avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#e8f4fd}
         .ts{color:#888}
         .nc-newtag{font-size:11px;font-weight:700;color:#f59e0b;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:1px 7px;margin-left:2px}
@@ -1386,11 +1394,7 @@
             if (!hasConsent) { consentOverlay.style.display = 'flex'; setTimeout(() => consentOverlay.querySelector('button')?.focus(), 0); return; }
             markPageSeen();
             paintOnboard();
-            if (unreadReplies > 0) {
-                notifBanner.textContent = `🔔 ${unreadReplies} new repl${unreadReplies === 1 ? 'y' : 'ies'} on your comments`;
-                notifBanner.style.display = 'block';
-                setTimeout(() => { notifBanner.style.display = 'none'; }, 5000);
-            }
+            if (unreadReplies > 0) paintNotifBanner();
             unreadReplies = 0;
             updateNotifBadge();
             setTimeout(() => s.getElementById('c')?.focus(), 0);
@@ -2133,6 +2137,10 @@
         let muteWords = Array.isArray(_st.nostrcomments_mutewords) ? _st.nostrcomments_mutewords.map(w => String(w).toLowerCase()) : [];
         function saveMuteWords() { chrome.storage.local.set({nostrcomments_mutewords: muteWords}); }
         let unreadReplies = 0;
+        // Where each unread reply is, so the banner can take you there. "3 new replies" without a
+        // page is a dead end: only the person who wrote the comments could work out where to look,
+        // and they would have to remember. The address is already in the event that arrives.
+        const unreadPages = new Map();   // page url -> count
         const _seenNotif = new Set();   // kept apart from the thread's, see queueVerify
         let q = '';
         let pageSize = 20;
@@ -2322,6 +2330,40 @@
             return seen;
         }
 
+        // Deliberately not on a timer. The old banner took itself away after five seconds, which is
+        // survivable for a line of text and wrong for something meant to be clicked — a link that
+        // disappears while you read it is worse than no link. It stays until dismissed or followed.
+        function paintNotifBanner() {
+            notifBanner.textContent = '';
+            const head = document.createElement('div');
+            head.className = 'nb-head';
+            const label = document.createElement('span');
+            label.textContent = `🔔 ${unreadReplies} new repl${unreadReplies === 1 ? 'y' : 'ies'} on your comments`;
+            const x = document.createElement('button');
+            x.type = 'button'; x.className = 'nb-x'; x.textContent = '×';
+            x.setAttribute('aria-label', 'Dismiss');
+            x.onclick = () => { notifBanner.style.display = 'none'; unreadPages.clear(); };
+            head.append(label, x);
+            notifBanner.appendChild(head);
+
+            // Three at most. A longer list stops being a prompt and becomes a page of its own.
+            const pages = [...unreadPages.entries()].sort((a, b) => b[1] - a[1]);
+            for (const [url, n] of pages.slice(0, 3)) {
+                const a = document.createElement('a');
+                a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                a.textContent = `${n} on ${url.replace(/^https?:\/\//, '')}`;
+                a.onclick = () => { unreadPages.delete(url); };
+                notifBanner.appendChild(a);
+            }
+            if (pages.length > 3) {
+                const rest = document.createElement('div');
+                rest.className = 'nb-rest';
+                rest.textContent = `and ${pages.length - 3} more page${pages.length - 3 === 1 ? '' : 's'}`;
+                notifBanner.appendChild(rest);
+            }
+            notifBanner.style.display = 'block';
+        }
+
         function updateNotifBadge() {
             nBadge.textContent = unreadReplies > 9 ? '9+' : String(unreadReplies);
             nBadge.style.display = unreadReplies > 0 ? 'block' : 'none';
@@ -2364,6 +2406,11 @@
                         // Already drawn in the thread you have open: announcing it is noise.
                         if (comments.some(c => c.id === ev.id)) return;
                         unreadReplies++;
+                        // 1111 carries the page in an uppercase I tag; a legacy kind 1 uses r. A
+                        // mention that is neither still counts, only without a destination.
+                        const _wt = (ev.tags || []).find(x => x[0] === 'I') || (ev.tags || []).find(x => x[0] === 'r');
+                        const _where = _wt && typeof _wt[1] === 'string' ? _wt[1] : '';
+                        if (_where) unreadPages.set(_where, (unreadPages.get(_where) || 0) + 1);
                         updateNotifBadge();
                     }, _seenNotif);
                 };
