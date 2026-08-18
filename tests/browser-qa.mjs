@@ -239,19 +239,14 @@ const sample = async () => JSON.parse(await js(`${ROOT}
   }
   return JSON.stringify(out);`));
 
-// The brand blue, #1d9bf0, is 3.00:1 against white — as text on the panel and as the background of
-// every filled button. Reaching 4.5:1 means a visibly darker, less vivid blue across the whole UI,
-// which is a decision about what the thing looks like rather than a bug to be fixed in passing.
+// Nothing is waived any more. The brand blue used to appear in two strengths: #1d9bf0 for text and
+// #0c75bc for the filled buttons, which were darkened in 23.0.3 when they failed AA. The text kept
+// the bright one and sat at 3.00:1 and 2.78:1 for eleven versions, recorded here as debt.
 //
-// So it is recorded rather than waived. These are listed with the ratio they had when measured, and
-// asserted as "no worse than that": the suite stays honest about the debt, prints it on every run
-// so it cannot be forgotten, and still fails the moment one of them slips further.
-// Filled buttons were fixed in 23.0.3 by darkening the blue they carry white text on, which is
-// theme-independent — white on a darker blue is better in both. What is left is blue *text*, and
-// that cannot be fixed the same way: #1d9bf0 is 3.00:1 on light and 5.90:1 on dark, #0c75bc is
-// 4.90:1 on light and 3.62:1 on dark. No single value serves both, so it needs a token per theme.
-// Until then these are recorded with the ratio they had and asserted as no worse.
-const BRAND_DEBT = { 'h2': 3.00, '.ob-title': 2.78, '.ob-wallet': 2.78 };
+// Both are #0c75bc now, so the panel carries one blue rather than two — more consistent, not less.
+// Dark mode already had its own tokens (#93c5fd, #60a5fa) and is untouched. If a background moves
+// and pushes one of these under the line, this suite is what says so.
+const BRAND_DEBT = {};
 
 const checkContrast = (theme, data) => {
     for (const [k, v] of Object.entries(data)) {

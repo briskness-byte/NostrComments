@@ -290,7 +290,7 @@
         #gear-btn.active{background:#e8f0fe;color:#1d9bf0}
         #theme-btn{position:absolute;top:15px;right:68px;width:36px;height:36px;font-size:20px;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:8px;opacity:0.6;color:#555}
         #theme-btn:hover{background:#f0f0f0;opacity:1}
-        h2{color:#1d9bf0;margin:0 0 12px;text-align:center;font-size:22px;font-weight:600}
+        h2{color:#0c75bc;margin:0 0 12px;text-align:center;font-size:22px;font-weight:600}
         #settings{display:none;background:#eef1f5;border:1px solid #dde2e8;border-radius:14px;padding:18px;margin:0 0 20px}
         #settings-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
         #settings-close{background:none;border:1px solid #d5d9e0;cursor:pointer;font-size:13px;font-weight:600;color:#666;padding:5px 12px;border-radius:8px;line-height:1;font-family:inherit;transition:color .15s,border-color .15s}
@@ -357,14 +357,14 @@
         #reply-cancel{background:none;border:none;color:#1d9bf0;cursor:pointer;font-weight:600;font-size:18px}
         #msg{display:none;position:fixed;left:50%;bottom:26px;transform:translateX(-50%);max-width:88vw;z-index:40;background:#0c75bc;color:white;padding:12px 18px;border-radius:12px;text-align:center;font-size:16px;box-shadow:0 6px 24px rgba(0,0,0,.28)}
         #onboard{display:none;background:#f0f7ff;border-radius:14px;padding:16px 18px;margin:0 0 12px}
-        .ob-title{font-size:17px;font-weight:700;color:#1d9bf0;margin:0 0 8px}
+        .ob-title{font-size:17px;font-weight:700;color:#0c75bc;margin:0 0 8px}
         .ob-pitch{font-size:13px;line-height:1.6;color:#555;margin:0 0 12px}
         .ob-primary{display:block;width:100%;padding:13px;background:linear-gradient(135deg,#0c75bc,#0a68ad);color:white;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;margin-bottom:10px;letter-spacing:0.01em}
         .ob-primary:hover{opacity:0.92}
         .ob-or{text-align:center;font-size:13px;color:#717171;margin:0 0 10px}
         .ob-secondary{display:block;width:100%;padding:12px;background:none;border:1px solid #0c75bc;border-radius:10px;color:#0c75bc;cursor:pointer;font-size:14px;font-weight:600;margin-bottom:10px;font-family:inherit}
         .ob-wallets{display:flex;gap:8px}
-        .ob-wallet{flex:1;padding:10px;text-align:center;border:2px solid #1d9bf0;border-radius:10px;color:#1d9bf0;font-weight:600;font-size:14px;text-decoration:none}
+        .ob-wallet{flex:1;padding:10px;text-align:center;border:2px solid #0c75bc;border-radius:10px;color:#0c75bc;font-weight:600;font-size:14px;text-decoration:none}
         .ob-wallet:hover{background:#e8f4fd}
         .ob-hint{font-size:12px;color:#717171;text-align:center;margin:8px 0 0}
         #post-note{margin:8px 2px 0;font-size:11px;line-height:1.45;color:#6b6b6b;text-align:center}
