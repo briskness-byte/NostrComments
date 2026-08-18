@@ -337,6 +337,10 @@
         .nc-hold-act{flex:none;font-weight:600;color:#0b70b4}
         #m.dark-mode .nc-hold{background:#1c1c1f;border-color:#3f3f46;color:#a1a1aa}
         #m.dark-mode .nc-hold-act{color:#93c5fd}
+        #mythreads{margin-top:10px;font-size:12px;color:#5b5b60}
+        #mythreads a{display:block;margin-top:6px;overflow-wrap:anywhere;color:#0a68a6;font-weight:600}
+        #m.dark-mode #mythreads{color:#a1a1aa}
+        #m.dark-mode #mythreads a{color:#60a5fa}
         #site-thread{font-size:12px;color:#5b5b60;margin:14px 0 0;line-height:1.55}
         #site-thread code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:#14171a;background:#e2e6ec;border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
         #m.dark-mode #site-thread{color:#a1a1aa}
@@ -650,6 +654,11 @@
         </div>
         <button id="site-disable-btn" style="margin-top:14px;padding:8px 14px;background:none;border:1px solid #e53935;color:#e53935;border-radius:8px;cursor:pointer;font-size:13px">Disable on this site</button>
         <p id="site-thread">Comments here are filed under <code id="site-thread-url"></code> — this is the address your relays are asked about.</p>
+        </div>
+        <div style="margin-top:14px">
+        <strong style="font-size:15px;color:#333">Your threads</strong>
+        <p style="font-size:12px;color:#777;margin:6px 0 0;line-height:1.45">Pages you have commented on. A comment is filed under one address, so without this there is no way back to a conversation you left.</p>
+        <div id="mythreads"></div>
         </div>
         </div>
         <div id="notif-banner"></div>
@@ -1748,6 +1757,7 @@
         const openSettings = async () => {
             settings.style.display = 'block';
             gearBtn.classList.add('active');
+            loadMyThreads();
             renderRelayList();
             renderMutedList();
             renderDisabledList();
@@ -1885,6 +1895,55 @@
             const bare = u.replace(/^https?:\/\//, '');
             return bare.length <= 58 ? bare : bare.slice(0, 30) + '…' + bare.slice(-24);
         };
+        // Asked for only when Settings is opened. A list you look at rarely should not be fetched by
+        // every page you read — that is somebody else's idea of a feature.
+        //
+        // Relays cannot answer "everything under example.com": NIP-01 tag filters match exactly, so
+        // there is no way to ask about a site. They can answer "everything by this key", and every
+        // comment carries its page in an I tag, so the list is built from the other direction.
+        let _threadsAsked = false;
+        function loadMyThreads() {
+            const box = s.getElementById('mythreads');
+            if (!box) return;
+            if (!myPub) { box.textContent = 'Connect a key to see this.'; return; }
+            if (_threadsAsked) return;
+            _threadsAsked = true;
+            box.textContent = 'Looking\u2026';
+            const seen = new Map();   // page url -> newest created_at
+            let done = 0;
+            const paint = () => {
+                box.textContent = '';
+                const pages = [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+                if (!pages.length) { box.textContent = 'Nothing yet \u2014 comments you write will be listed here.'; return; }
+                for (const [url] of pages) {
+                    const a = document.createElement('a');
+                    a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                    a.textContent = url.replace(/^https?:\/\//, '');
+                    box.appendChild(a);
+                }
+            };
+            RELAYS.forEach(r => {
+                let ws;
+                try { ws = new WebSocket(r); } catch (_) { if (++done === RELAYS.length) paint(); return; }
+                const qid = 'mt' + Math.random().toString(36).slice(2, 6);
+                const stop = () => { try { ws.close(); } catch (_) {} if (++done === RELAYS.length) paint(); };
+                const t = setTimeout(stop, 8000);
+                ws.onopen = () => ws.send(JSON.stringify(["REQ", qid, {kinds:[COMMENT_KIND], authors:[myPub], limit: 50}]));
+                ws.onmessage = m => {
+                    let parsed;
+                    try { parsed = JSON.parse(m.data); } catch (_) { return; }
+                    const [type, , ev] = parsed;
+                    if (type === 'EOSE') { clearTimeout(t); stop(); return; }
+                    if (type !== 'EVENT' || ev?.kind !== COMMENT_KIND || ev.pubkey !== myPub) return;
+                    const tag = (ev.tags || []).find(x => x[0] === 'I');
+                    const url = tag && typeof tag[1] === 'string' ? tag[1] : '';
+                    if (!url) return;
+                    if (!seen.has(url) || seen.get(url) < ev.created_at) seen.set(url, ev.created_at);
+                };
+                ws.onerror = () => { clearTimeout(t); stop(); };
+            });
+        }
+
         function paintPageKey() {
             // Settings names it every time. The line in the thread appears only when the two
             // addresses disagree, which is right for the thread and wrong for somebody who came

@@ -380,6 +380,22 @@ the tag assertion, and the count of comments in the thread afterwards.
 node tests/browser-share.mjs
 ```
 
+`browser-mythreads.mjs` covers the list of pages you have commented on. A comment is filed under one
+page address, so once you have written it and moved on there is no route back — you would have to
+remember where you were.
+
+Relays cannot answer "everything under example.com": NIP-01 tag filters match exactly, so a site is
+not a thing you can ask about. They can answer "everything by this key", and every comment carries
+its page in an `I` tag, so the list is built from the other direction.
+
+Two of its eleven checks are about restraint rather than the feature: nothing is fetched by reading
+a page, only by opening Settings — a list you look at rarely should not cost every page you read —
+and a page you commented on twice appears once.
+
+```sh
+node tests/browser-mythreads.mjs
+```
+
 `browser-xss.mjs` is written from the attacker's seat. Everything the panel draws comes from
 strangers — comment text, the name on a profile, the address of an avatar — and none of it is
 escaped anywhere, because none of it is ever parsed as markup: the DOM is built with `createElement`
