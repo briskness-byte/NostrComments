@@ -396,6 +396,23 @@ and a page you commented on twice appears once.
 node tests/browser-mythreads.mjs
 ```
 
+`browser-repeats.mjs` covers folding near-identical comments from one key. Reported from real use on
+x.com: a thread of twenty near-identical lines, which is not a discussion but looks like one until
+you read it. The alternative considered and rejected was a spam check before posting — that runs on
+the honest reader and on nobody else, since the bot does not use this extension.
+
+So it is presentation only. Nothing is blocked, nothing is hidden from anybody, and every folded
+comment is one click away.
+
+Half the suite is about what must **not** fold, which is where a feature like this goes wrong:
+somebody who posted twice is not running a campaign, and two different people writing "Thanks!" is a
+coincidence — grouping is per author for exactly that reason. Links and punctuation are dropped
+before comparing, because a pitch stays a pitch when the campaign parameter changes.
+
+```sh
+node tests/browser-repeats.mjs
+```
+
 `browser-xss.mjs` is written from the attacker's seat. Everything the panel draws comes from
 strangers — comment text, the name on a profile, the address of an avatar — and none of it is
 escaped anywhere, because none of it is ever parsed as markup: the DOM is built with `createElement`

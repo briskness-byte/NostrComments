@@ -404,6 +404,10 @@
         .c code{background:#f0f4f8;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:15px;color:#d63384}
         .zap-btn{font-size:20px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#b45309}
         .zap-btn:hover{color:#d97706}
+        .nc-same{background:none;border:1px dashed #c8c8cd;border-radius:10px;color:#5b5b60;cursor:pointer;font-family:inherit;font-size:13px;padding:8px 12px;margin:0 0 8px;width:100%;text-align:left}
+        .nc-same:hover{border-color:#0c75bc;color:#0c75bc}
+        #m.dark-mode .nc-same{border-color:#3f3f46;color:#a1a1aa}
+        #m.dark-mode .nc-same:hover{border-color:#60a5fa;color:#60a5fa}
         .share-btn{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#767676}
         .share-btn:hover{color:#0c75bc}
         .share-btn.armed{color:#0c75bc;font-weight:700}
@@ -3396,6 +3400,40 @@
             // returns a flat list of matches instead, which is what a search elsewhere does.
             const flat = !!q;
             const topLevel = flat ? shown : shown.filter(ev => !getParentId(ev));
+
+            // The same key saying the same thing over and over. Reported from real use on x.com: a
+            // thread of twenty near-identical lines, which is not a discussion but does look like
+            // one until you read it.
+            //
+            // Presentation only. Nothing is blocked, nothing is hidden from anybody, and every one
+            // of them is one click away — the alternative was a spam check before posting, which
+            // runs on the honest reader and on nobody else. Deliberately grouped per author: two
+            // different people writing "thanks" is not the pattern this is for.
+            //
+            // Links are dropped before comparing because a pitch stays a pitch when the campaign
+            // parameter changes; punctuation and emoji go for the same reason.
+            const SAME_MIN = 3;
+            const sameKey = ev => ev.pubkey + '\u0000' + (ev.content || '').toLowerCase()
+                .replace(/https?:\/\/\S+/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+            const sameGroups = new Map();
+            for (const ev of topLevel) {
+                const k = sameKey(ev);
+                if (!sameGroups.has(k)) sameGroups.set(k, []);
+                sameGroups.get(k).push(ev);
+            }
+            // One entry per thing that gets drawn, in the order the thread already had.
+            const entries = [];
+            const folded = new Set();
+            for (const ev of topLevel) {
+                if (folded.has(ev.id)) continue;
+                const g = sameGroups.get(sameKey(ev));
+                if (g && g.length >= SAME_MIN && g[0].id === ev.id) {
+                    g.slice(1).forEach(x => folded.add(x.id));
+                    entries.push({ lead: ev, rest: g.slice(1) });
+                } else {
+                    entries.push({ lead: ev, rest: [] });
+                }
+            }
             const replies = flat ? [] : shown.filter(ev => !!getParentId(ev));
 
             const visited = new Set();
@@ -3422,7 +3460,7 @@
                 capped.textContent = `Showing the newest ${COMMENT_LIMIT} comments — this thread has more than one request can carry.`;
                 list.appendChild(capped);
             }
-            const page = topLevel.slice(0, pageSize);
+            const page = entries.slice(0, pageSize);
             if (page.length === 0) {
                 const empty = document.createElement('i');
                 empty.className = 'nc-empty';
@@ -3445,10 +3483,23 @@
                             : `All ${hiddenCount} comments here are hidden — you muted their authors or words in them, or they were deleted.`;
                 list.appendChild(empty);
             } else {
-                page.forEach(ev => appendWithReplies(ev, 0));
+                page.forEach(e => {
+                    appendWithReplies(e.lead, 0);
+                    if (!e.rest.length) return;
+                    const more = document.createElement('button');
+                    more.type = 'button';
+                    more.className = 'nc-same';
+                    more.textContent = `and ${e.rest.length} more like this from the same key — show`;
+                    more.onclick = () => {
+                        const at = more.nextSibling;
+                        e.rest.forEach(r => list.insertBefore(makeItem(r, scores.get(r.id) || {up:0,down:0}, false, 0), at));
+                        more.remove();
+                    };
+                    list.appendChild(more);
+                });
             }
             paintIdentity();   // the profile may have arrived since the last render
-            loadMore.style.display = topLevel.length > pageSize ? 'block' : 'none';
+            loadMore.style.display = entries.length > pageSize ? 'block' : 'none';
             // Deliberately not `shown.length`: typing in the search box narrows the thread, and
             // the count on the button should not drop to the number of matches.
             const count = comments.filter(visible).length;
