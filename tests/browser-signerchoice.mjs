@@ -70,12 +70,15 @@ await js(`${ROOT} s.getElementById('m').style.display='grid'; s.getElementById('
 await wait(1500);
 
 const lit = () => js(`${ROOT}
-  const b = id => { const e = s.getElementById(id); return { bg: e.style.background, fg: e.style.color }; };
+  // The lit state is a class, not an inline colour. It was inline until the panel's colours were
+  // moved into CSS so that dark mode could reach them — reading style.background here would still
+  // pass against a button that no longer lights up at all.
+  const b = id => { const e = s.getElementById(id); return { on: e.classList.contains('on') }; };
   return JSON.stringify({ local: b('signer-local'), nip07: b('signer-nip07'),
                           note: s.getElementById('signer-note').textContent });`);
 let sc = JSON.parse(await lit());
-ok('the signer button is the highlighted one', /1d9bf0|rgb\(29, 155, 240\)/.test(sc.nip07.bg), sc.nip07);
-ok('and the stored-key button is not', !/1d9bf0|rgb\(29, 155, 240\)/.test(sc.local.bg), sc.local);
+ok('the signer button is the highlighted one', sc.nip07.on === true, sc.nip07);
+ok('and the stored-key button is not', sc.local.on === false, sc.local);
 ok('the note says the browser signer is in use', /browser signer/i.test(sc.note), sc.note);
 
 await goto(site.url);

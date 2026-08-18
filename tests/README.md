@@ -48,6 +48,33 @@ node tests/browser-qa.mjs --shots /tmp/x  # also write light + dark screenshots
 CHROMIUM=/path/to/chrome node tests/browser-qa.mjs
 ```
 
+It walks the panel through six scenes — a thread, the reply banner, replying, onboarding, Settings,
+the support section expanded — in both themes, and samples every element that paints its own text at
+each one.
+
+It did not always. For most of its life it sampled whatever happened to be on screen, which meant it
+measured one state and said nothing about the rest. Five contrast failures were found by hand in a
+single day because of that: the note badge at 4.34:1, the reply banner at 2.15:1, four buttons in the
+action row, the Settings link at 4.32:1 — every one of them in a region that is `display:none` or
+absent until there is data. Opening the scenes turned up 191 more.
+
+Two of the causes were structural rather than cosmetic, and both are worth remembering:
+
+**Inline styles cannot be themed.** Settings coloured itself with `style="color:#333"`, which no
+stylesheet can override, so the dark panel carried unreadable headings that were also unfixable. The
+colour lives in a class now; the rest of each inline style stayed exactly where it was, so nothing
+moved.
+
+**Colour set from script has the same problem.** The button-position row and the signer choice
+assigned `style.background` and `style.color` directly. Fighting that with `!important` overrode the
+selected state too — the lit button stopped being legible. The choice is a class now and the colour
+is CSS.
+
+**The coverage check is what keeps this honest.** A scene that silently stops opening takes its
+elements with it, and every remaining check still reports green — the exact failure this rewrite
+exists to prevent. So `MUST_SEE` lists selectors that have to be sampled at least once per run, and
+the suite fails and names any that were not. When you add a region to the panel, add it there too.
+
 Requires `chromium` (or Chrome) and a matching `chromedriver` on PATH. The binary is
 auto-detected; override with `CHROMIUM`.
 

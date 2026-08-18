@@ -287,7 +287,7 @@
         #c{position:absolute;top:12px;right:16px;width:50px;height:50px;font-size:40px;background:none;border:none;cursor:pointer;color:#555;display:flex;align-items:center;justify-content:center}
         #gear-btn{position:absolute;top:16px;left:16px;width:auto;height:40px;font-size:14px;padding:0 12px;background:none;border:none;cursor:pointer;color:#767676;display:flex;align-items:center;justify-content:center;border-radius:8px;gap:6px;transition:background .15s,color .15s}
         #gear-btn:hover{background:#f0f0f0;color:#555}
-        #gear-btn.active{background:#e8f0fe;color:#1d9bf0}
+        #gear-btn.active{background:#e8f0fe;color:#0a68a6}
         #theme-btn{position:absolute;top:15px;right:68px;width:36px;height:36px;font-size:20px;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:8px;opacity:0.6;color:#555}
         #theme-btn:hover{background:#f0f0f0;opacity:1}
         h2{color:#0c75bc;margin:0 0 12px;text-align:center;font-size:22px;font-weight:600}
@@ -337,6 +337,29 @@
         .nc-hold-act{flex:none;font-weight:600;color:#0b70b4}
         #m.dark-mode .nc-hold{background:#1c1c1f;border-color:#3f3f46;color:#a1a1aa}
         #m.dark-mode .nc-hold-act{color:#93c5fd}
+        /* Settings used to colour itself with inline styles, which no stylesheet can override — so
+           the dark panel carried #333 headings and #666 paragraphs, unreadable and unfixable, and
+           the contrast suite never saw them because Settings was never opened. The colour lives in
+           a class now; the rest of each inline style stayed where it was, so nothing moved. */
+        .set-h{color:#333}
+        .set-h.warn{color:#b3241f}
+        .set-p{color:#5b5b60}
+        .set-p.warn{color:#b3241f}
+        .set-blue{color:#0a68a6}
+        .set-btn{border:1px solid currentColor}
+        .set-btn.blue{color:#0a68a6}
+        .set-btn.red{color:#b3241f}
+        .set-btn.amber{color:#a15c07}
+        .set-btn.grey{color:#5b5b60}
+        #m.dark-mode .set-h{color:#e4e4e7}
+        #m.dark-mode .set-h.warn{color:#f87171}
+        #m.dark-mode .set-p{color:#a1a1aa}
+        #m.dark-mode .set-p.warn{color:#f87171}
+        #m.dark-mode .set-blue{color:#60a5fa}
+        #m.dark-mode .set-btn.blue{color:#60a5fa}
+        #m.dark-mode .set-btn.red{color:#f87171}
+        #m.dark-mode .set-btn.amber{color:#fbbf24}
+        #m.dark-mode .set-btn.grey{color:#a1a1aa}
         #mythreads{margin-top:10px;font-size:12px;color:#5b5b60}
         #mythreads a{display:block;margin-top:6px;overflow-wrap:anywhere;color:#0a68a6;font-weight:600}
         #m.dark-mode #mythreads{color:#a1a1aa}
@@ -350,15 +373,15 @@
         .c{background:white;padding:14px;margin:8px 0;border-radius:12px;border-left:5px solid #1d9bf0;box-shadow:0 2px 8px rgba(0,0,0,0.07);color:#222;word-break:break-word}
         .c.reply{margin-left:28px;border-left:4px solid #90caf9}
         .v{font-size:13px;background:#eef2f7;border:1px solid #d0d9e8;cursor:pointer;padding:4px 10px;border-radius:20px;color:#444;font-weight:700;min-width:0}
-        .v:hover{background:#dbeafe;border-color:#93c5fd;color:#1d9bf0}
+        .v:hover{background:#dbeafe;border-color:#93c5fd;color:#0a68a6}
         .v.mine{background:#dbeafe;border-color:#1d9bf0;color:#0b5c8f}
         .v.mine.down{background:#fde8e8;border-color:#c62828;color:#a01c1c}
         .reply-btn{font-size:14px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#0c75bc;font-weight:600}
         .h{opacity:0.5;font-style:italic;cursor:pointer;padding:30px;background:#f0f0f0;border-radius:16px;text-align:center;font-size:18px}
         .tomb{font-style:italic;background:#f3f4f6;color:#5b616e;border-left-color:#c9ced6;box-shadow:none;font-size:14px}
-        #reply-indicator{display:none;background:#e8f4fd;border-radius:10px;padding:10px 14px;margin:8px 0;font-size:14px;color:#1d9bf0;align-items:center;justify-content:space-between;gap:10px}
-        #reply-hint{display:none;font-size:12px;color:#5b7c95;margin-top:3px}
-        #reply-cancel{background:none;border:none;color:#1d9bf0;cursor:pointer;font-weight:600;font-size:18px}
+        #reply-indicator{display:none;background:#e8f4fd;border-radius:10px;padding:10px 14px;margin:8px 0;font-size:14px;color:#0a68a6;align-items:center;justify-content:space-between;gap:10px}
+        #reply-hint{display:none;font-size:12px;color:#4a6b82;margin-top:3px}
+        #reply-cancel{background:none;border:none;color:#0a68a6;cursor:pointer;font-weight:600;font-size:18px}
         #msg{display:none;position:fixed;left:50%;bottom:26px;transform:translateX(-50%);max-width:88vw;z-index:40;background:#0c75bc;color:white;padding:12px 18px;border-radius:12px;text-align:center;font-size:16px;box-shadow:0 6px 24px rgba(0,0,0,.28)}
         #onboard{display:none;background:#f0f7ff;border-radius:14px;padding:16px 18px;margin:0 0 12px}
         .ob-title{font-size:17px;font-weight:700;color:#0c75bc;margin:0 0 8px}
@@ -399,7 +422,7 @@
         #m.dark-mode #donate-custom input{background:#27272a;border-color:#3f3f46;color:#e4e4e7}
         #m.dark-mode #donate-note{color:#8b8b93}
         @media(min-width:768px){#controls{flex-direction:row;align-items:center}#search{width:260px}}
-        .c a{color:#1d9bf0;text-decoration:none}
+        .c a{color:#0c75bc;text-decoration:none}
         .c a:hover{text-decoration:underline}
         .c code{background:#f0f4f8;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:15px;color:#d63384}
         .zap-btn{font-size:20px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#b45309}
@@ -429,7 +452,7 @@
         .c.own{border-left-color:#2e7d32}
         #muted-section{display:none;margin-top:14px}
         .muted-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:white;border-radius:8px;margin:5px 0;font-size:14px;color:#444;border:1px solid #eee}
-        .unmute-btn{background:none;border:none;color:#1d9bf0;cursor:pointer;font-size:13px;font-weight:600}
+        .unmute-btn{background:none;border:none;color:#0a68a6;cursor:pointer;font-size:13px;font-weight:600}
         #notif-banner{display:none;background:#fff7e6;border:1px solid #f0b429;border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:14px;color:#6b4a00;text-align:left}
         #notif-banner .nb-head{display:flex;align-items:center;gap:8px;font-weight:600}
         #notif-banner .nb-head span{flex:1}
@@ -495,6 +518,21 @@
         #m.dark-mode .copy-btn:hover{color:#e4e4e7}
         #m.dark-mode .del-btn{color:#a1a1aa}
         #m.dark-mode .del-btn:hover,#m.dark-mode .del-btn.armed{color:#f87171}
+        #m.dark-mode .relay-remove,#m.dark-mode .relay-state.failed,#m.dark-mode .relay-state.unreachable,#m.dark-mode .relay-state.blocked,#m.dark-mode #status.err{color:#f87171}
+        /* The blue and red that were darkened for the light panel need the other direction here:
+           on #0c0c0e they land at 3.30:1 and 3.48:1. Everything that carries a colour set from
+           script — the button-position row, the signer choice — is listed too, or the inline value
+           wins and the theme has no say. */
+        #m.dark-mode #reply-cancel,#m.dark-mode .unmute-btn,#m.dark-mode #gear-btn.active{color:#93c5fd}
+        /* These were coloured from script, inline, which no theme can override — so the dark panel
+           kept the light palette, and !important only made it worse by overriding the selected
+           state too. The choice is a class now and the colour is CSS, which is what a theme needs. */
+        .btnpos,#signer-local,#signer-nip07{border:1px solid #0a68a6;color:#0a68a6;background:none}
+        .btnpos.on,#signer-local.on,#signer-nip07.on{background:#0c75bc;color:#fff;border-color:#0c75bc}
+        #m.dark-mode .btnpos,#m.dark-mode #signer-local,#m.dark-mode #signer-nip07{border-color:#3b82f6;color:#93c5fd}
+        #m.dark-mode .btnpos.on,#m.dark-mode #signer-local.on,#m.dark-mode #signer-nip07.on{background:#1e3a5f;color:#e8eaed;border-color:#3b82f6}
+        .backup-warn{color:#b3241f}
+        #m.dark-mode .backup-warn{color:#f87171}
         #m.dark-mode .mute-btn:hover{color:#f87171}
         #m.dark-mode .v{background:#2a2a35;border-color:#4a4a5a;color:#c4c4ce}
         #m.dark-mode .v:hover{background:#1e3a5f;border-color:#3b82f6;color:#60a5fa}
@@ -502,7 +540,7 @@
         #m.dark-mode .v.mine.down{background:#3b1f1f;border-color:#ef4444;color:#fca5a5}
         .nc-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
         .nc-plink{display:flex;align-items:center;gap:8px;text-decoration:none}
-        .nc-name{font-weight:600;color:#1d9bf0}
+        .nc-name{font-weight:600;color:#0c75bc}
         .nc-nip05{color:#2e7d32;font-weight:700;font-size:13px;cursor:help}
         .nc-body{margin:12px 0;font-size:17px;line-height:1.6}
         .nc-actions{margin-top:12px}
@@ -553,83 +591,83 @@
         <label id="widepub-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="widepub-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Also send what you post to three extra relays, so one relay removing it is not the end of it. They are never read from.</span></label>
         <div id="identity-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong style="font-size:15px;color:#333">Your identity</strong>
-        <p style="font-size:13px;color:#666;margin:6px 0 8px">This is the public half — the name people see. Safe to share anywhere.</p>
+        <strong class="set-h" style="font-size:15px">Your identity</strong>
+        <p class="set-p" style="font-size:13px;margin:6px 0 8px">This is the public half — the name people see. Safe to share anywhere.</p>
         <div id="identity-card" style="display:flex;align-items:center;gap:10px;margin:8px 0 0">
         <img id="identity-avatar" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;background:#e8e8e8;display:none;flex:none">
         <div style="min-width:0;flex:1">
-        <div id="identity-name" style="font-weight:600;font-size:14px;color:#1d9bf0"></div>
-        <div id="identity-npub" style="font-size:11px;font-family:monospace;color:#666;word-break:break-all"></div>
-        <div id="identity-hex" style="font-size:11px;font-family:monospace;color:#666;word-break:break-all;display:none"></div>
+        <div id="identity-name" class="set-blue" style="font-weight:600;font-size:14px"></div>
+        <div id="identity-npub" class="set-p" style="font-size:11px;font-family:monospace;word-break:break-all"></div>
+        <div id="identity-hex" class="set-p" style="font-size:11px;font-family:monospace;word-break:break-all;display:none"></div>
         </div>
         </div>
         <div id="setname-row" style="display:none;margin:10px 0 0">
-        <p id="setname-lead" style="font-size:13px;color:#666;margin:0 0 6px"></p>
+        <p id="setname-lead" class="set-p" style="font-size:13px;margin:0 0 6px"></p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
         <input id="setname-input" maxlength="40" placeholder="A name people will see" style="flex:1;min-width:160px;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;font-family:inherit">
         <button id="setname-btn" style="padding:9px 14px;background:#0c75bc;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;font-family:inherit">Publish name</button>
         </div>
-        <p style="font-size:12px;color:#8a8a8a;margin:6px 0 0">Public, like your comments. Any Nostr app can change it later, and so can this one.</p>
+        <p class="set-p" style="font-size:12px;margin:6px 0 0">Public, like your comments. Any Nostr app can change it later, and so can this one.</p>
         </div>
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <button id="identity-copy-npub" style="padding:6px 12px;background:none;border:1px solid #1d9bf0;color:#1d9bf0;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">Copy npub</button>
-        <button id="identity-hex-toggle" style="padding:6px 12px;background:none;border:1px solid #bbb;color:#666;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">Show hex</button>
-        <button id="identity-copy-hex" style="padding:6px 12px;background:none;border:1px solid #bbb;color:#666;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;display:none">Copy hex</button>
+        <button id="identity-copy-npub" class="set-btn blue" style="padding:6px 12px;background:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">Copy npub</button>
+        <button id="identity-hex-toggle" class="set-btn grey" style="padding:6px 12px;background:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">Show hex</button>
+        <button id="identity-copy-hex" class="set-btn grey" style="padding:6px 12px;background:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;display:none">Copy hex</button>
         </div>
         </div>
         <div id="keypair-section" style="display:none">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong style="font-size:15px;color:#c62828">Your private key</strong>
-        <p style="font-size:13px;color:#c62828;margin:6px 0 8px">⚠ Anyone who has this can post as you, forever. Never paste it anywhere but a Nostr app you trust — and keep a copy, because it is stored in this browser only.</p>
-        <button id="privkey-reveal" style="width:100%;padding:9px 14px;background:none;border:1px solid #c62828;color:#c62828;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Show private key</button>
+        <strong class="set-h warn" style="font-size:15px">Your private key</strong>
+        <p class="set-p warn" style="font-size:13px;margin:6px 0 8px">⚠ Anyone who has this can post as you, forever. Never paste it anywhere but a Nostr app you trust — and keep a copy, because it is stored in this browser only.</p>
+        <button id="privkey-reveal" class="set-btn red" style="width:100%;padding:9px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Show private key</button>
         <div id="privkey-box" style="display:none;margin-top:8px">
         <input id="privkey-display" readonly style="width:100%;font-size:12px;font-family:monospace;padding:8px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box">
         <div style="display:flex;gap:8px;margin-top:6px">
         <button id="copy-nsec" style="flex:1;padding:8px 14px;background:#0c75bc;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Copy nsec</button>
-        <button id="privkey-copy" style="flex:1;padding:8px 14px;background:none;border:1px solid #1d9bf0;color:#1d9bf0;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Copy hex</button>
+        <button id="privkey-copy" class="set-btn blue" style="flex:1;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Copy hex</button>
         </div>
         </div>
         <label id="privkey-backup-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="privkey-backup" style="width:16px;height:16px;flex:none;margin:0"><span>I've saved my private key somewhere safe</span></label>
 
         <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="privkey-rotate" style="flex:1;padding:8px 14px;background:none;border:1px solid #d97706;color:#d97706;border-radius:8px;cursor:pointer;font-size:13px">Rotate key</button>
-        <button id="privkey-delete" style="flex:1;padding:8px 14px;background:none;border:1px solid #c62828;color:#c62828;border-radius:8px;cursor:pointer;font-size:13px">Delete keypair</button>
+        <button id="privkey-rotate" class="set-btn amber" style="flex:1;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Rotate key</button>
+        <button id="privkey-delete" class="set-btn red" style="flex:1;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Delete keypair</button>
         </div>
         </div>
         <div id="import-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong style="font-size:15px;color:#333">Use an existing identity</strong>
-        <p style="font-size:13px;color:#666;margin:6px 0 10px">Paste the nsec from another Nostr app to post as that identity here. Raw hex works too.</p>
+        <strong class="set-h" style="font-size:15px">Use an existing identity</strong>
+        <p class="set-p" style="font-size:13px;margin:6px 0 10px">Paste the nsec from another Nostr app to post as that identity here. Raw hex works too.</p>
         <div style="display:flex;gap:8px">
         <input id="privkey-import" placeholder="nsec1… or 64-char hex" style="flex:1;font-size:12px;font-family:monospace;padding:8px;border:1px solid #ddd;border-radius:8px">
-        <button id="privkey-import-btn" style="padding:8px 14px;background:none;border:1px solid #1d9bf0;color:#1d9bf0;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Import</button>
+        <button id="privkey-import-btn" class="set-btn blue" style="padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Import</button>
         </div>
-        <p style="font-size:12px;color:#6b6b6b;margin:6px 0 0">This replaces any key stored here — back that one up first.</p>
+        <p class="set-p" style="font-size:12px;margin:6px 0 0">This replaces any key stored here — back that one up first.</p>
         </div>
         <div id="signer-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong style="font-size:15px;color:#333">Signing</strong>
-        <p style="font-size:13px;color:#666;margin:6px 0 10px">Which key signs your comments. Switch to your signer to use whichever account is selected there.</p>
+        <strong class="set-h" style="font-size:15px">Signing</strong>
+        <p class="set-p" style="font-size:13px;margin:6px 0 10px">Which key signs your comments. Switch to your signer to use whichever account is selected there.</p>
         <div style="display:flex;gap:8px">
         <button id="signer-local" style="flex:1;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Key stored here</button>
         <button id="signer-nip07" style="flex:1;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Alby / nos2x</button>
         </div>
-        <p id="signer-note" style="font-size:12px;color:#6b6b6b;margin:8px 0 0"></p>
+        <p id="signer-note" class="set-p" style="font-size:12px;margin:8px 0 0"></p>
         </div>
         <div id="muted-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong style="font-size:15px;color:#333">Muted users</strong>
+        <strong class="set-h" style="font-size:15px">Muted users</strong>
         <div id="muted-list"></div>
         </div>
         <div id="disabled-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong style="font-size:15px;color:#333">Disabled sites</strong>
+        <strong class="set-h" style="font-size:15px">Disabled sites</strong>
         <div id="disabled-list"></div>
         </div>
         <div id="muteword-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong style="font-size:15px;color:#333">Muted words</strong>
-        <p style="font-size:13px;color:#666;margin:6px 0 8px">Hide comments containing any of these words.</p>
+        <strong class="set-h" style="font-size:15px">Muted words</strong>
+        <p class="set-p" style="font-size:13px;margin:6px 0 8px">Hide comments containing any of these words.</p>
         <div id="muteword-list"></div>
         <div id="muteword-add">
         <input id="muteword-input" placeholder="word or phrase">
@@ -637,31 +675,31 @@
         </div>
         </div>
         <div style="margin-top:14px">
-        <strong style="font-size:15px;color:#333">Pictures</strong>
+        <strong class="set-h" style="font-size:15px">Pictures</strong>
         <label id="autoimg-label" style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="autoimg-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Load pictures automatically</span></label>
-        <p style="font-size:12px;color:#777;margin:6px 0 0;line-height:1.45">On by default. A picture is fetched from wherever the person who posted it chose, which tells that server your IP address — and nobody moderates a thread here, so you may not want every picture arriving unasked. Turn this off and each one waits behind its host name until you ask for it. Avatars wait too.</p>
+        <p class="set-p" style="font-size:12px;margin:6px 0 0;line-height:1.45">On by default. A picture is fetched from wherever the person who posted it chose, which tells that server your IP address — and nobody moderates a thread here, so you may not want every picture arriving unasked. Turn this off and each one waits behind its host name until you ask for it. Avatars wait too.</p>
         </div>
         <div style="margin-top:14px">
-        <strong style="font-size:15px;color:#333">Verified names</strong>
+        <strong class="set-h" style="font-size:15px">Verified names</strong>
         <label id="nip05-label" style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="nip05-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Check the name@domain a commenter claims</span></label>
-        <p style="font-size:12px;color:#777;margin:6px 0 0;line-height:1.45">Off by default. Checking asks that commenter's domain whether the name is really theirs, which tells the domain you are reading this page. Nothing else here contacts anyone outside your relays.</p>
+        <p class="set-p" style="font-size:12px;margin:6px 0 0;line-height:1.45">Off by default. Checking asks that commenter's domain whether the name is really theirs, which tells the domain you are reading this page. Nothing else here contacts anyone outside your relays.</p>
         </div>
         <div style="margin-top:14px">
         <hr style="margin:0 0 12px;border:none;border-top:1px solid #eee">
-        <strong style="font-size:15px;color:#333">This site</strong>
-        <p style="font-size:13px;color:#666;margin:6px 0 10px">Where the NostrComments button sits on <span id="site-origin"></span> — or whether it appears at all.</p>
+        <strong class="set-h" style="font-size:15px">This site</strong>
+        <p class="set-p" style="font-size:13px;margin:6px 0 10px">Where the NostrComments button sits on <span id="site-origin"></span> — or whether it appears at all.</p>
         <div id="btnpos-row" style="display:flex;gap:8px">
         <button class="btnpos" data-c="tl" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↖ Top left</button>
         <button class="btnpos" data-c="tr" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↗ Top right</button>
         <button class="btnpos" data-c="bl" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↙ Bottom left</button>
         <button class="btnpos" data-c="br" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↘ Bottom right</button>
         </div>
-        <button id="site-disable-btn" style="margin-top:14px;padding:8px 14px;background:none;border:1px solid #e53935;color:#e53935;border-radius:8px;cursor:pointer;font-size:13px">Disable on this site</button>
+        <button id="site-disable-btn" class="set-btn red" style="margin-top:14px;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Disable on this site</button>
         <p id="site-thread">Comments here are filed under <code id="site-thread-url"></code> — this is the address your relays are asked about.</p>
         </div>
         <div style="margin-top:14px">
-        <strong style="font-size:15px;color:#333">Your threads</strong>
-        <p style="font-size:12px;color:#777;margin:6px 0 0;line-height:1.45">Pages you have commented on. A comment is filed under one address, so without this there is no way back to a conversation you left.</p>
+        <strong class="set-h" style="font-size:15px">Your threads</strong>
+        <p class="set-p" style="font-size:12px;margin:6px 0 0;line-height:1.45">Pages you have commented on. A comment is filed under one address, so without this there is no way back to a conversation you left.</p>
         <div id="mythreads"></div>
         </div>
         </div>
@@ -759,9 +797,7 @@
         function paintBtnPos() {
             for (const b of s.querySelectorAll('.btnpos')) {
                 const on = b.dataset.c === btnCorner;
-                b.style.background = on ? '#1d9bf0' : 'none';
-                b.style.color = on ? '#fff' : '#1d9bf0';
-                b.style.border = '1px solid #1d9bf0';
+                b.classList.toggle('on', on);
             }
         }
         for (const b of s.querySelectorAll('.btnpos')) b.onclick = () => {
@@ -959,7 +995,7 @@
             if (!privkeyBackup) return;
             privkeyBackup.checked = keyBackedUp;
             const lbl = privkeyBackup.closest('label');
-            if (lbl) lbl.style.color = keyBackedUp ? '#888' : '#c62828';
+            if (lbl) lbl.classList.toggle('backup-warn', !keyBackedUp);
         }
         privkeyBackup.onchange = () => {
             keyBackedUp = privkeyBackup.checked;
@@ -970,7 +1006,8 @@
         // Optional password protection: encrypt the local key at rest (PBKDF2 -> AES-GCM).
         const pwBtn = document.createElement('button');
         pwBtn.type = 'button';
-        Object.assign(pwBtn.style, {width:'100%',marginTop:'8px',padding:'9px 14px',background:'none',border:'1px solid #1d9bf0',color:'#1d9bf0',borderRadius:'8px',cursor:'pointer',fontSize:'13px'});
+        pwBtn.className = 'set-btn blue';
+        Object.assign(pwBtn.style, {width:'100%',marginTop:'8px',padding:'9px 14px',background:'none',borderRadius:'8px',cursor:'pointer',fontSize:'13px'});
         function refreshPwBtn() { pwBtn.textContent = encPriv ? '🔓 Remove password' : '🔒 Set a password'; }
         refreshPwBtn();
         pwBtn.onclick = async () => {
@@ -2639,9 +2676,7 @@
         function paintSignerChoice() {
             const usingNip07 = signerPref === 'nip07' || (signerPref === null && !!_nip07Wallet());
             for (const [b, on] of [[signerLocalBtn, !usingNip07], [signerNip07Btn, usingNip07]]) {
-                b.style.background = on ? '#1d9bf0' : 'none';
-                b.style.color = on ? '#fff' : '#1d9bf0';
-                b.style.border = '1px solid #1d9bf0';
+                b.classList.toggle('on', on);
             }
             signerNote.textContent = usingNip07
                 ? 'Using your browser signer. Change the account there and NostrComments follows.'

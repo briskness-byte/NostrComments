@@ -275,64 +275,153 @@ const setTheme = async want => {
     return JSON.parse(await js(`${ROOT} return JSON.stringify({ dark: s.getElementById('m').classList.contains('dark-mode') });`)).dark;
 };
 
-// The whole action row under a comment — reply, zap, link, mute, delete — only exists once a
-// comment does, and this suite loads none. So none of it was ever measured, and .reply-btn sat at
-// 3.00:1 while .del-btn and .mute-btn sat at 1.92:1. Third time this shape of gap has cost
-// something: an element that is absent when the suite looks is an element it cannot hold.
-await js(`${ROOT}
-  const c = document.createElement('div');
-  c.className = 'c own';
-  c.append(document.createTextNode('A comment, so the row beneath it exists to be measured.'));
-  const row = document.createElement('div');
-  row.className = 'actions';
-  const mk = (cls, txt) => { const b = document.createElement('button'); b.className = cls; b.textContent = txt; return b; };
-  row.append(mk('vote-btn', '\u2191 5'), mk('reply-btn', '\u21a9 Reply'), mk('zap-btn', '\u26a1'),
-             mk('copy-btn', '\u{1F517}'), mk('mute-btn', '\u{1F6AB} Mute'), mk('del-btn', '\u{1F5D1} Delete'));
-  c.appendChild(row);
-  s.getElementById('list').appendChild(c);
-  return 1;`);
+// ---------------------------------------------------------------------------------------------
+// Scenes.
+//
+// This suite used to sample whatever happened to be on screen, which meant it measured the panel in
+// exactly one state and said nothing about the rest. Five contrast failures were found by hand in a
+// single day because of it — the note badge at 4.34:1, the reply banner at 2.15:1, four buttons in
+// the action row, the Settings link at 4.32:1 — every one of them in a region that is display:none
+// or absent until there is data.
+//
+// So the panel is walked through its states instead. Two kinds:
+//
+//   STATE-GATED  — Settings, onboarding, the reply indicator, the key sections. These are opened,
+//                  which is faithful: the suite drives the real thing.
+//   DATA-GATED   — comments, badges, tombstones, placeholders. There is no relay here, so a
+//                  representative element is put in. Contrast is a property of the stylesheet, not
+//                  of how the element arrived.
+//
+// COVERAGE is what makes this a fix rather than a longer list. A scene that silently fails to open
+// leaves the same hole as before and the suite would pass, so every selector below has to be seen
+// at least once or the run fails and names it.
+const scene = (name, setup) => ({ name, setup });
+const SCENES = [
+    scene('thread', `${ROOT}
+        const list = s.getElementById('list');
+        const mk = (cls, txt) => { const b = document.createElement('button'); b.className = cls; b.textContent = txt; return b; };
+        const card = document.createElement('div');
+        card.className = 'c own';
+        card.append(document.createTextNode('A comment, so the row beneath it exists to be measured.'));
+        const row = document.createElement('div');
+        row.className = 'actions';
+        row.append(mk('vote-btn', '\u2191 5'), mk('reply-btn', '\u21a9 Reply'), mk('zap-btn', '\u26a1'),
+                   mk('copy-btn', '\u{1F517}'), mk('share-btn', '\u{1F4E3} Share'),
+                   mk('mute-btn', '\u{1F6AB} Mute'), mk('del-btn', '\u{1F5D1} Delete'));
+        card.appendChild(row);
+        list.appendChild(card);
 
-// The reply banner is hidden until a reply arrives, so it was never sampled — and sat at 2.15:1,
-// white on orange, for as long as it existed. Same gap as the note badge below: an element that is
-// display:none when the suite looks is an element the suite cannot hold to anything.
-await js(`${ROOT}
-  const b = s.getElementById('notif-banner');
-  b.textContent = '';
-  const head = document.createElement('div');
-  head.className = 'nb-head';
-  const label = document.createElement('span');
-  label.textContent = '\u{1F514} 2 new replies on your comments';
-  const x = document.createElement('button');
-  x.type = 'button'; x.className = 'nb-x'; x.textContent = '\u00d7';
-  head.append(label, x);
-  const a = document.createElement('a');
-  a.href = 'https://example.com/article'; a.textContent = '2 on example.com/article';
-  b.append(head, a);
-  b.style.display = 'block';
-  return 1;`);
+        const note = document.createElement('div');
+        note.className = 'c nc-note';
+        note.append(document.createTextNode('A comment carried over from the old note format.'));
+        const tag = document.createElement('span');
+        tag.className = 'nc-notetag'; tag.textContent = 'note';
+        note.append(tag);
+        list.appendChild(note);
 
-// The "note" badge is only drawn on a comment carried over from the old kind 1 format, and this
-// suite never loads one — which is how its light-mode colour sat at 4.34:1 for eleven versions
-// without anything noticing. Contrast is a property of the stylesheet rather than of how the element
-// came to be there, so one is put into the list directly.
-await js(`${ROOT}
-  const d = document.createElement('div');
-  d.className = 'c nc-note';
-  d.append(document.createTextNode('A comment carried over from the old note format.'));
-  const t = document.createElement('span');
-  t.className = 'nc-notetag';
-  t.textContent = 'note';
-  d.append(t);
-  s.getElementById('list').append(d);
-  return 1;`);
+        const tomb = document.createElement('div');
+        tomb.className = 'tomb c';
+        tomb.textContent = 'Comment from a muted user \u2014 tap to show';
+        list.appendChild(tomb);
 
+        const hold = document.createElement('button');
+        hold.type = 'button'; hold.className = 'nc-hold';
+        const who = document.createElement('span'); who.className = 'nc-hold-host'; who.textContent = 'pictures.example';
+        const act = document.createElement('span'); act.className = 'nc-hold-act'; act.textContent = 'Show picture';
+        hold.append(who, act);
+        list.appendChild(hold);
+
+        const same = document.createElement('button');
+        same.type = 'button'; same.className = 'nc-same';
+        same.textContent = 'and 4 more like this from the same key \u2014 show';
+        list.appendChild(same);
+
+        const pk = s.getElementById('pagekey');
+        pk.textContent = 'Thread for example.com/article';
+        pk.style.display = 'block';
+
+        const empty = document.createElement('i');
+        empty.className = 'nc-empty';
+        empty.textContent = 'No comments yet \u2013 be the first!';
+        list.appendChild(empty);
+        return 1;`),
+
+    scene('reply banner', `${ROOT}
+        const b = s.getElementById('notif-banner');
+        b.textContent = '';
+        const head = document.createElement('div');
+        head.className = 'nb-head';
+        const label = document.createElement('span');
+        label.textContent = '\u{1F514} 2 new replies on your comments';
+        const x = document.createElement('button');
+        x.type = 'button'; x.className = 'nb-x'; x.textContent = '\u00d7';
+        head.append(label, x);
+        const a = document.createElement('a');
+        a.href = 'https://example.com/article'; a.textContent = '2 on example.com/article';
+        b.append(head, a);
+        b.style.display = 'block';
+        return 1;`),
+
+    scene('replying', `${ROOT}
+        s.getElementById('reply-to-label').textContent = 'Replying to npub1abc\u2026';
+        s.getElementById('reply-hint').textContent = ' \u2014 they will see it in their client';
+        s.getElementById('reply-hint').style.display = 'inline';
+        s.getElementById('reply-indicator').style.display = 'flex';
+        s.getElementById('msg').textContent = 'Posted to 3 of 6 relays.';
+        s.getElementById('msg').style.display = 'block';
+        return 1;`),
+
+    scene('onboarding', `${ROOT}
+        s.getElementById('onboard').style.display = 'block';
+        return 1;`),
+
+    scene('settings', `${ROOT}
+        s.getElementById('gear-btn').click();
+        s.getElementById('keypair-section').style.display = 'block';
+        s.getElementById('privkey-box').style.display = 'block';
+        s.getElementById('setname-row').style.display = 'flex';
+        s.getElementById('muted-section').style.display = 'block';
+        const mt = s.getElementById('mythreads');
+        mt.textContent = 'Recently:';
+        const a = document.createElement('a');
+        a.href = 'https://example.com/one'; a.textContent = 'example.com/one';
+        mt.appendChild(a);
+        s.getElementById('site-thread-url').textContent = 'https://example.com/article';
+        return 1;`),
+
+    scene('support expanded', `${ROOT}
+        s.getElementById('donate-body').style.display = 'block';
+        s.getElementById('donate-custom').style.display = 'flex';
+        return 1;`),
+];
+
+// Everything the scenes are supposed to bring into view. Missing from a run means a scene stopped
+// working, which is the failure this whole rewrite exists to catch.
+const MUST_SEE = [
+    '.reply-btn', '.zap-btn', '.copy-btn', '.share-btn', '.mute-btn', '.del-btn', '.vote-btn',
+    '.nc-notetag', '.tomb', '.nc-hold-host', '.nc-hold-act', '.nc-same', '.nc-empty',
+    '.nb-x', '#reply-hint', '#msg', '#site-thread', '#mythreads', '#pagekey',
+];
+
+const seen = new Set();
 for (const theme of ['light', 'dark']) {
     console.log(`\n=== contrast, ${theme} mode ===`);
     const isDark = await setTheme(theme);
     ok(`${theme} mode is active`, isDark === (theme === 'dark'), { darkClass: isDark });
-    checkContrast(theme, await sample());
+    for (const sc of SCENES) {
+        await js(sc.setup);
+        await new Promise(r => setTimeout(r, 250));
+        const data = await sample();
+        Object.keys(data).forEach(k => seen.add(k.split(' ')[0]));
+        checkContrast(`${theme}/${sc.name}`, data);
+    }
     await shot(theme);
 }
+
+console.log('\n=== coverage ===');
+// Without this the suite grows quietly useless: a scene that stops opening takes its elements with
+// it and everything still reports green.
+for (const sel of MUST_SEE) ok(`${sel} was reached and measured`, seen.has(sel), [...seen].sort());
 
 if (SHOTS) console.log(`\nscreenshots written to ${SHOTS}`);
 console.log(`\n${fail === 0 ? '✓' : '✗'} browser QA: ${pass} passed, ${fail} failed`);
