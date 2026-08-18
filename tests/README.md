@@ -362,6 +362,24 @@ owner has commented, so one host collects a reading list rather than a single vi
 node tests/browser-pictures.mjs
 ```
 
+`browser-share.mjs` covers sharing your own comment to your feed. A comment here is a kind 1111
+scoped to a page address, which keeps comments out of the timelines of everyone who follows you —
+the problem NIP-22 exists to solve — but it also means only somebody with this extension, on that
+page, can ever see it. Sharing publishes a second, separate event: an ordinary note carrying the
+comment and a link back.
+
+Two clicks, and the suite checks that the first one publishes nothing: a stray click must not
+broadcast to everybody following you.
+
+The assertion that pins the design is the last: the note carries **no `r` tag**. The panel reads
+kind 1 with `#r` as a legacy comment, so tagging the share with the page would make it appear a
+second time inside the thread it was shared from. Adding that tag fails two of the fifteen checks —
+the tag assertion, and the count of comments in the thread afterwards.
+
+```sh
+node tests/browser-share.mjs
+```
+
 `browser-xss.mjs` is written from the attacker's seat. Everything the panel draws comes from
 strangers — comment text, the name on a profile, the address of an avatar — and none of it is
 escaped anywhere, because none of it is ever parsed as markup: the DOM is built with `createElement`

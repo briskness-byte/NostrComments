@@ -375,6 +375,11 @@
         .c code{background:#f0f4f8;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:15px;color:#d63384}
         .zap-btn{font-size:20px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#b45309}
         .zap-btn:hover{color:#d97706}
+        .share-btn{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#767676}
+        .share-btn:hover{color:#0c75bc}
+        .share-btn.armed{color:#0c75bc;font-weight:700}
+        #m.dark-mode .share-btn{color:#a1a1aa}
+        #m.dark-mode .share-btn:hover,#m.dark-mode .share-btn.armed{color:#60a5fa}
         .del-btn{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#767676}
         .del-btn:hover{color:#c62828}
         .del-btn.armed{color:#c62828;font-weight:700}
@@ -3163,6 +3168,50 @@
             copyBtn.onclick = () => navigator.clipboard.writeText(`nostr:${toNote(ev.id)}`).then(() => showMsg('Link copied'));
             actions.appendChild(copyBtn);
             if (ev.pubkey === myPub) {
+                // A comment here is only visible to somebody who has this extension and opens this
+                // page. Sharing publishes an ordinary note instead, which your followers see in
+                // whatever client they use — the thing a comment cannot do.
+                //
+                // Two separate events on purpose. Writing the comment itself as a kind 1 would put
+                // every comment in your followers' timelines, which is what NIP-22 exists to stop.
+                // This way nothing is broadcast unless you say so, once, per comment.
+                //
+                // NOTE: no r tag with the page. The panel reads kind 1 with #r as a legacy comment,
+                // so tagging it would make the share appear a second time inside the thread it came
+                // from. The address goes in the text, where a reader can use it and the panel will
+                // not match on it.
+                const shareBtn = document.createElement('button');
+                shareBtn.className = 'share-btn';
+                shareBtn.textContent = '\u{1F4E3} Share';
+                shareBtn.title = 'Post this to your Nostr feed as an ordinary note';
+                let sArmed = false, sDisarm;
+                shareBtn.onclick = async () => {
+                    if (!sArmed) {
+                        sArmed = true;
+                        shareBtn.textContent = '\u{1F4E3} Share to your feed?';
+                        shareBtn.classList.add('armed');
+                        showMsg('Click again to post this as a note. Everyone who follows you will see it.');
+                        sDisarm = setTimeout(() => { sArmed = false; shareBtn.textContent = '\u{1F4E3} Share'; shareBtn.classList.remove('armed'); }, 6000);
+                        return;
+                    }
+                    clearTimeout(sDisarm);
+                    sArmed = false; shareBtn.classList.remove('armed'); shareBtn.textContent = '\u{1F4E3} Share';
+                    const note = {
+                        kind: 1,
+                        created_at: Math.floor(Date.now() / 1000),
+                        content: `${ev.content}\n\n${pageUrl}`,
+                        tags: [['client', 'NostrComments']],
+                        pubkey: myPub
+                    };
+                    try {
+                        const signed = await signAsMe(note);
+                        if (!(await verifyEvent(signed))) return showMsg('Signature check failed — nothing was posted.');
+                        if (publishFailed(await publishToRelays(signed), 'note')) return;
+                        showMsg('Posted to your feed. It links back to this page.');
+                    } catch (e) { showMsg('Could not sign the note'); }
+                };
+                actions.appendChild(shareBtn);
+
                 // Two-step, because this cannot be undone and cannot be fully guaranteed either.
                 const delBtn = document.createElement('button');
                 delBtn.className = 'del-btn';
