@@ -21,7 +21,7 @@
 import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9536);
-const SITE_PORT = Number(process.env.QA_SITE_PORT || 8095);
+const SITE_PORT = Number(process.env.QA_SITE_PORT || 8096);
 const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8463);
 
 const { _secp, toBech32, newKey } = extensionCode();

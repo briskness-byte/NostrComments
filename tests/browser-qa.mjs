@@ -29,7 +29,7 @@ const EXT = path.resolve(HERE, '..', 'NostrComments-Chrome');
 const LIVE = !process.argv.includes('--no-live');
 const SHOTS = process.argv.includes('--shots') ? process.argv[process.argv.indexOf('--shots') + 1] : null;
 const PORT = Number(process.env.QA_PORT || 9515);
-const SITE_PORT = Number(process.env.QA_SITE_PORT || 8099);
+const SITE_PORT = Number(process.env.QA_SITE_PORT || 8106);
 
 function findChromium() {
     if (process.env.CHROMIUM) return process.env.CHROMIUM;

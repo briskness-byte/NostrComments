@@ -23,7 +23,7 @@ import path from 'path';
 import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, makeCert, ROOT } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9546);
-const SITE_PORT = Number(process.env.QA_SITE_PORT || 8105);
+const SITE_PORT = Number(process.env.QA_SITE_PORT || 8107);
 const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8473);
 const SLOW_PORT = Number(process.env.QA_SLOW_PORT || 8474);
 

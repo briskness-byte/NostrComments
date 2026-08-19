@@ -19,7 +19,7 @@
 import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9533);
-const SITE_PORT = Number(process.env.QA_SITE_PORT || 8099);
+const SITE_PORT = Number(process.env.QA_SITE_PORT || 8104);
 const A_PORT = Number(process.env.QA_RELAY_PORT || 8461);
 const B_PORT = A_PORT + 1;
 const C_PORT = A_PORT + 2;

@@ -23,7 +23,7 @@ import { extensionCode, reporter, startRelay, startBrowser, configureScript, ROO
 
 const CD_PORT = Number(process.env.QA_PORT || 9537);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8105);
-const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8467);
+const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8468);
 
 const { normalizeUrl, sign, newKey } = extensionCode();
 const { ok, state } = reporter();

@@ -23,7 +23,7 @@ import { BADGE, extensionCode, reporter, startRelay, startSite, startBrowser, co
 
 const CD_PORT = Number(process.env.QA_PORT || 9538);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8097);
-const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8465);
+const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8466);
 
 const { _secp, normalizeUrl, toBech32, sign, newKey } = extensionCode();
 const { ok, state } = reporter();

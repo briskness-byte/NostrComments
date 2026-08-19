@@ -21,7 +21,7 @@
 // Requires: chromium (or Chrome), a matching chromedriver on PATH, openssl, Node 18+.
 import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT } from './harness.mjs';
 
-const CD_PORT = Number(process.env.QA_PORT || 9542);
+const CD_PORT = Number(process.env.QA_PORT || 9543);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8112);
 const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8482);
 

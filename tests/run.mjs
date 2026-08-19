@@ -4,6 +4,7 @@ import { run as secp } from './secp.test.mjs';
 import { run as encrypt } from './encrypt.test.mjs';
 import { run as normalize } from './normalize.test.mjs';
 import { run as parity } from './parity.test.mjs';
+import { run as ports } from './ports.test.mjs';
 import { run as zap } from './zap.test.mjs';
 import { run as bech32 } from './bech32.test.mjs';
 import { run as deletion } from './deletion.test.mjs';
@@ -12,7 +13,7 @@ import { run as popup } from './popup.test.mjs';
 import { run as relaymigration } from './relaymigration.test.mjs';
 import { run as nip05host } from './nip05host.test.mjs';
 
-const suites = [await secp(), await encrypt(), await normalize(), await zap(), await bech32(), await deletion(), await keyimport(), await popup(), await relaymigration(), await nip05host(), await parity()];
+const suites = [await secp(), await encrypt(), await normalize(), await zap(), await bech32(), await deletion(), await keyimport(), await popup(), await relaymigration(), await nip05host(), await parity(), await ports()];
 
 let totalFail = 0;
 console.log('');
