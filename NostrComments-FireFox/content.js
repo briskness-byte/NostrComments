@@ -9,7 +9,7 @@
     async function init() {
 
         // Load all persistent storage up front (cross-origin, unlike localStorage)
-        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg']);
+        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg']);
         let hasConsent = _st.nostrcomments_consent === true;
         let encPriv = _isEncPriv(_st.nostrcomments_privkey) ? _st.nostrcomments_privkey : null;
         let keyBackedUp = _st.nostrcomments_keybackup === true;
@@ -335,6 +335,17 @@
         #m.dark-mode .set-btn.red{color:#f87171}
         #m.dark-mode .set-btn.amber{color:#fbbf24}
         #m.dark-mode .set-btn.grey{color:#a1a1aa}
+        #notiflist{margin-top:10px;font-size:12px;color:#5b5b60}
+        .nf-row{padding:7px 0;border-bottom:1px solid #ececf0}
+        .nf-row:last-child{border-bottom:0}
+        .nf-who{font-weight:700;color:#1d9bf0;margin-right:6px}
+        .nf-txt{overflow-wrap:anywhere}
+        .nf-row a{display:block;margin-top:3px;overflow-wrap:anywhere;color:#0a68a6;font-weight:600}
+        .nf-new .nf-who::before{content:"● ";color:#e53935}
+        #m.dark-mode #notiflist{color:#a1a1aa}
+        #m.dark-mode .nf-row{border-bottom-color:#2a2a31}
+        #m.dark-mode .nf-who{color:#93c5fd}
+        #m.dark-mode .nf-row a{color:#60a5fa}
         #mythreads{margin-top:10px;font-size:12px;color:#5b5b60}
         #mythreads a{display:block;margin-top:6px;overflow-wrap:anywhere;color:#0a68a6;font-weight:600}
         #m.dark-mode #mythreads{color:#a1a1aa}
@@ -684,6 +695,11 @@
         <strong class="set-h" style="font-size:15px">Your threads</strong>
         <p class="set-p" style="font-size:12px;margin:6px 0 0;line-height:1.45">Pages you have commented on. A comment is filed under one address, so without this there is no way back to a conversation you left.</p>
         <div id="mythreads"></div>
+        </div>
+        <div style="margin-top:14px">
+        <strong class="set-h" style="font-size:15px">Replies to you</strong>
+        <p class="set-p" style="font-size:12px;margin:6px 0 0;line-height:1.45">Who answered you, and where. A reply about a page links back to the page; a reply to one of your notes lives on Nostr, and is marked that way.</p>
+        <div id="notiflist"></div>
         </div>
         </div>
         <div id="notif-banner"></div>
@@ -1786,6 +1802,8 @@
             settings.style.display = 'block';
             gearBtn.classList.add('active');
             loadMyThreads();
+            renderNotifs();
+            markNotifsSeen();
             renderRelayList();
             renderMutedList();
             renderDisabledList();
@@ -1929,6 +1947,55 @@
         // Relays cannot answer "everything under example.com": NIP-01 tag filters match exactly, so
         // there is no way to ask about a site. They can answer "everything by this key", and every
         // comment carries its page in an I tag, so the list is built from the other direction.
+        // Where a reply goes. A page comment goes back to the page; a reply to one of your notes
+        // has no page and belongs in a Nostr client, so it is labelled as such rather than dressed
+        // up as something this panel can open.
+        function notifDest(n) {
+            if (n.where) return { href: n.where, label: n.where.replace(/^https?:\/\//, '') };
+            try { return { href: 'https://njump.me/' + toBech32('note', n.id), label: 'on Nostr' }; }
+            catch (e) { return null; }
+        }
+
+        function renderNotifs() {
+            const box = s.getElementById('notiflist');
+            if (!box) return;
+            box.textContent = '';
+            if (!notifLog.length) {
+                box.textContent = 'Nothing yet — replies to your comments and mentions of you will be listed here.';
+                return;
+            }
+            for (const n of notifLog.slice(0, 12)) {
+                const row = document.createElement('div');
+                row.className = 'nf-row' + (n.seen ? '' : ' nf-new');
+                const who = document.createElement('span');
+                who.className = 'nf-who';
+                who.textContent = (myPub && profiles.get(n.pub)) || toNpub(n.pub).slice(0, 12) + '…';
+                const txt = document.createElement('span');
+                txt.className = 'nf-txt';
+                txt.textContent = n.txt || '(no text)';
+                row.append(who, txt);
+                const d = notifDest(n);
+                if (d) {
+                    const a = document.createElement('a');
+                    a.href = d.href; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                    a.textContent = d.label;
+                    row.appendChild(a);
+                }
+                box.appendChild(row);
+            }
+        }
+
+        // Opening the list is what marks it read: the badge should reflect whether you have looked,
+        // not whether you pressed a button afterwards.
+        function markNotifsSeen() {
+            if (!notifLog.some(n => !n.seen)) return;
+            notifLog.forEach(n => { n.seen = true; });
+            saveNotifs();
+            unreadReplies = 0;
+            updateNotifBadge();
+            renderNotifs();
+        }
+
         let _threadsAsked = false;
         function loadMyThreads() {
             const box = s.getElementById('mythreads');
@@ -2245,6 +2312,10 @@
         let muteWords = Array.isArray(_st.nostrcomments_mutewords) ? _st.nostrcomments_mutewords.map(w => String(w).toLowerCase()) : [];
         function saveMuteWords() { chrome.storage.local.set({nostrcomments_mutewords: muteWords}); }
         let unreadReplies = 0;
+        // Kept, not counted. A number nobody can act on is not a notification — it says something
+        // happened and refuses to say what. Capped at 50: this is a log to glance at, not an inbox.
+        let notifLog = Array.isArray(_st.nostrcomments_notifs) ? _st.nostrcomments_notifs.slice(0, 50) : [];
+        const saveNotifs = () => { try { chrome.storage.local.set({nostrcomments_notifs: notifLog.slice(0, 50)}); } catch(e) {} };
         // Where each unread reply is, so the banner can take you there. "3 new replies" without a
         // page is a dead end: only the person who wrote the comments could work out where to look,
         // and they would have to remember. The address is already in the event that arrives.
@@ -2446,7 +2517,13 @@
             const head = document.createElement('div');
             head.className = 'nb-head';
             const label = document.createElement('span');
-            label.textContent = `🔔 ${unreadReplies} new repl${unreadReplies === 1 ? 'y' : 'ies'} on your comments`;
+            // The old headline was a count and nothing else. Naming who and quoting the first words
+            // is the difference between a prompt and a notification.
+            const newest = notifLog.find(n => !n.seen);
+            const whoNewest = newest ? ((myPub && profiles.get(newest.pub)) || toNpub(newest.pub).slice(0, 12) + '…') : '';
+            label.textContent = newest && newest.txt
+                ? `🔔 ${whoNewest}: ${newest.txt.slice(0, 60)}${newest.txt.length > 60 ? '…' : ''}`
+                : `🔔 ${unreadReplies} new repl${unreadReplies === 1 ? 'y' : 'ies'} on your comments`;
             const x = document.createElement('button');
             x.type = 'button'; x.className = 'nb-x'; x.textContent = '×';
             x.setAttribute('aria-label', 'Dismiss');
@@ -2462,6 +2539,19 @@
                 a.textContent = `${n} on ${url.replace(/^https?:\/\//, '')}`;
                 a.onclick = () => { unreadPages.delete(url); };
                 notifBanner.appendChild(a);
+            }
+            // A reply with no page still has somewhere to go, and not only when it is the sole
+            // unread one: the headline quotes the newest reply, so a banner that links three pages
+            // and omits the note being quoted points everywhere except at what it just said.
+            {
+                const n = notifLog.find(x => !x.seen && !x.where);
+                const d = n && notifDest(n);
+                if (d) {
+                    const a = document.createElement('a');
+                    a.href = d.href; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                    a.textContent = 'read it ' + d.label;
+                    notifBanner.appendChild(a);
+                }
             }
             if (pages.length > 3) {
                 const rest = document.createElement('div');
@@ -2514,11 +2604,30 @@
                         // Already drawn in the thread you have open: announcing it is noise.
                         if (comments.some(c => c.id === ev.id)) return;
                         unreadReplies++;
+                        // Two shapes of the same event: a reply about a page, and a reply about a
+                        // note. Both are yours to know about, and conflating them is what made the
+                        // banner say "1 new reply" with nowhere to go.
+                        if (!notifLog.some(n => n.id === ev.id)) {
+                            notifLog.unshift({ id: ev.id, pub: ev.pubkey, at: ev.created_at,
+                                txt: String(ev.content || '').replace(/\s+/g, ' ').slice(0, 140),
+                                where: '', seen: false });
+                        }
                         // 1111 carries the page in an uppercase I tag; a legacy kind 1 uses r. A
                         // mention that is neither still counts, only without a destination.
                         const _wt = (ev.tags || []).find(x => x[0] === 'I') || (ev.tags || []).find(x => x[0] === 'r');
                         const _where = _wt && typeof _wt[1] === 'string' ? _wt[1] : '';
-                        if (_where) unreadPages.set(_where, (unreadPages.get(_where) || 0) + 1);
+                        if (_where) {
+                            unreadPages.set(_where, (unreadPages.get(_where) || 0) + 1);
+                            const rec = notifLog.find(n => n.id === ev.id);
+                            if (rec) rec.where = _where;
+                        }
+                        notifLog = notifLog.slice(0, 50);
+                        saveNotifs();
+                        renderNotifs();
+                        // Arriving while the panel is open used to update the badge and nothing
+                        // else, so the one moment somebody was definitely looking was the one
+                        // moment they were not told.
+                        if (modal.style.display !== 'none') paintNotifBanner();
                         updateNotifBadge();
                     }, _seenNotif);
                 };
