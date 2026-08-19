@@ -101,11 +101,35 @@ ok('it is still announced', b.shown === true, b.shown);
 ok('and it still has somewhere to go', b.links.length > 0, b.links);
 ok('pointed at a nostr client, not at a page', b.links.some(l => /njump\.me\/note1/.test(l.href)), b.links);
 
+// --- what interrupts, and what merely waits -----------------------------------------------------
+// The badge is the thing that pulls attention from outside the panel. A reply to one of your notes
+// cannot be answered here, so asking for attention it cannot repay is the annoyance the report was
+// really about. It stays in the list; it stays out of the badge.
+console.log('\n=== the badge counts only what this panel can act on ===');
+const badgeNow = () => js(`
+  const hosts = [...document.documentElement.children].filter(e => e.shadowRoot);
+  for (const h of hosts) { const n = h.shadowRoot.getElementById('nc-nbadge');
+    if (n) return JSON.stringify({ shown: getComputedStyle(n).display !== 'none', text: n.textContent }); }
+  return JSON.stringify({ missing: true });`);
+let bg = JSON.parse(await badgeNow());
+ok('the badge counts the page reply', bg.text === '1', bg);
+ok('and not the reply that has no page', bg.text !== '2', bg);
+// Both are still there to be found, which is the half that must not regress.
+let both = JSON.parse(await list());
+ok('while the list still holds both', both.rows.length === 2, both.rows.length);
+
+// A reply with no page must not raise the badge at all, even on its own.
+await reply('another note reply, still no page', [['e', 'cd'.repeat(32)], ['p', ME_PUB]]);
+bg = JSON.parse(await badgeNow());
+ok('a second page-less reply leaves the badge alone', bg.text === '1', bg);
+both = JSON.parse(await list());
+ok('but it is listed', both.rows.length === 3, both.rows.length);
+
 console.log('\n=== the list in settings ===');
 await openSettings();
 let l = JSON.parse(await list());
 ok('the list exists', !l.missing, l);
-ok('both replies are in it', l.rows.length === 2, l.rows.length);
+ok('all three replies are in it', l.rows.length === 3, l.rows.length);
 ok('each says who', l.rows.every(r => r.who.length > 0), l.rows.map(r => r.who));
 ok('each shows what was said', l.rows.some(r => /about the article/.test(r.txt)) && l.rows.some(r => /replying to your note/.test(r.txt)), l.rows.map(r => r.txt));
 // The whole point of the distinction: one is a page, the other is not, and the label says so.
@@ -129,7 +153,7 @@ await goto(site.url);
 await wait(3500);
 await openSettings();
 l = JSON.parse(await list());
-ok('the replies are still listed after a reload', l.rows.length === 2, l.rows.length);
+ok('the replies are still listed after a reload', l.rows.length === 3, l.rows.length);
 ok('with their text intact', l.rows.some(r => /replying to your note/.test(r.txt)), l.rows.map(r => r.txt));
 ok('and their destinations intact', l.rows.some(r => /njump\.me\/note1/.test(r.href)), l.rows.map(r => r.href));
 

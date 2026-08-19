@@ -2310,7 +2310,11 @@
         function saveMuted() { chrome.storage.local.set({nostrcomments_muted: [...mutedPubkeys]}); }
         let muteWords = Array.isArray(_st.nostrcomments_mutewords) ? _st.nostrcomments_mutewords.map(w => String(w).toLowerCase()) : [];
         function saveMuteWords() { chrome.storage.local.set({nostrcomments_mutewords: muteWords}); }
-        let unreadReplies = 0;
+        // The badge is what interrupts; the list is what you look at. They should not count the
+        // same thing. A reply to one of your notes has no page, cannot be answered from this panel
+        // and belongs in a Nostr client — so it goes in the list, where you find it when you look,
+        // and stays out of the badge, which asks for attention this panel cannot repay.
+        let unreadReplies = 0;          // page replies only: the number on the badge
         // Kept, not counted. A number nobody can act on is not a notification — it says something
         // happened and refuses to say what. Capped at 50: this is a log to glance at, not an inbox.
         let notifLog = Array.isArray(_st.nostrcomments_notifs) ? _st.nostrcomments_notifs.slice(0, 50) : [];
@@ -2521,7 +2525,8 @@
             const whoNewest = newest ? ((myPub && profiles.get(newest.pub)) || toNpub(newest.pub).slice(0, 12) + '…') : '';
             label.textContent = newest && newest.txt
                 ? `🔔 ${whoNewest}: ${newest.txt.slice(0, 60)}${newest.txt.length > 60 ? '…' : ''}`
-                : `🔔 ${unreadReplies} new repl${unreadReplies === 1 ? 'y' : 'ies'} on your comments`;
+                : (() => { const n = notifLog.filter(x => !x.seen).length || unreadReplies;
+                           return `🔔 ${n} new repl${n === 1 ? 'y' : 'ies'} on your comments`; })();
             const x = document.createElement('button');
             x.type = 'button'; x.className = 'nb-x'; x.textContent = '×';
             x.setAttribute('aria-label', 'Dismiss');
@@ -2601,7 +2606,7 @@
                     queueVerify(ev, () => {
                         // Already drawn in the thread you have open: announcing it is noise.
                         if (comments.some(c => c.id === ev.id)) return;
-                        unreadReplies++;
+                        // Counted below, and only if it turns out to have a page.
                         // Two shapes of the same event: a reply about a page, and a reply about a
                         // note. Both are yours to know about, and conflating them is what made the
                         // banner say "1 new reply" with nowhere to go.
@@ -2615,6 +2620,7 @@
                         const _wt = (ev.tags || []).find(x => x[0] === 'I') || (ev.tags || []).find(x => x[0] === 'r');
                         const _where = _wt && typeof _wt[1] === 'string' ? _wt[1] : '';
                         if (_where) {
+                            unreadReplies++;
                             unreadPages.set(_where, (unreadPages.get(_where) || 0) + 1);
                             const rec = notifLog.find(n => n.id === ev.id);
                             if (rec) rec.where = _where;
@@ -3862,6 +3868,15 @@
         // function so that send.onclick has nothing between "disable the button" and the try that
         // re-enables it — an exception thrown while building tags would otherwise leave the panel
         // with a dead Post button and no message.
+        // NIP-89. It says which software wrote a comment, which is how anybody — including this
+        // project — can count how many distinct keys have ever published with it. Installs are not
+        // use, and the store numbers cannot tell the difference.
+        //
+        // It is also a marker: a relay or a site can select on it and see exactly who is running
+        // this extension. The shape of these events is already recognisable to anyone looking, so
+        // it adds little, but it turns analysis into a filter. That trade was made deliberately.
+        const CLIENT_TAG = ["client", "NostrComments"];
+
         function buildEvent(text) {
             // Two shapes, and which one is used is decided by the parent, never by a setting.
             //
@@ -3879,6 +3894,7 @@
                 // Keeps the reply in this page's thread for the next reader, the same way the note
                 // it answers got there.
                 tags.push(["r", pageUrl]);
+                tags.push(CLIENT_TAG);
                 ev = {kind:LEGACY_KIND, created_at:Math.floor(Date.now()/1000), tags, content:text, pubkey:myPub};
             } else {
                 // NIP-22: the root scope in uppercase, the parent in lowercase. For a top-level
@@ -3890,6 +3906,7 @@
                 } else {
                     tags.push(["i", pageUrl], ["k", "web"]);
                 }
+                tags.push(CLIENT_TAG);
                 ev = {kind:COMMENT_KIND, created_at:Math.floor(Date.now()/1000), tags, content:text, pubkey:myPub};
             }
             return ev;
