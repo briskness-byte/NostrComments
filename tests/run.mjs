@@ -12,8 +12,9 @@ import { run as keyimport } from './import.test.mjs';
 import { run as popup } from './popup.test.mjs';
 import { run as relaymigration } from './relaymigration.test.mjs';
 import { run as nip05host } from './nip05host.test.mjs';
+import { run as background } from './background.test.mjs';
 
-const suites = [await secp(), await encrypt(), await normalize(), await zap(), await bech32(), await deletion(), await keyimport(), await popup(), await relaymigration(), await nip05host(), await parity(), await ports()];
+const suites = [await secp(), await encrypt(), await normalize(), await zap(), await bech32(), await deletion(), await keyimport(), await popup(), await relaymigration(), await nip05host(), await parity(), await ports(), await background()];
 
 let totalFail = 0;
 console.log('');

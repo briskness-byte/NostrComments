@@ -9,8 +9,61 @@
     async function init() {
 
         // Load all persistent storage up front (cross-origin, unlike localStorage)
-        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg']);
+        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker']);
         let hasConsent = _st.nostrcomments_consent === true;
+
+        // ---- background relay client — PHASE 1: built, deliberately not used -------------------
+        //
+        // Relay traffic opened from here is subject to the *page's* CSP on Firefox, so a site with
+        // a strict connect-src gets no relays and an empty panel. The socket has to be opened
+        // somewhere the site has no say over, which is background.js. This is the client side of
+        // that port.
+        //
+        // Nothing calls it yet. `nostrcomments_worker` defaults to false, every in-page socket
+        // below is untouched, and that is still what every user runs. Phase 2 puts both paths side
+        // by side in the tests and compares what comes back before either becomes the default.
+        const useWorker = _st.nostrcomments_worker === true;
+        const workerRelay = (() => {
+            let port = null, seq = 0;
+            const waiting = new Map();
+            const connect = () => {
+                if (port) return port;
+                port = chrome.runtime.connect({name: 'nc-relay'});
+                port.onMessage.addListener(m => {
+                    const w = waiting.get(m.id);
+                    if (!w) return;
+                    if (m.t === 'event') w.onEvent && w.onEvent(m.event, m.relay);
+                    else if (m.t === 'eose') w.onEose && w.onEose(m.relay);
+                    else if (m.t === 'ok') w.results && w.results.push({relay: m.relay, ok: m.ok, reason: m.reason});
+                    else if (m.t === 'pubdone') { waiting.delete(m.id); w.onDone && w.onDone(m.results || w.results || []); }
+                    else if (m.t === 'denied') { waiting.delete(m.id); w.onDone && w.onDone([]); }
+                });
+                // An MV3 service worker that was shut down for being idle takes the port with it.
+                // The next call builds a new one; anything already in flight is reported as
+                // unanswered rather than left hanging forever on a promise nobody will settle.
+                port.onDisconnect.addListener(() => {
+                    port = null;
+                    for (const [id, w] of [...waiting]) { waiting.delete(id); w.onDone && w.onDone(w.results || []); }
+                });
+                return port;
+            };
+            return {
+                enabled: useWorker,
+                sub(relays, filter, onEvent, onEose) {
+                    const id = 's' + (++seq);
+                    waiting.set(id, {onEvent, onEose});
+                    connect().postMessage({t: 'sub', id, relays, filter});
+                    return () => { waiting.delete(id); if (port) try { port.postMessage({t: 'unsub', id}); } catch(e) {} };
+                },
+                publish(relays, event) {
+                    return new Promise(resolve => {
+                        const id = 'p' + (++seq);
+                        waiting.set(id, {results: [], onDone: resolve});
+                        connect().postMessage({t: 'pub', id, relays, event});
+                    });
+                },
+            };
+        })();
         let encPriv = _isEncPriv(_st.nostrcomments_privkey) ? _st.nostrcomments_privkey : null;
         let keyBackedUp = _st.nostrcomments_keybackup === true;
         let isSupporter = _st.nostrcomments_supporter === true;

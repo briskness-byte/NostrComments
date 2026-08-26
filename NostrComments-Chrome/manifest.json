@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "NostrComments",
   "version": "23.1.0",
-  "description": "Comment freely on every website — without censorship",
+  "description": "Comment freely on every website \u2014 without censorship",
   "license": "MIT",
   "icons": {
     "48": "icon48.png",
@@ -19,6 +19,9 @@
       "run_at": "document_end"
     }
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_title": "NostrComments",
     "default_popup": "popup.html",

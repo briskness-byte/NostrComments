@@ -57,7 +57,7 @@ mkdir -p dist
 # Every file named here has to exist, and every file the extension needs has to be named here.
 # A build that quietly ships without one of them is not a hypothetical: an .xpi once went out
 # missing a whole feature because nobody checked what was inside it.
-PACKED="content.js injected.js popup.html popup.js manifest.json icon48.png icon128.png"
+PACKED="content.js background.js injected.js popup.html popup.js manifest.json icon48.png icon128.png"
 
 # A zip stores each file's modification time in local time with no zone recorded. Next to a GitHub
 # release, whose publication time is UTC, that is enough to work out where the machine that built it
