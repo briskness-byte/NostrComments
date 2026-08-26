@@ -8,233 +8,180 @@
 // CSP applies here, not the site's.
 //
 // The second thing it buys was the original reason this was on the backlog: today every tab opens
-// its own socket to every relay, so ten tabs is sixty connections and the page address goes out
-// sixty times. Here there is one socket per relay for the whole browser, shared by every tab, and
-// "connect" stops being a per-page cost at all.
+// its own sockets to every relay, so ten tabs is dozens of connections and the page address goes
+// out dozens of times. Here there is one real socket per relay for the whole browser.
 //
-// PHASE 1: this file ships but nothing uses it yet. content.js only opens a port when
-// `nostrcomments_worker` is true in extension storage, and that defaults to false. The existing
-// in-page socket code is untouched and is still what every user runs.
+// THIS FILE IS A PIPE, NOT A PROTOCOL PARTICIPANT. It carries frames verbatim and does not read
+// them, beyond the subscription id it needs in order to know who a frame belongs to. That is
+// deliberate, and it is what makes the rest work:
 //
-// What deliberately did NOT move here:
-//   - Signing. NIP-07 needs `window.nostr`, which only exists in the page. The content script
-//     signs and hands over a finished event; this file never sees a key.
-//   - Drawing. Same reason the panel is where it is.
-//   - Policy. Per-site disable is a decision the content script can see and this file cannot, so
-//     it stays there. A background that guessed at policy would be a background that gets it
-//     wrong on the page it cannot look at.
+//   - NIP-42 needs no special handling. An AUTH challenge arrives as a frame, the content script
+//     signs it exactly as it does today, and ["AUTH", signed] goes back as a frame. Signing stays
+//     where window.nostr is, and this file never sees a key.
+//   - The content script's relay logic — backoff, relay state, the refetch, the auth dance — runs
+//     unchanged whichever transport is underneath, so the two paths are genuinely comparable.
+//   - Anything added to the protocol later works here without a change.
 //
-// The pure helpers at the bottom are separated out so tests/background.test.mjs can exercise the
-// refcounting and the consent gate without a browser.
+// What this file does decide, because a pipe shared between tabs has to:
+//
+//   - Every socket the content script asks for gets its own handle. One tab opens several sockets
+//     to the same relay — the thread, the notifications and the relay health check have three
+//     different lifetimes — so keying by relay URL alone would let the second silently replace the
+//     first. Measured, not guessed: it did, and the subscription that went quiet was the thread.
+//   - Subscription ids are rewritten on the way out and back, so two tabs that pick the same id do
+//     not collide, and so one tab can never be handed another tab's events. On a shared socket
+//     that would be a list of the pages the other tab is on.
+//   - Real sockets are reference-counted with a grace period, so an ordinary link click does not
+//     close six connections and reopen them a second later.
+//   - Consent is checked here as well as in the content script. Two gates, one decision, and
+//     neither trusts the other.
+//
+// Known property, written down rather than hidden: NIP-42 authenticates a *connection*. Handles
+// sharing one real socket share its authenticated identity. With one user and one key that is what
+// you want anyway; if a NIP-07 signer switches account mid-session the socket keeps the identity it
+// authenticated with until it closes. The in-page path has the same edge.
 
 const api = typeof browser !== 'undefined' ? browser : chrome;
 
 const CONSENT_KEY = 'nostrcomments_consent';
 
-// A relay with no subscribers left is not closed straight away. Navigating within a site tears the
-// port down and builds a new one a moment later, and without this every link click would close
-// six sockets and reopen them.
+// A relay nobody is using is not closed straight away. Navigating within a site tears the port
+// down and builds a new one a moment later; without this, every link click would cycle every
+// socket.
 const GRACE_MS = 30000;
 
-// How long to wait for a relay to answer OK on a publish before calling it a timeout. Matches the
-// figure the in-page path has used since the beginning, so the two are comparable in phase 2.
-const PUBLISH_TIMEOUT_MS = 8000;
-
-// url -> { ws, ready, subs:Set<subKey>, pubs:Set<eventId>, closeTimer }
+// url -> { ws, ready, queue, handles:Set<handle>, closeTimer }
 const pool = new Map();
-// subKey -> { port, filter, relays:string[] }
-const subs = new Map();
+// handle key -> { port, sid, url }
+const handles = new Map();
 
-let portSeq = 0;
+let portSeq = 0, subSeq = 0;
 
-// Consent is read here as well as in the content script, on purpose. The content script asks
-// nothing before consent, and this checks again from storage — so a content script that has been
-// tampered with cannot talk a relay into anything the user never agreed to. Two gates, one
-// decision, and neither trusts the other.
+// Consent is read here as well as in the content script, on purpose. A content script that has
+// been tampered with cannot talk this into opening a socket the user never agreed to.
 let consent = false;
 api.storage.local.get(CONSENT_KEY).then(st => { consent = st[CONSENT_KEY] === true; }, () => {});
 api.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !(CONSENT_KEY in changes)) return;
     consent = changes[CONSENT_KEY].newValue === true;
-    // Consent withdrawn mid-session must actually stop traffic, not just stop new traffic.
-    if (!consent) dropEverything('consent withdrawn');
+    // Withdrawing consent has to stop traffic that is already flowing, not merely refuse new
+    // traffic. Otherwise a subscription opened before the change outlives the decision.
+    if (!consent) dropEverything();
 });
 
+const hkey = (port, sid) => port._ncId + ':' + sid;
+
 // ---------------------------------------------------------------------------------------------
-// the socket pool
+// real sockets
 // ---------------------------------------------------------------------------------------------
 
-function relay(url) {
+function socket(url) {
     let r = pool.get(url);
     if (r) return r;
-    r = { ws: null, ready: false, subs: new Set(), pubs: new Set(), closeTimer: null, queue: [] };
+    r = { ws: null, ready: false, queue: [], handles: new Set(), closeTimer: null };
     pool.set(url, r);
-    openSocket(url, r);
+    dial(url, r);
     return r;
 }
 
-function openSocket(url, r) {
+function dial(url, r) {
     try { r.ws = new WebSocket(url); }
-    catch (e) { fanout(url, { t: 'relayerror', relay: url, reason: 'could not connect' }); return; }
+    catch (e) { each(r, h => post(h.port, { t: 'error', sid: h.sid })); return; }
 
     r.ws.onopen = () => {
         r.ready = true;
-        for (const frame of r.queue.splice(0)) send(r, frame);
-        // A socket that opened after its subscribers arrived still owes them their REQ.
-        for (const key of r.subs) {
-            const s = subs.get(key);
-            if (s) send(r, ['REQ', wireId(key), s.filter]);
-        }
+        for (const frame of r.queue.splice(0)) raw(r, frame);
+        each(r, h => post(h.port, { t: 'open', sid: h.sid }));
     };
     r.ws.onmessage = m => {
-        let d;
-        try { d = JSON.parse(m.data); } catch (e) { return; }
-        route(url, d);
+        let frame;
+        try { frame = JSON.parse(m.data); } catch (e) { return; }
+        deliver(r, frame);
     };
-    r.ws.onerror = () => { fanout(url, { t: 'relayerror', relay: url, reason: 'unreachable' }); };
+    r.ws.onerror = () => { each(r, h => post(h.port, { t: 'error', sid: h.sid })); };
     r.ws.onclose = () => {
-        r.ready = false;
-        r.ws = null;
-        fanout(url, { t: 'relayclosed', relay: url });
-        // Anyone still subscribed wants the socket back. Nobody left means it closed because we
-        // asked it to, and reopening would defeat the point.
-        if (r.subs.size) setTimeout(() => { if (pool.get(url) === r && r.subs.size && !r.ws) openSocket(url, r); }, 3000);
-        else pool.delete(url);
+        r.ready = false; r.ws = null;
+        each(r, h => post(h.port, { t: 'closed', sid: h.sid }));
+        // Reconnecting is the content script's job — it already has the backoff, and it is the only
+        // side that knows whether the page it was for is still the page on screen.
+        if (!r.handles.size) pool.delete(url);
     };
 }
 
-function send(r, frame) {
+function each(r, fn) {
+    for (const k of r.handles) { const h = handles.get(k); if (h) fn(h); }
+}
+
+function raw(r, frame) {
     if (r.ready && r.ws) { try { r.ws.send(JSON.stringify(frame)); } catch (e) {} }
     else r.queue.push(frame);
 }
 
-// A relay message carries the wire subscription id, which encodes which port asked. Publish
-// answers (OK) carry an event id instead, so those go to whoever is waiting on that event.
-function route(url, d) {
-    const kind = d[0];
+// Who gets a frame. Subscription traffic goes to the one handle that asked for it; a publish answer
+// to the one waiting on that event id; anything else to every handle on this socket, because it is
+// about the connection rather than about a page.
+function deliver(r, frame) {
+    const kind = frame[0];
+
     if (kind === 'EVENT' || kind === 'EOSE' || kind === 'CLOSED') {
-        const key = keyFromWire(d[1]);
-        const s = subs.get(key);
-        if (!s) return;
-        if (kind === 'EVENT') post(s.port, { t: 'event', id: s.id, relay: url, event: d[2] });
-        else if (kind === 'EOSE') post(s.port, { t: 'eose', id: s.id, relay: url });
-        else post(s.port, { t: 'subclosed', id: s.id, relay: url, reason: d[2] || '' });
-        return;
+        const owner = subOwner.get(frame[1]);
+        if (!owner || !r.handles.has(hkey(owner.port, owner.sid))) return;
+        const out = frame.slice();
+        out[1] = owner.theirs;                       // hand back the id the content script chose
+        return post(owner.port, { t: 'frame', sid: owner.sid, frame: out });
     }
-    if (kind === 'OK' || kind === 'NOTICE' || kind === 'AUTH') fanout(url, { t: kind.toLowerCase(), relay: url, data: d });
-}
 
-// ---------------------------------------------------------------------------------------------
-// subscriptions
-// ---------------------------------------------------------------------------------------------
-
-function addSub(port, msg) {
-    const key = subKey(port._ncId, msg.id);
-    removeSub(key);                                   // resubscribing under the same id supersedes
-    const relays = dedupe(msg.relays || []);
-    subs.set(key, { port, id: msg.id, filter: msg.filter || {}, relays });
-    for (const url of relays) {
-        const r = relay(url);
-        r.subs.add(key);
-        cancelClose(r);
-        send(r, ['REQ', wireId(key), msg.filter || {}]);
+    if (kind === 'OK') {
+        const o = pubOwner.get(frame[1]);
+        if (o && r.handles.has(hkey(o.port, o.sid))) return post(o.port, { t: 'frame', sid: o.sid, frame });
     }
-}
 
-function removeSub(key) {
-    const s = subs.get(key);
-    if (!s) return;
-    subs.delete(key);
-    for (const url of s.relays) {
-        const r = pool.get(url);
-        if (!r) continue;
-        r.subs.delete(key);
-        send(r, ['CLOSE', wireId(key)]);
-        maybeClose(url, r);
-    }
-}
-
-function cancelClose(r) {
-    if (r.closeTimer) { clearTimeout(r.closeTimer); r.closeTimer = null; }
-}
-
-// Idle means no subscriptions and no publish waiting on an answer. The grace period is what stops
-// an ordinary link click from cycling every socket.
-function maybeClose(url, r) {
-    if (!isIdle(r) || r.closeTimer) return;
-    r.closeTimer = setTimeout(() => {
-        const cur = pool.get(url);
-        if (!cur || cur !== r) return;
-        if (!isIdle(cur)) { cur.closeTimer = null; return; }
-        pool.delete(url);
-        try { cur.ws && cur.ws.close(); } catch (e) {}
-    }, GRACE_MS);
+    each(r, h => post(h.port, { t: 'frame', sid: h.sid, frame }));
 }
 
 // ---------------------------------------------------------------------------------------------
-// publishing
+// subscription ids
 // ---------------------------------------------------------------------------------------------
-
-// The event arrives already signed. This waits for each relay's OK and reports every answer back,
-// rather than resolving on the first acceptance — how many relays hold a comment is the difference
-// between it surviving somebody's spring clean and not, and the caller wants to be able to say so.
 //
-// NIP-42 is not handled here yet, on purpose. Answering an auth challenge means signing, signing
-// needs the page, and a round trip back through the content script mid-publish is a design
-// decision rather than a detail. Until phase 2 settles it, an auth-required refusal is reported
-// as what it is instead of being silently swallowed.
-function publish(port, msg) {
-    const ev = msg.event;
-    if (!ev || typeof ev.id !== 'string') return post(port, { t: 'pubdone', id: msg.id, results: [] });
-    const targets = dedupe(msg.relays || []);
-    const results = [];
-    let left = targets.length;
-    if (!left) return post(port, { t: 'pubdone', id: msg.id, results: [] });
+// Two tabs on the same site pick their subscription ids the same way, so on a shared socket they
+// would collide — and worse, each would receive the other's events, which is a list of the pages
+// that tab is on. Every outgoing id is therefore replaced with one minted here.
 
-    for (const url of targets) {
-        const r = relay(url);
-        r.pubs.add(ev.id);
-        cancelClose(r);
+const subOwner = new Map();     // wire id -> { port, sid, theirs }
+const subMine  = new Map();     // handle key + ' ' + their id -> wire id
+const pubOwner = new Map();     // event id -> { port, sid }
 
-        let settled = false;
-        const settle = (ok, reason) => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            r.pubs.delete(ev.id);
-            off();
-            results.push({ relay: url, ok, reason });
-            post(port, { t: 'ok', id: msg.id, relay: url, ok, reason });
-            maybeClose(url, r);
-            if (--left === 0) post(port, { t: 'pubdone', id: msg.id, results });
-        };
+function mint(port, sid, theirs) {
+    const k = hkey(port, sid) + ' ' + theirs;
+    let wire = subMine.get(k);
+    if (!wire) { wire = 'nc' + (++subSeq).toString(36); subMine.set(k, wire); }
+    subOwner.set(wire, { port, sid, theirs });
+    return wire;
+}
 
-        const listener = frame => {
-            if (frame.t === 'relayclosed') return settle(false, 'closed without answering');
-            if (frame.t === 'relayerror') return settle(false, frame.reason || 'unreachable');
-            if (frame.t !== 'ok') return;
-            const d = frame.data;
-            if (d[1] !== ev.id) return;                      // OK is per event id
-            settle(d[2] === true, d[3] || (d[2] === true ? '' : 'refused without a reason'));
-        };
-        const off = () => watchers.get(url)?.delete(listener);
-        watch(url, listener);
+function forget(port, sid, theirs) {
+    const k = hkey(port, sid) + ' ' + theirs;
+    const wire = subMine.get(k);
+    if (!wire) return null;
+    subMine.delete(k);
+    subOwner.delete(wire);
+    return wire;
+}
 
-        const timer = setTimeout(() => settle(false, 'timed out'), PUBLISH_TIMEOUT_MS);
-        send(r, ['EVENT', ev]);
+// The content script's frame, with anything that names a subscription translated on the way out.
+function translate(port, sid, frame) {
+    const kind = frame[0];
+    if (kind === 'REQ' && typeof frame[1] === 'string') {
+        const out = frame.slice();
+        out[1] = mint(port, sid, frame[1]);
+        return out;
     }
-}
-
-// Relay-wide messages (OK, NOTICE, AUTH, and the socket's own life events) have no subscription id
-// to route by, so anything interested registers here.
-const watchers = new Map();
-function watch(url, fn) {
-    if (!watchers.has(url)) watchers.set(url, new Set());
-    watchers.get(url).add(fn);
-}
-function fanout(url, frame) {
-    const set = watchers.get(url);
-    if (set) for (const fn of [...set]) { try { fn(frame); } catch (e) {} }
+    if (kind === 'CLOSE' && typeof frame[1] === 'string') {
+        const wire = forget(port, sid, frame[1]);
+        return wire ? ['CLOSE', wire] : null;
+    }
+    if (kind === 'EVENT' && frame[1] && typeof frame[1].id === 'string') pubOwner.set(frame[1].id, { port, sid });
+    return frame;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -248,54 +195,79 @@ api.runtime.onConnect.addListener(port => {
     port.onMessage.addListener(msg => {
         if (!msg || typeof msg.t !== 'string') return;
         if (msg.t === 'ping') return post(port, { t: 'pong' });
-        // Every request that would touch a relay passes the gate, not just the first one.
-        if (!consent) return post(port, { t: 'denied', id: msg.id, reason: 'no consent' });
-        if (msg.t === 'sub') return addSub(port, msg);
-        if (msg.t === 'unsub') return removeSub(subKey(port._ncId, msg.id));
-        if (msg.t === 'pub') return publish(port, msg);
+        // Every request that would touch a relay passes the gate, not only the first one.
+        if (!consent) return post(port, { t: 'denied', sid: msg.sid });
+        if (typeof msg.sid !== 'number') return;
+
+        if (msg.t === 'open') {
+            if (typeof msg.relay !== 'string' || !/^wss?:\/\//i.test(msg.relay)) return;
+            const k = hkey(port, msg.sid);
+            if (handles.has(k)) return;
+            handles.set(k, { port, sid: msg.sid, url: msg.relay });
+            const r = socket(msg.relay);
+            r.handles.add(k);
+            cancelClose(r);
+            if (r.ready) post(port, { t: 'open', sid: msg.sid });
+            return;
+        }
+        if (msg.t === 'send') {
+            const h = handles.get(hkey(port, msg.sid));
+            if (!h || !Array.isArray(msg.frame)) return;
+            const r = pool.get(h.url);
+            if (!r) return;
+            const out = translate(port, msg.sid, msg.frame);
+            if (out) raw(r, out);
+            return;
+        }
+        if (msg.t === 'close') return release(port, msg.sid);
     });
 
-    // A closed tab must not leave a relay subscribed on its behalf. Without this the pool would
-    // grow for the life of the browser and keep asking relays for pages nobody is looking at.
+    // A closed tab must not leave a relay subscribed on its behalf. Without this the pool grows for
+    // the life of the browser, still asking relays about pages nobody is looking at.
     port.onDisconnect.addListener(() => {
-        for (const key of [...subs.keys()]) if (subs.get(key).port === port) removeSub(key);
+        for (const h of [...handles.values()]) if (h.port === port) release(port, h.sid);
     });
 });
 
+function release(port, sid) {
+    const k = hkey(port, sid);
+    const h = handles.get(k);
+    if (!h) return;
+    handles.delete(k);
+    const r = pool.get(h.url);
+    for (const [wire, o] of [...subOwner]) {
+        if (o.port !== port || o.sid !== sid) continue;
+        if (r) raw(r, ['CLOSE', wire]);
+        subOwner.delete(wire);
+        subMine.delete(k + ' ' + o.theirs);
+    }
+    for (const [id, o] of [...pubOwner]) if (o.port === port && o.sid === sid) pubOwner.delete(id);
+    if (!r) return;
+    r.handles.delete(k);
+    maybeClose(h.url, r);
+}
+
+function cancelClose(r) { if (r.closeTimer) { clearTimeout(r.closeTimer); r.closeTimer = null; } }
+
+function maybeClose(url, r) {
+    if (r.handles.size || r.closeTimer) return;
+    r.closeTimer = setTimeout(() => {
+        const cur = pool.get(url);
+        if (!cur || cur !== r) return;
+        if (cur.handles.size) { cur.closeTimer = null; return; }
+        pool.delete(url);
+        try { cur.ws && cur.ws.close(); } catch (e) {}
+    }, GRACE_MS);
+}
+
 function post(port, frame) { try { port.postMessage(frame); } catch (e) {} }
 
-function dropEverything(why) {
-    for (const key of [...subs.keys()]) {
-        const s = subs.get(key);
-        post(s.port, { t: 'denied', id: s.id, reason: why });
-        removeSub(key);
+function dropEverything() {
+    for (const h of [...handles.values()]) post(h.port, { t: 'denied', sid: h.sid });
+    handles.clear();
+    for (const [url, r] of [...pool]) {
+        pool.delete(url);
+        try { r.ws && r.ws.close(); } catch (e) {}
     }
-    for (const [url, r] of [...pool]) { pool.delete(url); try { r.ws && r.ws.close(); } catch (e) {} }
+    subOwner.clear(); subMine.clear(); pubOwner.clear();
 }
-
-// ---------------------------------------------------------------------------------------------
-// pure helpers — tests/background.test.mjs reads these straight out of this file
-// ---------------------------------------------------------------------------------------------
-
-// The wire id goes to a relay, so it must be short, unique per (tab, subscription), and must not
-// carry anything about the page. The port number is local and meaningless off this machine.
-function subKey(portId, id) { return portId + ' ' + String(id); }
-function wireId(key) { return 'nc' + key.replace(' ', 'x').replace(/[^a-zA-Z0-9]/g, '').slice(0, 40); }
-function keyFromWire(wire) {
-    for (const key of subs.keys()) if (wireId(key) === wire) return key;
-    return null;
-}
-
-function dedupe(list) {
-    const seen = new Set(), out = [];
-    for (const u of list) {
-        if (typeof u !== 'string') continue;
-        const k = u.replace(/\/+$/, '').toLowerCase();
-        if (seen.has(k)) continue;
-        seen.add(k);
-        out.push(u);
-    }
-    return out;
-}
-
-function isIdle(r) { return r.subs.size === 0 && r.pubs.size === 0; }

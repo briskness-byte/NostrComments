@@ -57,11 +57,30 @@ export function findGeckodriver() {
 
 // Firefox installs an add-on, not a folder, so the build has to be zipped first. Done per run into
 // the throwaway workdir rather than reusing dist/, so a suite never silently tests a stale package.
+// The file list comes from build.sh rather than being written out again here. It was written out
+// again here, and it drifted: background.js was added to the build and not to this, so Firefox got
+// an .xpi whose manifest announced a background script that was not in the archive. It loaded
+// anyway, the background never ran, and every port the content script opened disconnected
+// immediately with no error — which looks exactly like a broken feature and not at all like a
+// missing file. Deriving the list is the only version of this that cannot happen twice.
+function packedFiles() {
+    const build = fs.readFileSync(path.resolve(ROOTDIR, 'build.sh'), 'utf8');
+    const m = build.match(/^PACKED="([^"]+)"/m);
+    if (!m) throw new Error('could not read PACKED from build.sh');
+    return m[1].trim().split(/\s+/);
+}
+
 function packXpi(dir, into) {
     const xpi = path.join(into, 'ext.xpi');
     const root = path.resolve(dir, '..');
-    execFileSync('zip', ['-qrX', xpi, 'content.js', 'injected.js', 'manifest.json'], { cwd: dir });
-    execFileSync('zip', ['-qjX', xpi, path.join(root, 'icon48.png'), path.join(root, 'icon128.png')]);
+    const inDir = [], inRoot = [];
+    for (const f of packedFiles()) {
+        if (fs.existsSync(path.join(dir, f))) inDir.push(f);
+        else if (fs.existsSync(path.join(root, f))) inRoot.push(path.join(root, f));
+        else throw new Error(`build.sh packs ${f}, but it is in neither ${dir} nor ${root}`);
+    }
+    execFileSync('zip', ['-qrX', xpi, ...inDir], { cwd: dir });
+    if (inRoot.length) execFileSync('zip', ['-qjX', xpi, ...inRoot]);
     return xpi;
 }
 

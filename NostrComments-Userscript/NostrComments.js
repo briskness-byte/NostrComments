@@ -42,6 +42,15 @@
             theme:     await GM_getValue('nostrcomments_theme',     null),
             autoimg:   await GM_getValue('nostrcomments_autoimg',   true),
         };
+        // A userscript has no background context, so relay sockets stay in the page here and the
+        // page's CSP still applies to them — a site with a strict connect-src gets no relays, and
+        // v23.0.2's detection is what tells the reader so. The extensions moved this into the
+        // background; this build cannot follow and is not meant to.
+        //
+        // The name is kept so everything above the transport stays byte-identical across all three
+        // builds. That is exactly what the parity guard is for: the protocol logic must not drift,
+        // and where the socket comes from is the one line that is allowed to.
+        const ncSocket = url => new WebSocket(url);
         let hasConsent = _st.consent === true;
         let encPriv = _isEncPriv(_st.privkey) ? _st.privkey : null;
         let keyBackedUp = _st.keybackup === true;
@@ -2033,7 +2042,7 @@
             };
             RELAYS.forEach(r => {
                 let ws;
-                try { ws = new WebSocket(r); } catch (_) { if (++done === RELAYS.length) paint(); return; }
+                try { ws = ncSocket(r); } catch (_) { if (++done === RELAYS.length) paint(); return; }
                 const qid = 'mt' + Math.random().toString(36).slice(2, 6);
                 const stop = () => { try { ws.close(); } catch (_) {} if (++done === RELAYS.length) paint(); };
                 const t = setTimeout(stop, 8000);
@@ -2394,7 +2403,7 @@
             // looked like people not having profiles, and was us not looking.
             RELAYS.forEach(r => {
                 try {
-                    const ws = new WebSocket(r);
+                    const ws = ncSocket(r);
                     const pid = 'p' + Math.random().toString(36).slice(2, 6);
                     const t = setTimeout(() => ws.close(), 8000);
                     ws.onopen = () => ws.send(JSON.stringify(["REQ", pid, {kinds:[0], authors: missing}]));
@@ -2592,7 +2601,7 @@
             const open = (r, attempt) => {
                 if (gen !== _notifGen) return;
                 let ws;
-                try { ws = new WebSocket(r); } catch(e) { return; }
+                try { ws = ncSocket(r); } catch(e) { return; }
                 _notifWs.push(ws);
                 ws.onopen = () => { attempt = 0; ws.send(JSON.stringify(["REQ", sid, {kinds:[1, COMMENT_KIND], "#p":[watching], since}])); };
                 ws.onmessage = m => {
@@ -2858,7 +2867,7 @@
                 RELAYS.forEach(r => {
                     let ws, replied = false;
                     const shut = () => { try { ws && ws.close(); } catch(_) {} if (--open <= 0) { clearTimeout(t); finish(); } };
-                    try { ws = new WebSocket(r); } catch(e) { return shut(); }
+                    try { ws = ncSocket(r); } catch(e) { return shut(); }
                     ws.onopen = () => ws.send(JSON.stringify(["REQ", 'sn' + Math.random().toString(36).slice(2, 6), {kinds:[0], authors:[pubkey], limit:5}]));
                     ws.onmessage = m => {
                         let p; try { p = JSON.parse(m.data); } catch(e) { return; }
@@ -3742,7 +3751,7 @@
                 let settled = false;
                 const settle = v => { if (!settled) { settled = true; resolve(v); } };
                 let ws;
-                try { ws = new WebSocket(r); } catch(e) { return settle({ok:false, reason:'could not connect'}); }
+                try { ws = ncSocket(r); } catch(e) { return settle({ok:false, reason:'could not connect'}); }
                 const shut = () => { try { ws.close(); } catch(_) {} };
                 let challenge = null, authId = null, identified = false;
                 ws.onopen = () => ws.send(JSON.stringify(["EVENT", signed]));
@@ -4048,7 +4057,7 @@
             function openRelay(r, attempt) {
                 if (gen !== pageGen) return;
                 let ws;
-                try { ws = new WebSocket(r); } catch(e) { return; }
+                try { ws = ncSocket(r); } catch(e) { return; }
                 _wsPool.push(ws);
                 const openSub = () => ws.send(JSON.stringify(["REQ", subId+gen, ...pageFilters()]));
                 let challenge = null, authId = null, identified = false;

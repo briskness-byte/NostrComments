@@ -12,58 +12,83 @@
         const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker']);
         let hasConsent = _st.nostrcomments_consent === true;
 
-        // ---- background relay client — PHASE 1: built, deliberately not used -------------------
+        // ---- where relay sockets get opened ---------------------------------------------------
         //
-        // Relay traffic opened from here is subject to the *page's* CSP on Firefox, so a site with
-        // a strict connect-src gets no relays and an empty panel. The socket has to be opened
-        // somewhere the site has no say over, which is background.js. This is the client side of
-        // that port.
+        // On Firefox a WebSocket opened from a content script is subject to the *page's* CSP, so a
+        // site with a strict connect-src silently gets no relays and an empty panel. The socket has
+        // to be opened somewhere the site has no say over, and that is the extension's background
+        // context. Chrome does not apply the page CSP here, but it gets the same treatment so there
+        // is one code path to reason about rather than two.
         //
-        // Nothing calls it yet. `nostrcomments_worker` defaults to false, every in-page socket
-        // below is untouched, and that is still what every user runs. Phase 2 puts both paths side
-        // by side in the tests and compares what comes back before either becomes the default.
+        // ncSocket() returns something WebSocket-shaped either way, so every caller below is
+        // written once and neither knows nor cares which transport it got. That is the whole point:
+        // the relay logic — backoff, relay state, the refetch, the NIP-42 exchange — is identical
+        // on both paths, which is what makes them comparable and what stops the worker path from
+        // quietly growing its own protocol bugs.
+        //
+        // Off unless `nostrcomments_worker` is true, which it is not by default.
         const useWorker = _st.nostrcomments_worker === true;
-        const workerRelay = (() => {
-            let port = null, seq = 0;
-            const waiting = new Map();
-            const connect = () => {
+
+        // One tab opens more than one socket to the same relay — the thread, the notifications and
+        // the relay health check are three independent subscriptions with three different
+        // lifetimes. So a socket needs its own handle: keying by relay URL alone means the second
+        // one silently replaces the first, and the subscription that goes quiet is whichever
+        // attached earliest. That is the thread.
+        const _wport = (() => {
+            let port = null, sid = 0;
+            const sockets = new Map();      // handle -> the shim waiting on it
+            const open = () => {
                 if (port) return port;
                 port = chrome.runtime.connect({name: 'nc-relay'});
                 port.onMessage.addListener(m => {
-                    const w = waiting.get(m.id);
-                    if (!w) return;
-                    if (m.t === 'event') w.onEvent && w.onEvent(m.event, m.relay);
-                    else if (m.t === 'eose') w.onEose && w.onEose(m.relay);
-                    else if (m.t === 'ok') w.results && w.results.push({relay: m.relay, ok: m.ok, reason: m.reason});
-                    else if (m.t === 'pubdone') { waiting.delete(m.id); w.onDone && w.onDone(m.results || w.results || []); }
-                    else if (m.t === 'denied') { waiting.delete(m.id); w.onDone && w.onDone([]); }
+                    const s = sockets.get(m.sid);
+                    if (!s) return;
+                    if (m.t === 'frame') s._deliver(m.frame);
+                    else if (m.t === 'open') s._opened();
+                    else if (m.t === 'closed' || m.t === 'denied') { sockets.delete(m.sid); s._shut(); }
+                    else if (m.t === 'error') s._failed();
                 });
-                // An MV3 service worker that was shut down for being idle takes the port with it.
-                // The next call builds a new one; anything already in flight is reported as
-                // unanswered rather than left hanging forever on a promise nobody will settle.
+                // An MV3 service worker shut down for being idle takes the port with it. Every
+                // socket riding on it is gone, so say so — the callers already know how to handle a
+                // socket that closed, and silence is the one thing they cannot handle.
                 port.onDisconnect.addListener(() => {
                     port = null;
-                    for (const [id, w] of [...waiting]) { waiting.delete(id); w.onDone && w.onDone(w.results || []); }
+                    for (const s of [...sockets.values()]) s._shut();
+                    sockets.clear();
                 });
                 return port;
             };
             return {
-                enabled: useWorker,
-                sub(relays, filter, onEvent, onEose) {
-                    const id = 's' + (++seq);
-                    waiting.set(id, {onEvent, onEose});
-                    connect().postMessage({t: 'sub', id, relays, filter});
-                    return () => { waiting.delete(id); if (port) try { port.postMessage({t: 'unsub', id}); } catch(e) {} };
+                attach(url, shim) {
+                    const id = ++sid;
+                    sockets.set(id, shim);
+                    open().postMessage({t: 'open', sid: id, relay: url});
+                    return id;
                 },
-                publish(relays, event) {
-                    return new Promise(resolve => {
-                        const id = 'p' + (++seq);
-                        waiting.set(id, {results: [], onDone: resolve});
-                        connect().postMessage({t: 'pub', id, relays, event});
-                    });
-                },
+                send(id, frame) { if (port) try { port.postMessage({t: 'send', sid: id, frame}); } catch(e) {} },
+                detach(id)      { sockets.delete(id); if (port) try { port.postMessage({t: 'close', sid: id}); } catch(e) {} },
             };
         })();
+
+        // A WebSocket as far as its caller is concerned: readyState, send, close, and the four
+        // handlers. Frames travel as parsed arrays and are handed back as text, so the JSON.parse
+        // on the receiving side is given the string it expects.
+        function _workerSocket(url) {
+            const s = {
+                readyState: 0,
+                onopen: null, onmessage: null, onerror: null, onclose: null,
+                send(text) { let f; try { f = JSON.parse(text); } catch(e) { return; } _wport.send(s._id, f); },
+                close() { if (s.readyState === 3) return; s.readyState = 3; _wport.detach(s._id); s.onclose && s.onclose({}); },
+                _opened()  { if (s.readyState !== 0) return; s.readyState = 1; s.onopen && s.onopen({}); },
+                _deliver(f) { s.onmessage && s.onmessage({data: JSON.stringify(f)}); },
+                _failed()  { s.onerror && s.onerror({}); },
+                _shut()    { if (s.readyState === 3) return; s.readyState = 3; s.onclose && s.onclose({}); },
+            };
+            s._id = _wport.attach(url, s);
+            return s;
+        }
+
+        const ncSocket = url => useWorker ? _workerSocket(url) : new WebSocket(url);
         let encPriv = _isEncPriv(_st.nostrcomments_privkey) ? _st.nostrcomments_privkey : null;
         let keyBackedUp = _st.nostrcomments_keybackup === true;
         let isSupporter = _st.nostrcomments_supporter === true;
@@ -636,6 +661,7 @@
         <button id="relay-add-btn">Add</button>
         </div>
         <label id="widepub-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="widepub-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Also send what you post to three extra relays, so one relay removing it is not the end of it. They are never read from.</span></label>
+        <label id="worker-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="worker-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Open relay connections in the background instead of in the page. Some sites forbid the page from reaching a relay at all, and this gets past that. Experimental — it takes effect on the next page load.</span></label>
         <div id="identity-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
         <strong class="set-h" style="font-size:15px">Your identity</strong>
@@ -2071,7 +2097,7 @@
             };
             RELAYS.forEach(r => {
                 let ws;
-                try { ws = new WebSocket(r); } catch (_) { if (++done === RELAYS.length) paint(); return; }
+                try { ws = ncSocket(r); } catch (_) { if (++done === RELAYS.length) paint(); return; }
                 const qid = 'mt' + Math.random().toString(36).slice(2, 6);
                 const stop = () => { try { ws.close(); } catch (_) {} if (++done === RELAYS.length) paint(); };
                 const t = setTimeout(stop, 8000);
@@ -2347,6 +2373,19 @@
             showMsg(nip05Check ? 'Verified names on — commenters\' domains will be contacted'
                                : 'Verified names off — no domain will be contacted');
         };
+        // Experimental, and off by default. Turning it on moves relay sockets into the extension's
+        // background context, which is the only way to reach a relay on a site whose CSP forbids
+        // the page from doing it. It cannot take effect on a page that has already opened its
+        // sockets, so the message says so rather than leaving somebody watching a panel that has
+        // not changed.
+        const workerToggle = s.getElementById('worker-toggle');
+        workerToggle.checked = useWorker;
+        workerToggle.onchange = () => {
+            chrome.storage.local.set({nostrcomments_worker: workerToggle.checked});
+            showMsg(workerToggle.checked ? 'Background connections on — reload the page to use them'
+                                         : 'Background connections off — reload the page to go back');
+        };
+
         const widepubToggle = s.getElementById('widepub-toggle');
         widepubToggle.checked = publishWide;
         widepubToggle.onchange = () => {
@@ -2392,7 +2431,7 @@
             // looked like people not having profiles, and was us not looking.
             RELAYS.forEach(r => {
                 try {
-                    const ws = new WebSocket(r);
+                    const ws = ncSocket(r);
                     const pid = 'p' + Math.random().toString(36).slice(2, 6);
                     const t = setTimeout(() => ws.close(), 8000);
                     ws.onopen = () => ws.send(JSON.stringify(["REQ", pid, {kinds:[0], authors: missing}]));
@@ -2643,7 +2682,7 @@
             const open = (r, attempt) => {
                 if (gen !== _notifGen) return;
                 let ws;
-                try { ws = new WebSocket(r); } catch(e) { return; }
+                try { ws = ncSocket(r); } catch(e) { return; }
                 _notifWs.push(ws);
                 ws.onopen = () => { attempt = 0; ws.send(JSON.stringify(["REQ", sid, {kinds:[1, COMMENT_KIND], "#p":[watching], since}])); };
                 ws.onmessage = m => {
@@ -2926,7 +2965,7 @@
                 RELAYS.forEach(r => {
                     let ws, replied = false;
                     const shut = () => { try { ws && ws.close(); } catch(_) {} if (--open <= 0) { clearTimeout(t); finish(); } };
-                    try { ws = new WebSocket(r); } catch(e) { return shut(); }
+                    try { ws = ncSocket(r); } catch(e) { return shut(); }
                     ws.onopen = () => ws.send(JSON.stringify(["REQ", 'sn' + Math.random().toString(36).slice(2, 6), {kinds:[0], authors:[pubkey], limit:5}]));
                     ws.onmessage = m => {
                         let p; try { p = JSON.parse(m.data); } catch(e) { return; }
@@ -3810,7 +3849,7 @@
                 let settled = false;
                 const settle = v => { if (!settled) { settled = true; resolve(v); } };
                 let ws;
-                try { ws = new WebSocket(r); } catch(e) { return settle({ok:false, reason:'could not connect'}); }
+                try { ws = ncSocket(r); } catch(e) { return settle({ok:false, reason:'could not connect'}); }
                 const shut = () => { try { ws.close(); } catch(_) {} };
                 let challenge = null, authId = null, identified = false;
                 ws.onopen = () => ws.send(JSON.stringify(["EVENT", signed]));
@@ -4133,7 +4172,7 @@
             function openRelay(r, attempt) {
                 if (gen !== pageGen) return;
                 let ws;
-                try { ws = new WebSocket(r); } catch(e) { return; }
+                try { ws = ncSocket(r); } catch(e) { return; }
                 _wsPool.push(ws);
                 const openSub = () => ws.send(JSON.stringify(["REQ", subId+gen, ...pageFilters()]));
                 let challenge = null, authId = null, identified = false;
