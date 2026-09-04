@@ -9,7 +9,7 @@
     async function init() {
 
         // Load all persistent storage up front (cross-origin, unlike localStorage)
-        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker']);
+        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker','nostrcomments_clienttag']);
         let hasConsent = _st.nostrcomments_consent === true;
 
         // ---- where relay sockets get opened ---------------------------------------------------
@@ -756,6 +756,11 @@
         <strong class="set-h" style="font-size:15px">Verified names</strong>
         <label id="nip05-label" style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="nip05-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Check the name@domain a commenter claims</span></label>
         <p class="set-p" style="font-size:12px;margin:6px 0 0;line-height:1.45">Off by default. Checking asks that commenter's domain whether the name is really theirs, which tells the domain you are reading this page. Nothing else here contacts anyone outside your relays.</p>
+        </div>
+        <div style="margin-top:14px">
+        <strong class="set-h" style="font-size:15px">What your comments say about this app</strong>
+        <label id="clienttag-label" style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="clienttag-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Label what you post with the name of this extension</span></label>
+        <p class="set-p" style="font-size:12px;margin:6px 0 0;line-height:1.45">On by default, the way most Nostr apps label what they write. It is what makes it possible to count how many people actually post from here, which download numbers cannot tell anyone. Turning it off drops the label from what you publish next. It does not change what you already published, and it does not make you invisible — these events keep the shape that gives them away.</p>
         </div>
         <div style="margin-top:14px">
         <hr style="margin:0 0 12px;border:none;border-top:1px solid #eee">
@@ -1721,6 +1726,10 @@
         // everything between DEFAULT_RELAYS and RELAYS with no _st in scope. Putting a storage read
         // in that range breaks the suite, which is a good enough reason to keep it out.
         let publishWide = _st.nostrcomments_widepublish !== false;
+        // NIP-89's client tag, and whether it is written at all. Kept next to publishWide because
+        // the two answer the same kind of question: what leaves this machine beyond the comment
+        // itself. The reasoning for the default, and for offering the choice, is at CLIENT_TAG.
+        let labelClient = _st.nostrcomments_clienttag !== false;
 
         // What each relay is actually doing. A relay that never answers looked exactly like a relay
         // with nothing to say: the thread was thinner and slower and nothing said why. Sockets fail
@@ -2393,6 +2402,15 @@
             chrome.storage.local.set({nostrcomments_widepublish: publishWide});
             showMsg(publishWide ? 'Extra relays on — what you post goes to three more, and is read from none of them'
                                 : 'Extra relays off — what you post goes only to the relays listed above');
+        };
+
+        const clienttagToggle = s.getElementById('clienttag-toggle');
+        clienttagToggle.checked = labelClient;
+        clienttagToggle.onchange = () => {
+            labelClient = clienttagToggle.checked;
+            chrome.storage.local.set({nostrcomments_clienttag: labelClient});
+            showMsg(labelClient ? 'Labelling on — what you post from now on says it was written here'
+                                : 'Labelling off — what you post from now on does not name this extension');
         };
 
         const avatars = new Map();
@@ -3503,7 +3521,7 @@
                         kind: 1,
                         created_at: Math.floor(Date.now() / 1000),
                         content: `${ev.content}\n\n${pageUrl}`,
-                        tags: [['client', 'NostrComments']],
+                        tags: labelClient ? [['client', 'NostrComments']] : [],
                         pubkey: myPub
                     };
                     try {
@@ -3966,7 +3984,14 @@
         //
         // It is also a marker: a relay or a site can select on it and see exactly who is running
         // this extension. The shape of these events is already recognisable to anyone looking, so
-        // it adds little, but it turns analysis into a filter. That trade was made deliberately.
+        // it adds little, but it turns analysis into a filter.
+        //
+        // Which is why it is a setting rather than a decision made here. Whether a comment should
+        // be labelled is a question about what its author is willing to reveal, and the author is
+        // the only one who can answer it — unlike the kind a comment is published as, which is a
+        // correctness question a reader cannot be expected to weigh. On by default, because the
+        // count is worth having and hiding it protects nobody who was not already thinking about
+        // it; off wherever labelClient says so.
         const CLIENT_TAG = ["client", "NostrComments"];
 
         function buildEvent(text) {
@@ -3986,7 +4011,7 @@
                 // Keeps the reply in this page's thread for the next reader, the same way the note
                 // it answers got there.
                 tags.push(["r", pageUrl]);
-                tags.push(CLIENT_TAG);
+                if (labelClient) tags.push(CLIENT_TAG);
                 ev = {kind:LEGACY_KIND, created_at:Math.floor(Date.now()/1000), tags, content:text, pubkey:myPub};
             } else {
                 // NIP-22: the root scope in uppercase, the parent in lowercase. For a top-level
@@ -3998,7 +4023,7 @@
                 } else {
                     tags.push(["i", pageUrl], ["k", "web"]);
                 }
-                tags.push(CLIENT_TAG);
+                if (labelClient) tags.push(CLIENT_TAG);
                 ev = {kind:COMMENT_KIND, created_at:Math.floor(Date.now()/1000), tags, content:text, pubkey:myPub};
             }
             return ev;

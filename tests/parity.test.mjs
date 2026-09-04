@@ -106,6 +106,27 @@ export async function run() {
            !!fn && /signerPref === 'nip07'/.test(fn));
     }
 
+    // The client tag is a setting, and a setting nobody enforces is a setting that quietly stops
+    // working. Somebody turning it off is asking not to be identifiable as a user of this extension
+    // — so a refactor that writes the tag unconditionally is a privacy regression, in a spot where
+    // the only symptom is an event nobody looks at. These assertions are the thing that notices.
+    for (const [name, src] of Object.entries(srcs)) {
+        const writes = src.match(/tags\.push\(CLIENT_TAG\)/g) || [];
+        ok(`${name}: the tag is written where a comment is built`, writes.length === 2);
+        // Every push guarded, counted rather than spot-checked, so a third one added later cannot
+        // slip past by being somewhere this test did not look.
+        const guarded = src.match(/if \(labelClient\) tags\.push\(CLIENT_TAG\)/g) || [];
+        ok(`${name}: and every one of them asks first`, guarded.length === writes.length);
+        // Sharing to your feed is a separate event with its own literal tag, and it was missed
+        // once already by a change that only looked at buildEvent.
+        ok(`${name}: sharing to your feed asks too`,
+           src.includes("tags: labelClient ? [['client', 'NostrComments']] : [],"));
+        ok(`${name}: the preference is read at startup, defaulting to on`,
+           /let labelClient = _st\.(nostrcomments_)?clienttag !== false;/.test(src));
+        ok(`${name}: and the checkbox writes it back`,
+           /clienttagToggle\.onchange[\s\S]{0,200}?nostrcomments_clienttag/.test(src));
+    }
+
     // Chrome extension ids are fixed and public, so a page can fetch a web-accessible resource by
     // guessing its URL and learn whether the extension is installed — Google's own documentation
     // calls this out as fingerprinting. use_dynamic_url regenerates that id every session, which

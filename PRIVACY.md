@@ -132,6 +132,28 @@ page you leave within a couple of seconds, is never mentioned to anyone.
 The relays are yours to choose. Remove any you do not trust in ⚙ Settings, or point the
 extension at one you run yourself.
 
+### Your comments say which software wrote them
+
+Every comment, reply and note published from here carries a `client` tag naming this extension
+(NIP-89), the way most Nostr apps label what they write. It is part of the public event, so anyone
+reading the thread can see it.
+
+It is there because download counts cannot tell an install from someone who actually uses the
+thing, and this tag can: it is what makes it possible to count how many distinct keys have ever
+published with this extension. Nobody is identified by that count, and it is arrived at by reading
+public relays — the same way you could arrive at it yourself.
+
+The cost is that the tag is also a marker. A relay or a site can select on it and see exactly which
+of its visitors are running this extension. Events from here are already recognisable by their
+shape, so it adds less than it looks like it does, but it turns reading into filtering, and that is
+a real difference.
+
+**You can switch this off.** In ⚙ Settings, *Label what you post with the name of this extension*
+stops the tag from being written. Two things it does not do: it cannot reach what you have already
+published, because a published event is fixed, and it does not make you unrecognisable — a comment
+from here keeps a shape that a determined site can still spot. It is on by default, because the
+count is worth having and the label is what every other Nostr app writes too.
+
 ### Pictures load from wherever they are hosted
 
 **You can switch this off.** In ⚙ Settings, *Load pictures automatically* holds every picture and
