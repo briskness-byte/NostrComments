@@ -389,6 +389,21 @@ owner has commented, so one host collects a reading list rather than a single vi
 node tests/browser-pictures.mjs
 ```
 
+`browser-clienttag.mjs` covers the switch that decides whether what you publish says it was
+written here. `parity.test.mjs` already guards the source — it counts the places that push the tag
+and requires each to ask `labelClient` first — but that reads text. It cannot see whether the
+checkbox starts in the right position, or whether `labelClient` holds the *current* value at the
+moment something is signed rather than the value it had when the page loaded.
+
+That last one is why the suite exists. Somebody unticks the box, posts, and is labelled anyway:
+nothing on screen is wrong, no error appears, and the only evidence is on a relay in an event they
+cannot unpublish. It covers all three call sites, which are not the same code — a comment, a reply,
+and the Share note, whose tag comes from a separate literal.
+
+```sh
+node tests/browser-clienttag.mjs
+```
+
 `browser-share.mjs` covers sharing your own comment to your feed. A comment here is a kind 1111
 scoped to a page address, which keeps comments out of the timelines of everyone who follows you —
 the problem NIP-22 exists to solve — but it also means only somebody with this extension, on that
