@@ -47,7 +47,8 @@ const shape = () => js(`${ROOT}
     block:    vis(ob),
     signer:   vis(btn(/connect your nostr signer/i)),
     generate: vis(btn(/generate your key|start commenting/i)),
-    install:  [...ob.querySelectorAll('a')].filter(a => /alby|nos2x/i.test(a.textContent)).some(vis),
+    // Attest in the Firefox build, nos2x in the Chrome one — the suite runs against both.
+    install:  [...ob.querySelectorAll('a')].filter(a => /alby|nos2x|attest/i.test(a.textContent)).some(vis),
     hint:     [...ob.querySelectorAll('p')].some(p => /install it, then reload/i.test(p.textContent) && vis(p)),
     npub:     s.getElementById('identity-npub').textContent,
   });`);

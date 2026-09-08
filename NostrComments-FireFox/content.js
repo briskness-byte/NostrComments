@@ -1196,7 +1196,15 @@
 
             const wallets = document.createElement('div');
             wallets.className = 'ob-wallets';
-            [['Alby', 'https://addons.mozilla.org/firefox/addon/alby/'], ['nos2x-fox', 'https://addons.mozilla.org/firefox/addon/nos2x-fox/']].forEach(([label, href]) => {
+            // Attest replaces nos2x-fox here rather than joining it. Since nos2x-fox issue #68 there
+            // is a publicly described flaw in it that lets a web page read the PIN protecting the
+            // private key, and no fixed release upstream — so sending a new user there is sending
+            // them somewhere known to be broken. Attest is a fork of it with that hole closed.
+            //
+            // It is by the same developer as this extension, which is said out loud below rather
+            // than left for somebody to discover. A recommendation that hides whose it is reads as
+            // an advertisement the moment anyone checks.
+            [['Alby', 'https://addons.mozilla.org/firefox/addon/alby/'], ['Attest', 'https://addons.mozilla.org/firefox/addon/attest/']].forEach(([label, href]) => {
                 const a = document.createElement('a');
                 a.className = 'ob-wallet'; a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer';
                 a.textContent = label;
@@ -1208,7 +1216,7 @@
             // is not something to rely on when one sentence removes the doubt.
             const walletHint = document.createElement('p');
             walletHint.className = 'ob-hint';
-            walletHint.textContent = 'Install it, then reload this page.';
+            walletHint.textContent = 'Install it, then reload this page. Attest is by the same developer as this extension; Alby is not.';
 
             // Selecting a signer that then stops answering used to be a dead end: the stored key
             // is deliberately not loaded, so nothing connects, the block stays up, and the only
