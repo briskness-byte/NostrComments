@@ -102,5 +102,26 @@ ok('each opens in a new tab', shape.target === '_blank', shape);
 ok('and carries noopener', /noopener/.test(shape.rel || ''), shape);
 ok('the scheme is dropped for readability', !/^https?:/.test(shape.text || ''), shape.text);
 
+console.log('\n=== rotating the key empties it ===');
+// Reported from real use: after generating a new identity the list went on showing the previous
+// one's pages until the page was reloaded, which reads as the rotation not having happened at all.
+// The list is fetched once per page load behind a latch, and nothing reset that latch.
+await js(`${ROOT} s.getElementById('privkey-rotate').click(); return 1;`);
+await wait(800);
+// The confirmation is deliberate and cannot be skipped, so the suite answers it the way a reader
+// would rather than reaching past it.
+const confirmed = await js(`${ROOT}
+  const b = [...s.querySelectorAll('button')].find(x => /generate a new one/i.test(x.textContent));
+  if (!b) return 'no confirm button';
+  b.click();
+  return 'clicked';`);
+ok('the rotation asks before it acts', confirmed === 'clicked', confirmed);
+await wait(3000);
+
+r = JSON.parse(await readList());
+ok('the previous identity\'s pages are gone', !r.links.some(u => ELSEWHERE.includes(u)), r);
+ok('and nothing else is left over', r.links.length === 0, r);
+ok('it says so rather than sitting empty', /nothing yet|looking/i.test(r.text || ''), r.text);
+
 console.log(`\n${state.fail === 0 ? '✓' : '✗'} my threads: ${state.pass} passed, ${state.fail} failed`);
 await finish(state.fail ? 1 : 0);

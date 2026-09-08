@@ -1034,6 +1034,7 @@
                 fetchProfiles([myPub]); paintIdentity();
                 recountAll();
                 startNotifSub();
+                forgetIdentityState();
                 render();
                 showMsg('New key generated — copy it and tick "I\'ve saved my private key".');
                 offerEncryption(priv);
@@ -1066,6 +1067,7 @@
             // the Connect button returns and no vote is left marked as yours.
             paintIdentity(); recountAll(); render();
             startNotifSub();   // no identity left: this tears the subscription down
+            forgetIdentityState();
             closeSettings();
             showMsg('Keypair deleted');
         };
@@ -2090,6 +2092,33 @@
             unreadReplies = 0;
             updateNotifBadge();
             renderNotifs();
+        }
+
+
+        // Everything the panel is still showing that belonged to the identity that just went away.
+        //
+        // Rotating a key changes who you are, but two things had already been drawn from who you
+        // were and neither redraws on its own:
+        //
+        //   - the list of pages you have commented on is fetched once per page load, behind a
+        //     latch, so it went on listing the previous identity's pages until the page was
+        //     reloaded. That reads as the rotation not having happened — the one thing a rotation
+        //     must never look like.
+        //   - the notification log is replies addressed to the old key, and it is saved across
+        //     sessions. Keeping it leaves a badge counting conversations that were never had with
+        //     the identity now in use.
+        //
+        // Deleting an identity has exactly the same problem, so both paths call this.
+        function forgetIdentityState() {
+            _threadsAsked = false;
+            const box = s.getElementById('mythreads');
+            if (box) box.textContent = myPub ? 'Looking\u2026' : 'Connect a key to see this.';
+            notifLog = [];
+            saveNotifs();
+            unreadReplies = 0;
+            updateNotifBadge();
+            renderNotifs();
+            if (myPub) loadMyThreads();
         }
 
         let _threadsAsked = false;
