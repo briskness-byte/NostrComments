@@ -26,8 +26,12 @@
         // on both paths, which is what makes them comparable and what stops the worker path from
         // quietly growing its own protocol bugs.
         //
-        // Off unless `nostrcomments_worker` is true, which it is not by default.
-        const useWorker = _st.nostrcomments_worker === true;
+        // On unless somebody has switched it off. It shipped dark in 23.2.0 while one question stayed
+        // open: whether a service worker survives a quiet page, since Chrome stops an idle one after
+        // ~30s and a relay with nothing to say sends nothing. browser-workerlife.mjs answered it —
+        // five minutes of complete silence, then a reply from outside arrived, on Chromium and on
+        // Firefox alike. An explicit `false` is still honoured, so the setting remains a way back.
+        const useWorker = _st.nostrcomments_worker !== false;
 
         // One tab opens more than one socket to the same relay — the thread, the notifications and
         // the relay health check are three independent subscriptions with three different

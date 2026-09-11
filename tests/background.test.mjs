@@ -242,8 +242,11 @@ export async function run() {
     // by accident is a build where an untested transport went to the stores.
     for (const name of ['chrome', 'firefox']) {
         const cs = builds[name];
-        ok(`${name} reads the flag from storage`, cs.includes('_st.nostrcomments_worker === true'));
-        ok(`${name} defaults it to off`, !/nostrcomments_worker\s*:\s*true/.test(cs));
+        ok(`${name} reads the flag from storage`, cs.includes('_st.nostrcomments_worker !== false'));
+        // On by default since browser-workerlife.mjs showed the worker survives five idle minutes.
+        // Only an explicit false turns it off, so an unset value — every existing install — gets it.
+        ok(`${name} defaults it to on`, !cs.includes('_st.nostrcomments_worker === true'));
+        ok(`${name} never writes a default into storage`, !/nostrcomments_worker\s*:\s*(true|false)\s*[,}]/.test(cs));
         ok(`${name} picks the transport from the flag`,
            /const ncSocket = url => useWorker \? _workerSocket\(url\) : new WebSocket\(url\);/.test(cs));
     }

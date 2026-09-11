@@ -60,6 +60,17 @@ ok('extension injects even on a site with a strict policy', injected === true, i
 if (!injected) { console.log('\nNothing to test; aborting.'); await finish(1); }
 
 await js(configureScript({ relayUrl: relay.url }));
+// This suite is about the in-page transport: on Firefox that path is what the site's policy blocks,
+// and pinning that is the point. Since the background transport became the default it has to be
+// asked for explicitly — otherwise the page would load through the worker, the "blocked" assertions
+// would fail for the right reason, and the suite would stop proving anything about the in-page path.
+// The background half of the same page is browser-worker-csp.mjs.
+const workerOff = await js(`${ROOT}
+  const t = s.getElementById('worker-toggle');
+  if (!t) return 'no toggle';
+  if (t.checked) t.click();
+  return String(t.checked);`);
+ok('the in-page transport is selected for this suite', workerOff === 'false', workerOff);
 await wait(1500);
 await goto(SITE_URL);
 await wait(2500);

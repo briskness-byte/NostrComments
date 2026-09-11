@@ -113,12 +113,17 @@ const setWorker = want => js(`${ROOT}
   s.getElementById('settings-close')?.click();
   return String(t.checked);`);
 
-// --- the toggle exists and is off ----------------------------------------------------------------
-console.log('\n=== the transport is a choice, and it starts in the page ===');
-ok('the setting is there', (await workerIsOn()) === 'false', await workerIsOn());
+// --- the toggle exists and is on -----------------------------------------------------------------
+// On by default since browser-workerlife.mjs showed the worker surviving five idle minutes on both
+// engines. The in-page transport is still there and still selectable, and run A needs it on purpose:
+// the comparison is only worth anything if the two runs really are on different transports.
+console.log('\n=== the transport is a choice, and it starts in the background ===');
+ok('the setting is there, and on by default', (await workerIsOn()) === 'true', await workerIsOn());
+ok('it can be turned off', (await setWorker(false)) === 'false');
 
 // --- run A: sockets in the page --------------------------------------------------------------------
 console.log('\n=== run A: sockets opened in the page ===');
+// The setting takes hold on the next page load, so this reload is what puts run A in the page.
 await goto(site.url);
 await wait(4000);
 const seenA = JSON.parse(await thread());
