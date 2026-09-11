@@ -2,7 +2,7 @@
 
 ## What this is
 
-A browser extension and userscript that attaches a comment thread to any URL, using the Nostr
+A browser extension that attaches a comment thread to any URL, using the Nostr
 protocol. **There is no server.** No account, no backend, no database, nothing to breach that
 belongs to this project. Everything happens in the browser or directly between the browser and
 public relays that the user chooses.
@@ -20,9 +20,12 @@ That shapes the threat model. The things worth attacking are:
 
 **The current release, and nothing else.**
 
-Chrome, Firefox and Greasyfork all auto-update, releases are frequent, and there is no long-term
-branch to backport to. A fix ships as a new version rather than as a patch to an old one. If you
-are running something older, updating is the fix.
+Chrome and Firefox both auto-update, releases are frequent, and there is no long-term branch to
+backport to. A fix ships as a new version rather than as a patch to an old one. If you are running
+something older, updating is the fix.
+
+The userscript on Greasyfork is frozen at 23.2.0 and receives no fixes, security fixes included.
+If you use it, the fix is to install the extension instead.
 
 Version numbers are `MAJOR.MINOR.PATCH` since 23.0.0.
 

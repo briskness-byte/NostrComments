@@ -30,8 +30,9 @@ Requires Node 18+ (uses the built-in `crypto.subtle` and `URL`). No packages to 
   already-migrated list, a user who never saved one, a list somebody deliberately trimmed. Getting
   those wrong overwrites a preference, which is worse than the dead relay it would be fixing.
 - **parity.test.mjs** — the crypto, `verifyEvent`, `normalizeUrl`, relay migration, and voting snippets are
-  byte-identical across the Chrome extension, Firefox extension, and userscript (guards against
-  drift). Voting is in there because the browser QA only loads the Chrome build.
+  byte-identical across the Chrome and Firefox extensions (guards against drift). Voting is in
+  there because the browser QA only loads the Chrome build. The userscript is no longer compared:
+  it was frozen at 23.2.0.
 
 ## Browser QA (separate, before a release)
 

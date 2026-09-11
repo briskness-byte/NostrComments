@@ -1,16 +1,18 @@
 // Guards against drift: the security-critical snippets (secp/Schnorr, event verification,
-// normalizeUrl) must be byte-identical across the Chrome extension, Firefox extension, and
-// the userscript, so a fix applied to one can never silently miss another.
+// normalizeUrl) must be byte-identical across the Chrome and Firefox extensions, so a fix applied
+// to one can never silently miss the other.
 //
 // The voting path is guarded here too. It is not security-critical, but browser-votes.mjs only
 // ever loads the Chrome build, so this is the only thing standing between a vote fix and a
-// silent miss in the other two distributions.
+// silent miss in Firefox.
 import fs from 'fs';
 
+// The userscript was compared here too until 23.2.0, where it was frozen. It has no background
+// context, so it could not follow the extensions onto the background relay transport, and a
+// parity check against a file nobody edits any more would only stand in the way of fixes.
 const FILES = {
-    chrome:     new URL('../NostrComments-Chrome/content.js', import.meta.url),
-    firefox:    new URL('../NostrComments-FireFox/content.js', import.meta.url),
-    userscript: new URL('../NostrComments-Userscript/NostrComments.js', import.meta.url),
+    chrome:  new URL('../NostrComments-Chrome/content.js', import.meta.url),
+    firefox: new URL('../NostrComments-FireFox/content.js', import.meta.url),
 };
 
 function snippet(src, start, endMarker) {
@@ -61,17 +63,14 @@ export async function run() {
     for (const [name, start, end] of regions) {
         const chrome = snippet(srcs.chrome, start, end);
         ok(`${name} present in chrome`, !!chrome);
-        for (const other of ['firefox', 'userscript']) {
-            const s = snippet(srcs[other], start, end);
-            ok(`${name} identical in ${other}`, s !== null && s === chrome);
-        }
+        const firefox = snippet(srcs.firefox, start, end);
+        ok(`${name} identical in firefox`, firefox !== null && firefox === chrome);
     }
 
-    // The onboarding links are the one place the three builds are meant to differ, so this guards
+    // The onboarding links are the one place the two builds are meant to differ, so this guards
     // the divergence rather than the sameness. A signer has to be installed from the store of the
     // browser you are already in; a repository README is where somebody who just clicked "generate
-    // a key" gives up. The userscript runs in both browsers and cannot know which, and its users
-    // went looking for a script manager to begin with, so it keeps the vendor sites.
+    // a key" gives up.
     {
         const has = (k, t) => srcs[k].includes(t);
         ok('chrome sends people to the Chrome Web Store',
@@ -88,18 +87,16 @@ export async function run() {
         ok('firefox no longer recommends nos2x-fox', !has('firefox', 'addon/nos2x-fox'));
         // Attest is by the same developer, and the panel has to say so next to the link.
         ok('firefox says whose Attest is', has('firefox', 'Attest is by the same developer as this extension'));
-        ok('the userscript keeps the vendor sites', has('userscript', 'https://getalby.com') && has('userscript', 'github.com/fiatjaf/nos2x'));
-        ok('the userscript picks neither store', !has('userscript', 'chromewebstore.google.com') && !has('userscript', 'addons.mozilla.org'));
         // Leaving to install one and coming back to a panel that still says nothing reads as
-        // failure. All three say the same thing about it.
+        // failure. Both say the same thing about it.
         for (const k of Object.keys(srcs))
             ok(`${k} tells them to reload after installing`, srcs[k].includes('Install it, then reload this page.'));
     }
 
-    // Which signer button is lit cannot be byte-identical across the three: the userscript reads
-    // window.nostr straight off the page, the extensions have to ask an asynchronous bridge and
-    // remember the answer. So this guards the property rather than the text — and it guards a real
-    // drift, not a hypothetical one. The userscript had it right; both extensions decided the
+    // Which signer button is lit is guarded as a property rather than as text, because the
+    // extensions have to ask an asynchronous bridge for window.nostr and remember the answer — and
+    // it guards a real drift, not a hypothetical one. The userscript, which reads window.nostr
+    // straight off the page, had it right; both extensions decided the
     // highlight from signerPref alone, which is null until somebody presses a button, so anyone
     // signing through nos2x was shown "Key stored here" as their live choice.
     for (const [name, src] of Object.entries(srcs)) {

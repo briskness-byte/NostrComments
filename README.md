@@ -12,8 +12,8 @@ public is expensive. The comment thread is attached to the page's URL, not hoste
 owner, so it stays reachable whether or not they want it to exist.
 
 Published on the [Chrome Web Store](https://chromewebstore.google.com/detail/nostrcomments/ebmgdpicceaencegknannfaljhbfgido),
-on [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/nostrcomments/) and as a
-userscript. In active development since December 2025, with new releases most weeks.
+on [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/nostrcomments/). In active
+development since December 2025, with new releases most weeks.
 
 ## Privacy
 
@@ -91,11 +91,13 @@ Or manually: download `NostrComments-Firefox-vX.Y.xpi` from the
 [latest release](https://github.com/briskness-byte/NostrComments/releases/latest) and drag it into
 Firefox, or open `about:addons` → gear icon → **Install Add-on From File**.
 
-### Userscript (Tampermonkey / Greasemonkey)
+### Userscript (no longer updated)
 
-Download `NostrComments-vX.Y.user.js` from the
-[latest release](https://github.com/briskness-byte/NostrComments/releases/latest) and install it
-in your userscript manager.
+The userscript is frozen at 23.2.0. It still works, but it gets no new features and no fixes. A
+userscript has no background context, so it cannot open relay connections outside the page, and
+on sites with a strict Content-Security-Policy (x.com among them) Firefox refuses them. Install
+the extension instead. Details in
+[NostrComments-Userscript/README.md](NostrComments-Userscript/README.md).
 
 ## Getting started
 
@@ -123,12 +125,12 @@ You can add or remove relays from the ⚙ Settings panel inside the extension.
 ## Development
 
 No build system, no dependencies, no package manager. The extension is a single content script
-per distribution, and the three distributions are kept in lockstep.
+per distribution, and the two distributions are kept in lockstep.
 
 ```sh
 node tests/run.mjs         # run the test suite (Node 18+, no packages to install)
 node tests/browser-qa.mjs  # drive the real extension in a browser (needs chromium + chromedriver)
-sh build.sh                # produce the Chrome .zip, Firefox .xpi and userscript into dist/
+sh build.sh                # produce the Chrome .zip and Firefox .xpi into dist/
 ```
 
 The tests extract and exercise the **real code from the shipped source files**, so they fail if
@@ -136,7 +138,7 @@ shipped behaviour changes. They cover the hand-rolled secp256k1 / BIP-340 Schnor
 (including the official BIP-340 reference vector, so events interoperate with other Nostr
 clients), event signature verification, at-rest key encryption, URL normalisation, NIP-19
 identity encoding, the Lightning payment path, and byte-identical parity of the security-critical
-code across the Chrome, Firefox and userscript builds.
+code across the Chrome and Firefox builds.
 
 `browser-qa.mjs` is separate because it needs a browser: it loads the unpacked extension in
 chromium, drives the panel, and measures WCAG AA contrast against what is actually painted on

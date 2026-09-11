@@ -1,9 +1,9 @@
 #!/bin/sh
-# Build all three distributables into dist/, version-stamped.
+# Build both distributables into dist/, version-stamped.
 # Reads the version from the Chrome manifest so you never pass it by hand.
-#   dist/NostrComments-Chrome-vX.Y.zip     (Chrome Web Store)
+#   dist/NostrComments-Chrome-vX.Y.zip     (Chrome Web Store, Edge Add-ons)
 #   dist/NostrComments-Firefox-vX.Y.xpi    (addons.mozilla.org)
-#   dist/NostrComments-vX.Y.user.js        (Greasyfork / Tampermonkey / Greasemonkey)
+# The userscript is frozen at 23.2.0 and no longer built; see NostrComments-Userscript/README.md.
 set -eu
 cd "$(dirname "$0")"
 
@@ -84,7 +84,6 @@ pack() { # pack <src-folder> <output-path>
 
 pack NostrComments-Chrome  "dist/NostrComments-Chrome-v$VER.zip"
 pack NostrComments-FireFox "dist/NostrComments-Firefox-v$VER.xpi"
-cp NostrComments-Userscript/NostrComments.js "dist/NostrComments-v$VER.user.js"
 
 # Signed package for the Chrome Web Store, when a key is given:
 #   CRX_KEY=/path/outside/this/repo/key.pem sh build.sh
