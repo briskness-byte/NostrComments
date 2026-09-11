@@ -78,11 +78,16 @@ export async function run() {
            has('chrome', 'chromewebstore.google.com/detail/nos2x/') && has('chrome', 'chromewebstore.google.com/detail/alby'));
         ok('chrome does not send them to the Firefox store', !has('chrome', 'addons.mozilla.org'));
         ok('firefox sends people to addons.mozilla.org',
-           has('firefox', 'addons.mozilla.org/firefox/addon/nos2x-fox/') && has('firefox', 'addons.mozilla.org/firefox/addon/alby/'));
+           has('firefox', 'addons.mozilla.org/firefox/addon/attest/') && has('firefox', 'addons.mozilla.org/firefox/addon/alby/'));
         ok('firefox does not send them to the Chrome store', !has('firefox', 'chromewebstore.google.com'));
-        // Firefox has no nos2x. What is there is a separate port by a different author, so the
-        // label has to say the name of the thing the user will actually land on.
-        ok('firefox labels it nos2x-fox, the extension that exists there', has('firefox', "'nos2x-fox'"));
+        // Firefox has no nos2x. It used to offer nos2x-fox, but since that project's issue #68 a web
+        // page can read the PIN protecting the key and there is no fixed release upstream, so it is
+        // no longer recommended at all — Attest, a fork with the hole closed, replaces it. The label
+        // still has to name the thing the user will actually land on.
+        ok('firefox labels it Attest, the extension that exists there', has('firefox', "'Attest'"));
+        ok('firefox no longer recommends nos2x-fox', !has('firefox', 'addon/nos2x-fox'));
+        // Attest is by the same developer, and the panel has to say so next to the link.
+        ok('firefox says whose Attest is', has('firefox', 'Attest is by the same developer as this extension'));
         ok('the userscript keeps the vendor sites', has('userscript', 'https://getalby.com') && has('userscript', 'github.com/fiatjaf/nos2x'));
         ok('the userscript picks neither store', !has('userscript', 'chromewebstore.google.com') && !has('userscript', 'addons.mozilla.org'));
         // Leaving to install one and coming back to a panel that still says nothing reads as

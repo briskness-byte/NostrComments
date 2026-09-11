@@ -1,7 +1,8 @@
 // Does the background transport survive being left alone?
 //
-// This is the one question standing between the worker and being switched on by default, and it is
-// the reason the flag has stayed off since v23.2.0.
+// This was the one question standing between the worker and being switched on by default, and the
+// reason it shipped dark at first. It passed on Chromium and Firefox at 300s, and the default flipped
+// on the strength of that; keep it passing whenever the transport changes.
 //
 // Chrome stops an MV3 service worker after about 30 seconds of inactivity. WebSocket traffic resets
 // that timer and so does a connected port, which is why the transport works at all — but a relay
@@ -25,9 +26,9 @@
 // Requires: chromium (or Chrome) and chromedriver, or Firefox and geckodriver; openssl; Node 18+.
 import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT, BROWSER } from './harness.mjs';
 
-const CD_PORT    = Number(process.env.QA_PORT       || 9610);
-const SITE_PORT  = Number(process.env.QA_SITE_PORT  || 8170);
-const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8530);
+const CD_PORT    = Number(process.env.QA_PORT       || 9615);
+const SITE_PORT  = Number(process.env.QA_SITE_PORT  || 8175);
+const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8535);
 // Chrome's limit is ~30s. Five minutes is what the plan asked for: long enough that a worker which
 // only survives by luck has stopped being lucky.
 const IDLE_S     = Number(process.env.NC_IDLE_S     || 300);
