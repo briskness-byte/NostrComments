@@ -14,7 +14,7 @@ between your browser and the public Nostr relays you connect to.
   it connects to public Nostr relays to load and publish comments associated
   with the current page's URL.
 - Lets you generate a Nostr key locally, or use a Nostr signing extension you
-  already have installed (Alby, nos2x). Your private key is used only to sign
+  already have installed (Alby, nos2x, Attest). Your private key is used only to sign
   events and never leaves your device.
 
 ## Data stored locally (in your browser only)

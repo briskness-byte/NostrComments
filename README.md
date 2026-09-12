@@ -108,8 +108,9 @@ what gets sent where. After you accept it, the onboarding screen offers two opti
    locally in your browser. Back it up from the ⚙ Settings panel — you can copy it as `nsec` to
    use the same identity in any other Nostr app — and consider setting a password to encrypt it
    at rest.
-2. **Connect a wallet** — use [Alby](https://getalby.com) or [nos2x](https://github.com/fiatjaf/nos2x)
-   for signing via the NIP-07 browser extension standard.
+2. **Connect a wallet** — use [Alby](https://getalby.com) for signing via the NIP-07 browser
+   extension standard, or a dedicated signer: [nos2x](https://github.com/fiatjaf/nos2x) on Chrome,
+   [Attest](https://addons.mozilla.org/firefox/addon/attest/) on Firefox.
 
 ## Default relays
 

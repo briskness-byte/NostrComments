@@ -727,7 +727,7 @@
         <p class="set-p" style="font-size:13px;margin:6px 0 10px">Which key signs your comments. Switch to your signer to use whichever account is selected there.</p>
         <div style="display:flex;gap:8px">
         <button id="signer-local" style="flex:1;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Key stored here</button>
-        <button id="signer-nip07" style="flex:1;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Alby / nos2x</button>
+        <button id="signer-nip07" style="flex:1;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Alby / Attest</button>
         </div>
         <p id="signer-note" class="set-p" style="font-size:12px;margin:8px 0 0"></p>
         </div>
@@ -2803,7 +2803,7 @@
             if (!hasConsent || connecting) return;
             connecting = true;
             const wallet = getWallet();
-            if (!wallet) { connecting = false; return status.textContent = "Install Alby/nos2x"; }
+            if (!wallet) { connecting = false; return status.textContent = "Install Alby/Attest"; }
             try {
                 myPub = await wallet.getPublicKey();
                 fetchProfiles([myPub]); paintIdentity();
@@ -2968,7 +2968,7 @@
             if (pref === 'nip07') {
                 let present = false;
                 try { present = await signerPresent(); } catch(e) {}
-                if (!present) return showMsg('No Nostr signer found — install Alby or nos2x first');
+                if (!present) return showMsg('No Nostr signer found — install Alby or Attest first');
             } else if (!localWallet && !encPriv) {
                 // `localWallet` is whether the key is *loaded*, not whether it exists. Choosing the
                 // signer and reloading leaves it deliberately unloaded, and this then told you that

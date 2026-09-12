@@ -87,6 +87,18 @@ export async function run() {
         ok('firefox no longer recommends nos2x-fox', !has('firefox', 'addon/nos2x-fox'));
         // Attest is by the same developer, and the panel has to say so next to the link.
         ok('firefox says whose Attest is', has('firefox', 'Attest is by the same developer as this extension'));
+        // Every place that names a signer has to name one that exists in this browser. nos2x is
+        // Chrome-only — the Firefox port is nos2x-fox, which is the thing with the PIN hole — so a
+        // Firefox panel saying "nos2x" sends people either nowhere or somewhere broken. Three
+        // strings, and they drifted apart once already: the button, the connect failure, and the
+        // refusal when nip07 is chosen with no signer present.
+        ok('chrome names nos2x on the signer button', has('chrome', '>Alby / nos2x</button>'));
+        ok('firefox names Attest there instead',
+           has('firefox', '>Alby / Attest</button>') && !has('firefox', '>Alby / nos2x</button>'));
+        ok('chrome names nos2x when no signer answers',
+           has('chrome', 'Install Alby/nos2x') && has('chrome', 'install Alby or nos2x first'));
+        ok('firefox names Attest there too',
+           has('firefox', 'Install Alby/Attest') && has('firefox', 'install Alby or Attest first'));
         // Leaving to install one and coming back to a panel that still says nothing reads as
         // failure. Both say the same thing about it.
         for (const k of Object.keys(srcs))
