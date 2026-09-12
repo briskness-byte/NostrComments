@@ -59,8 +59,14 @@ let portSeq = 0, subSeq = 0;
 
 // Consent is read here as well as in the content script, on purpose. A content script that has
 // been tampered with cannot talk this into opening a socket the user never agreed to.
+//
+// The read is asynchronous and the gate has to wait for it. An MV3 worker is started *by* the first
+// port message after an idle shutdown, so without the wait that first message is answered from the
+// initial `false` — a user who consented long ago gets a denial, the socket is torn down, and the
+// panel reconnects a beat later for no reason. Every message awaits this, and awaiting an already
+// settled promise keeps them in arrival order.
 let consent = false;
-api.storage.local.get(CONSENT_KEY).then(st => { consent = st[CONSENT_KEY] === true; }, () => {});
+const consentReady = api.storage.local.get(CONSENT_KEY).then(st => { consent = st[CONSENT_KEY] === true; }, () => {});
 api.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !(CONSENT_KEY in changes)) return;
     consent = changes[CONSENT_KEY].newValue === true;
@@ -86,7 +92,14 @@ function socket(url) {
 
 function dial(url, r) {
     try { r.ws = new WebSocket(url); }
-    catch (e) { each(r, h => post(h.port, { t: 'error', sid: h.sid })); return; }
+    catch (e) {
+        // Nothing is listening yet — the handle that asked for this socket is registered by the
+        // caller, after this returns. So record the failure and let the caller report it, and take
+        // the dead record out of the pool so the next attempt dials again instead of inheriting it.
+        r.failed = true;
+        pool.delete(url);
+        return;
+    }
 
     r.ws.onopen = () => {
         r.ready = true;
@@ -112,9 +125,14 @@ function each(r, fn) {
     for (const k of r.handles) { const h = handles.get(k); if (h) fn(h); }
 }
 
+// A socket that never opens must not accumulate frames for the life of the worker. The queue exists
+// to cover the moment between dialling and onopen, which is a handful of frames; anything past that
+// is a relay that is not answering, and the content script's own backoff is what handles that.
+const QUEUE_MAX = 200;
+
 function raw(r, frame) {
     if (r.ready && r.ws) { try { r.ws.send(JSON.stringify(frame)); } catch (e) {} }
-    else r.queue.push(frame);
+    else if (r.queue.length < QUEUE_MAX) r.queue.push(frame);
 }
 
 // Who gets a frame. Subscription traffic goes to the one handle that asked for it; a publish answer
@@ -133,7 +151,11 @@ function deliver(r, frame) {
 
     if (kind === 'OK') {
         const o = pubOwner.get(frame[1]);
-        if (o && r.handles.has(hkey(o.port, o.sid))) return post(o.port, { t: 'frame', sid: o.sid, frame });
+        if (o && r.handles.has(hkey(o.port, o.sid))) post(o.port, { t: 'frame', sid: o.sid, frame });
+        // No owner means whoever published it has gone. Falling through to the broadcast below would
+        // hand every other tab on this socket an event id somebody else published, plus whatever the
+        // relay said about it. An answer addressed to nobody is dropped.
+        return;
     }
 
     each(r, h => post(h.port, { t: 'frame', sid: h.sid, frame }));
@@ -150,6 +172,11 @@ function deliver(r, frame) {
 const subOwner = new Map();     // wire id -> { port, sid, theirs }
 const subMine  = new Map();     // handle key + ' ' + their id -> wire id
 const pubOwner = new Map();     // event id -> { port, sid }
+
+// A publish is remembered until its OK arrives or the handle is released. A relay that simply never
+// answers leaves the entry behind, so the map is bounded and the oldest goes first — Map iteration
+// is insertion-ordered. Losing the oldest entry costs one OK notice, not a comment.
+const PUB_MAX = 500;
 
 function mint(port, sid, theirs) {
     const k = hkey(port, sid) + ' ' + theirs;
@@ -180,7 +207,10 @@ function translate(port, sid, frame) {
         const wire = forget(port, sid, frame[1]);
         return wire ? ['CLOSE', wire] : null;
     }
-    if (kind === 'EVENT' && frame[1] && typeof frame[1].id === 'string') pubOwner.set(frame[1].id, { port, sid });
+    if (kind === 'EVENT' && frame[1] && typeof frame[1].id === 'string') {
+        if (pubOwner.size >= PUB_MAX) pubOwner.delete(pubOwner.keys().next().value);
+        pubOwner.set(frame[1].id, { port, sid });
+    }
     return frame;
 }
 
@@ -190,23 +220,35 @@ function translate(port, sid, frame) {
 
 api.runtime.onConnect.addListener(port => {
     if (port.name !== 'nc-relay') return;
+    // Who is allowed to hold this pipe. A web page cannot reach runtime.onConnect at all — another
+    // extension arrives at onConnectExternal, which has no listener here — so this is a second wall
+    // rather than the only one. It is here because the flaw this project just fixed in another
+    // signer was precisely a handler that never asked who was calling.
+    if (!port.sender || (port.sender.id && port.sender.id !== api.runtime.id)) return port.disconnect();
     port._ncId = ++portSeq;
 
-    port.onMessage.addListener(msg => {
+    port.onMessage.addListener(async msg => {
         if (!msg || typeof msg.t !== 'string') return;
         if (msg.t === 'ping') return post(port, { t: 'pong' });
+        await consentReady;
         // Every request that would touch a relay passes the gate, not only the first one.
         if (!consent) return post(port, { t: 'denied', sid: msg.sid });
         if (typeof msg.sid !== 'number') return;
 
         if (msg.t === 'open') {
-            if (typeof msg.relay !== 'string' || !/^wss?:\/\//i.test(msg.relay)) return;
+            // wss only. The panel refuses to add anything else, and this is the side that is not
+            // bound by the page's CSP, so it must not be the looser of the two. A rejection is
+            // reported rather than dropped, so a bad address shows up as a relay that failed
+            // instead of one that hangs.
+            if (typeof msg.relay !== 'string' || !/^wss:\/\//i.test(msg.relay))
+                return post(port, { t: 'error', sid: msg.sid });
             const k = hkey(port, msg.sid);
             if (handles.has(k)) return;
             handles.set(k, { port, sid: msg.sid, url: msg.relay });
             const r = socket(msg.relay);
             r.handles.add(k);
             cancelClose(r);
+            if (r.failed) return post(port, { t: 'error', sid: msg.sid });
             if (r.ready) post(port, { t: 'open', sid: msg.sid });
             return;
         }

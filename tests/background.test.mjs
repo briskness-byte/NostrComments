@@ -57,6 +57,9 @@ export async function run() {
     try {
         const built = (0, eval)(`(() => {
             const subOwner = new Map(), subMine = new Map(), pubOwner = new Map();
+            // translate() evicts from pubOwner when it is full; the cap is declared above the slice
+            // being lifted, so it is read out of the file rather than restated here.
+            const PUB_MAX = ${/const PUB_MAX = (\d+);/.exec(src)?.[1] || 0};
             let subSeq = 0;
             const hkey = (port, sid) => port._ncId + ':' + sid;
             ${declared}
@@ -134,6 +137,11 @@ export async function run() {
     ok('a frame is addressed to a socket handle, not a relay', /sid: owner\.sid/.test(deliver));
     ok('the id is translated back before it goes out', /out\[1\] = owner\.theirs/.test(deliver));
     ok('a publish answer goes to the tab waiting on that event', /OK[\s\S]{0,120}pubOwner\.get/.test(deliver));
+    // An OK whose owner has gone — the tab closed, or the publish fell out of the bounded map —
+    // used to fall through to the broadcast below it, handing every other tab on the socket an
+    // event id somebody else published and whatever the relay said about it.
+    ok('an OK with no owner is dropped rather than broadcast',
+       !/return post\(o\.port/.test(deliver) && /pubOwner\.get[\s\S]{0,400}?return;\s*\}/.test(deliver));
 
     // --- the consent gate -------------------------------------------------------------------------------
     // The content script asks nothing before consent. This checks again, from storage, so a content
@@ -147,9 +155,35 @@ export async function run() {
     for (const verb of ['open', 'send', 'close']) {
         ok(`the gate is above '${verb}'`, gate >= 0 && gate < handler.indexOf(`msg.t === '${verb}'`));
     }
+    // The consent value is read asynchronously, and an MV3 worker is started *by* the first port
+    // message after an idle shutdown. Deciding that message from the initial `false` denies a user
+    // who consented months ago, tears the socket down, and reconnects a beat later for nothing.
+    ok('the gate waits for the stored value before deciding', /await consentReady;/.test(handler));
+    ok('and the handler is async so that it can', /port\.onMessage\.addListener\(async msg =>/.test(src));
+    // A web page cannot reach onConnect at all — another extension lands on onConnectExternal, which
+    // has no listener here. This is the second wall, and it exists because the flaw this project
+    // fixed in another signer was exactly a handler that never asked who was calling.
+    ok('a port from anywhere but this extension is refused',
+       /!port\.sender \|\| \(port\.sender\.id && port\.sender\.id !== api\.runtime\.id\)\) return port\.disconnect\(\)/.test(src));
     // A relay address arrives from the content script and goes straight into a WebSocket, so it is
-    // checked here too rather than trusted.
-    ok('only ws:// and wss:// are dialled', /\^wss\?:\\\/\\\//.test(handler));
+    // checked here too rather than trusted. wss only: the panel refuses to add anything else, and
+    // this side is the one the page's CSP does not bind, so it must not be the looser of the two.
+    ok('only wss:// is dialled', handler.includes('!/^wss:\\/\\//i.test(msg.relay)'));
+    ok('and plaintext ws:// is no longer accepted', !/wss\?/.test(handler));
+    // Dropping a rejected address silently leaves the content script waiting on a socket that will
+    // never answer. Reporting it makes the relay show as failed, which is what the panel can act on.
+    ok('a rejected address is reported back', /msg\.relay\)\)\s*\n\s*return post\(port, \{ t: 'error', sid: msg\.sid \}\)/.test(handler));
+    // Same for a URL the WebSocket constructor itself throws on: the handle is registered after the
+    // dial, so nothing was listening at the moment it failed.
+    ok('a socket that could not be constructed is reported too',
+       /r\.failed = true;/.test(src) && /if \(r\.failed\) return post\(port, \{ t: 'error', sid: msg\.sid \}\)/.test(handler));
+    ok('and the dead record does not stay in the pool',
+       /r\.failed = true;\s*\n\s*pool\.delete\(url\);/.test(src));
+    // Two maps that a relay which never answers would otherwise grow for the life of the worker.
+    ok('frames waiting for a socket to open are capped',
+       /const QUEUE_MAX = \d+;/.test(src) && /r\.queue\.length < QUEUE_MAX/.test(src));
+    ok('and remembered publishes are capped, oldest first',
+       /const PUB_MAX = \d+;/.test(src) && /pubOwner\.delete\(pubOwner\.keys\(\)\.next\(\)\.value\)/.test(src));
     // A port may only send on a handle it owns; otherwise one tab could push frames onto another
     // tab's socket. hkey() namespaces the handle by port, so a guessed number is not enough.
     ok('a tab can only send on a handle it owns', /const h = handles\.get\(hkey\(port, msg\.sid\)\);/.test(handler));
