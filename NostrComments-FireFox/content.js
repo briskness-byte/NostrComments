@@ -665,7 +665,7 @@
         <button id="relay-add-btn">Add</button>
         </div>
         <label id="widepub-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="widepub-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Also send what you post to three extra relays, so one relay removing it is not the end of it. They are never read from.</span></label>
-        <label id="worker-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="worker-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Open relay connections in the background instead of in the page. Some sites forbid the page from reaching a relay at all, and this gets past that. Experimental — it takes effect on the next page load.</span></label>
+        <label id="worker-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="worker-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Open relay connections in the background instead of in the page. Some sites forbid the page from reaching a relay at all, and this gets past that. On by default; it takes effect on the next page load.</span></label>
         <div id="identity-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
         <strong class="set-h" style="font-size:15px">Your identity</strong>
@@ -2424,7 +2424,7 @@
             showMsg(nip05Check ? 'Verified names on — commenters\' domains will be contacted'
                                : 'Verified names off — no domain will be contacted');
         };
-        // Experimental, and off by default. Turning it on moves relay sockets into the extension's
+        // On by default since 23.2.0. It moves relay sockets into the extension's
         // background context, which is the only way to reach a relay on a site whose CSP forbids
         // the page from doing it. It cannot take effect on a page that has already opened its
         // sockets, so the message says so rather than leaving somebody watching a panel that has
