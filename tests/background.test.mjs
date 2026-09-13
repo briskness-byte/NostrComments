@@ -107,7 +107,16 @@ export async function run() {
         // A publish is remembered by event id so the relay's OK reaches the tab that is waiting on
         // it rather than every tab on that socket.
         translate(B, S, ['EVENT', { id: 'abc123', kind: 1 }]);
-        ok('a published event is owned by the tab that sent it', maps.pubOwner.get('abc123')?.port === B);
+        ok('a published event is owned by the tab that sent it',
+           maps.pubOwner.get('abc123|' + B._ncId + ':' + S)?.port === B);
+        // Publishing sends one event to every relay at once, so the same id goes out on several
+        // handles. Keyed by id alone the last sender overwrote the rest, and only one relay's
+        // answer could be routed home; the others sat until an 8s timeout and were retried as if
+        // the relay had gone quiet. Both entries have to survive.
+        translate(A, S, ['EVENT', { id: 'abc123', kind: 1 }]);
+        ok('and two relays publishing the same event keep separate owners',
+           maps.pubOwner.get('abc123|' + B._ncId + ':' + S)?.port === B &&
+           maps.pubOwner.get('abc123|' + A._ncId + ':' + S)?.port === A);
         // The event itself must not be rewritten on the way out: the id is signed over, so any
         // change to it invalidates the signature.
         const ev = { id: 'deadbeef', kind: 1, content: 'x' };
@@ -136,7 +145,10 @@ export async function run() {
     // addressed to a handle, and this is what stops that coming back.
     ok('a frame is addressed to a socket handle, not a relay', /sid: owner\.sid/.test(deliver));
     ok('the id is translated back before it goes out', /out\[1\] = owner\.theirs/.test(deliver));
-    ok('a publish answer goes to the tab waiting on that event', /OK[\s\S]{0,120}pubOwner\.get/.test(deliver));
+    ok('a publish answer goes to the tab waiting on that event', /OK[\s\S]{0,400}pubOwner\.get/.test(deliver));
+    // Looked up among this socket's own handles, so two relays answering the same event id are
+    // told apart rather than racing for one slot.
+    ok('and it is found among this socket\'s handles', /for \(const k of r\.handles\)[\s\S]{0,200}pubOwner\.get\(frame\[1\] \+ '\|' \+ k\)/.test(deliver));
     // An OK whose owner has gone — the tab closed, or the publish fell out of the bounded map —
     // used to fall through to the broadcast below it, handing every other tab on the socket an
     // event id somebody else published and whatever the relay said about it.

@@ -157,11 +157,16 @@ function deliver(r, frame) {
     }
 
     if (kind === 'OK') {
-        const o = pubOwner.get(frame[1]);
-        if (o && r.handles.has(hkey(o.port, o.sid))) post(o.port, { t: 'frame', sid: o.sid, frame });
-        // No owner means whoever published it has gone. Falling through to the broadcast below would
-        // hand every other tab on this socket an event id somebody else published, plus whatever the
-        // relay said about it. An answer addressed to nobody is dropped.
+        // The answer belongs to the handle that published this id *on this socket*. Looking it up
+        // among this socket's own handles is what keeps two relays' answers to the same event
+        // apart, and what stops one tab hearing about another's publish.
+        for (const k of r.handles) {
+            const o = pubOwner.get(frame[1] + '|' + k);
+            if (o) { post(o.port, { t: 'frame', sid: o.sid, frame }); return; }
+        }
+        // No owner on this socket: whoever published it has gone, or it was never ours. Falling
+        // through to the broadcast below would hand every other tab on this socket an event id
+        // somebody else published, plus whatever the relay said about it.
         return;
     }
 
@@ -216,7 +221,13 @@ function translate(port, sid, frame) {
     }
     if (kind === 'EVENT' && frame[1] && typeof frame[1].id === 'string') {
         if (pubOwner.size >= PUB_MAX) pubOwner.delete(pubOwner.keys().next().value);
-        pubOwner.set(frame[1].id, { port, sid });
+        // Keyed by handle *and* event id, not by event id alone. Publishing sends one event to
+        // every relay at the same time, so several handles carry the same id — and keying by id
+        // meant the last sender overwrote the rest. Exactly one relay could be told what its own
+        // relay answered; every other publish sat until its 8s timeout and was then retried as if
+        // it had gone quiet. What that costs is the thing redundancy exists for: a relay that
+        // refused for a transient reason looked like a relay that never spoke.
+        pubOwner.set(frame[1].id + '|' + hkey(port, sid), { port, sid });
     }
     return frame;
 }
@@ -290,7 +301,7 @@ function release(port, sid) {
         subOwner.delete(wire);
         subMine.delete(k + ' ' + o.theirs);
     }
-    for (const [id, o] of [...pubOwner]) if (o.port === port && o.sid === sid) pubOwner.delete(id);
+    for (const [key, o] of [...pubOwner]) if (o.port === port && o.sid === sid) pubOwner.delete(key);
     if (!r) return;
     r.handles.delete(k);
     maybeClose(h.url, r);
