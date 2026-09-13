@@ -15,6 +15,10 @@ Published on the [Chrome Web Store](https://chromewebstore.google.com/detail/nos
 on [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/nostrcomments/). In active
 development since December 2025, with new releases most weeks.
 
+**[Watch it work](https://www.youtube.com/watch?v=bywF8yWZa3o)** — sixty-six seconds: a thread on an
+article that has no comment section, the same thread appearing in a second browser under a different
+key, and then a paywalled paper, a company announcement, a government page and a post on X.
+
 ## Privacy
 
 NostrComments has **no server**. There is no account, no email, no telemetry, and no analytics
