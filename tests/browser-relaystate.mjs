@@ -16,7 +16,7 @@ import https from 'https';
 import fs from 'fs';
 import crypto from 'crypto';
 import path from 'path';
-import { extensionCode, reporter, startRelay, startSite, startBrowser, makeCert, ROOT } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, makeCert, ROOT, seedStorage, nativeClick } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9542);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8101);
@@ -61,10 +61,19 @@ const now = Math.floor(Date.now() / 1000);
 good.stored.push(await sign(OTHER, { kind: 1111, created_at: now - 20, content: 'a comment on this page',
     tags: [['I', pageUrl], ['K', 'web'], ['i', pageUrl], ['k', 'web']] }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const drv = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncrs-',
     onClose: () => { site.close(); good.close(); mute.close(); },
 });
+const { js, wait, goto, finish } = drv;
+
+// Adding a relay is one of the three things the panel will not do for an untrusted event, so the
+// clicks that mean to exercise it come from the browser rather than from a script in the page.
+// That is also the only way this suite still proves the button works for a real person.
+const addViaUi = async url => {
+    await js(`${ROOT} s.getElementById('relay-input').value = ${JSON.stringify(url)}; return 1;`);
+    return nativeClick(drv, `${ROOT} return s.getElementById('relay-add-btn');`);
+};
 
 await goto(site.url);
 await wait(3000);
@@ -74,19 +83,16 @@ ok('extension injects into the page', injected === true, injected);
 if (!injected) { console.log('\nNothing to test; aborting.'); await finish(1); }
 
 // Three relays: one that works, one that answers nothing, one that is not there at all.
-await js(`${ROOT}
-  s.getElementById('m').style.display='grid';
-  const o=[...s.getElementById('p').children].find(c=>c.textContent.includes('One quick thing'));
-  if(o) o.querySelector('button').click();
-  s.getElementById('gear-btn').click();
-  let guard=0;
-  while (s.getElementById('relay-list').querySelector('.relay-remove') && guard++<50)
-      s.getElementById('relay-list').querySelector('.relay-remove').click();
-  for (const u of ['wss://127.0.0.1:${GOOD_PORT}','wss://127.0.0.1:${MUTE_PORT}','wss://127.0.0.1:${DEAD_PORT}']) {
-      s.getElementById('relay-input').value = u;
-      s.getElementById('relay-add-btn').click();
-  }
-  return 1;`);
+// Consent and the relay list arrive through storage. Not a shortcut: the panel refuses untrusted
+// clicks on exactly those two, and what this section tests is what the list *reports*, not how it
+// is filled. The add-relay button is exercised further down, with a real click.
+await js(seedStorage({
+    nostrcomments_consent: true,
+    nostrcomments_relays: [`wss://127.0.0.1:${GOOD_PORT}`, `wss://127.0.0.1:${MUTE_PORT}`, `wss://127.0.0.1:${DEAD_PORT}`],
+    nostrcomments_widepublish: false,
+}));
+await wait(600);
+await js(`${ROOT} s.getElementById('m').style.display='grid'; s.getElementById('gear-btn').click(); return 1;`);
 await wait(800);
 
 const rows = () => js(`${ROOT}
@@ -146,19 +152,19 @@ const listed = () => js(`${ROOT} return JSON.stringify(
 const before = JSON.parse(await listed()).length;
 const tries = [`wss://127.0.0.1:${GOOD_PORT}/`, `WSS://127.0.0.1:${GOOD_PORT}`, `wss://127.0.0.1:${GOOD_PORT}//`, `  wss://127.0.0.1:${GOOD_PORT}  `];
 for (const t of tries) {
-    await js(`${ROOT} s.getElementById('relay-input').value = ${JSON.stringify('__T__')}; s.getElementById('relay-add-btn').click(); return 1;`.replace('__T__', t));
+    await addViaUi(t);
     await wait(250);
 }
 const after = JSON.parse(await listed());
 ok('four spellings of a relay already in the list add nothing', after.length === before, { before, after });
 
-await js(`${ROOT} s.getElementById('relay-input').value='wss://relay.example.com/nostr/'; s.getElementById('relay-add-btn').click(); return 1;`);
+await addViaUi('wss://relay.example.com/nostr/');
 await wait(300);
 const withPath = JSON.parse(await listed());
 ok('a genuinely new relay is still accepted', withPath.length === before + 1, withPath);
 ok('stored without its trailing slash', withPath.includes('wss://relay.example.com/nostr'), withPath);
 
-await js(`${ROOT} s.getElementById('relay-input').value='wss://relay.example.com/NOSTR'; s.getElementById('relay-add-btn').click(); return 1;`);
+await addViaUi('wss://relay.example.com/NOSTR');
 await wait(300);
 // Hosts are case-insensitive, paths are not: this is a different relay and must be allowed.
 ok('a path differing only in case is a different relay', JSON.parse(await listed()).length === before + 2, await listed());

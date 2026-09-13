@@ -36,8 +36,15 @@ const { js, wait, goto, finish } = await startBrowser({
 });
 
 // Counted at the relay, so the extension carries no measurement code of its own.
-let sockets = 0;
-relay.onTraffic = e => { if (e.type === 'open') sockets++; };
+//
+// Subscriptions for this page, not new connections. Counting connections was right while every
+// tab opened its own socket; since 23.2.0 the background script keeps one socket per relay and
+// holds it for 30 seconds after the last handle lets go, so a revisit reuses it and the relay sees
+// no new connection at all. That made this suite report "never connected" for an extension that
+// was talking to the relay perfectly well. What the test actually means to watch is whether the
+// extension has asked this relay about this page, which is what a subscription is.
+const pageSubs = () => [...relay.conns].reduce((n, c) =>
+    n + [...c.subs.values()].filter(fs => fs.some(f => JSON.stringify(f).includes(PAGE))).length, 0);
 
 await goto(site.url);
 await wait(3500);
@@ -45,35 +52,32 @@ await js(configureScript({ relayUrl: relay.url, nsec: toBech32('nsec', ME) }));
 await wait(1500);
 
 console.log('=== a visit that does not stay ===');
-sockets = 0;
 await goto(site.url);
 await wait(1200);            // shorter than the settle
-const during = sockets;
+const during = pageSubs();
 await goto('about:blank');
 await wait(4000);
-ok('nothing is connected in the first second', during === 0, during);
-ok('and leaving costs nothing at all', sockets === 0, sockets);
+ok('nothing is asked about the page in the first second', during === 0, during);
+ok('and leaving costs nothing at all', pageSubs() === 0, pageSubs());
 
 console.log('\n=== a visit that stays ===');
-sockets = 0;
 await goto(site.url);
 await wait(9000);
-ok('it connects once the page has been read for a moment', sockets > 0, sockets);
+ok('it asks once the page has been read for a moment', pageSubs() > 0, pageSubs());
 const loaded = await js(`${ROOT} return s.getElementById('list').querySelectorAll('.c').length;`);
 ok('and the thread loads as before', loaded >= 1, loaded);
 
 console.log('\n=== somebody who asks for it does not wait ===');
 // The guarantee that matters most: opening the panel skips the delay. A reader who clicks the
 // button has already decided; making them watch a timer would trade one annoyance for another.
-sockets = 0;
 await goto(site.url);
 await wait(400);
-const beforeOpen = sockets;
+const beforeOpen = pageSubs();
 await js(`${ROOT} return !!s;`);
 await js(`${ROOT} const b = s.getElementById('nc-btn'); if (b) b.click(); return 1;`);
 await wait(2000);
-ok('nothing had connected yet at that point', beforeOpen === 0, beforeOpen);
-ok('opening the panel connects straight away', sockets > 0, sockets);
+ok('nothing had been asked yet at that point', beforeOpen === 0, beforeOpen);
+ok('opening the panel asks straight away', pageSubs() > 0, pageSubs());
 
 console.log(`\n${state.fail === 0 ? '✓' : '✗'} lazy connect: ${state.pass} passed, ${state.fail} failed`);
 await finish(state.fail ? 1 : 0);

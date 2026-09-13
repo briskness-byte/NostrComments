@@ -20,7 +20,7 @@ import https from 'https';
 import fs from 'fs';
 import crypto from 'crypto';
 import path from 'path';
-import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, makeCert, ROOT } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, seedStorage, makeCert, ROOT } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9546);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8107);
@@ -238,12 +238,9 @@ await goto(site.url); await wait(2000);
 await js(`${ROOT}
   s.getElementById('m').style.display='grid';
   s.getElementById('gear-btn').click();
-  let g = 0;
-  while (s.getElementById('relay-list').querySelector('.relay-remove') && g++ < 50)
-      s.getElementById('relay-list').querySelector('.relay-remove').click();
-  s.getElementById('relay-input').value = 'wss://127.0.0.1:${MUTE_PORT}';
-  s.getElementById('relay-add-btn').click();
   return 1;`);
+// Replacing the list goes through storage: both adding and removing refuse untrusted clicks now.
+await js(seedStorage({ nostrcomments_relays: [`wss://127.0.0.1:${MUTE_PORT}`] }));
 await wait(800);
 published.length = 0;
 await publishName('Published Blind');
