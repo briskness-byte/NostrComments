@@ -303,6 +303,15 @@
         }
 
         // Shadow DOM: the panel and the button both live in here.
+        //
+        // Clear a host from an earlier run of this script first. Firefox injects content scripts
+        // into already-open matching tabs when an add-on is installed or updated, so one page can
+        // end up running this twice — and the second run used to append a second button on top of
+        // the first. What that looks like is one badge sitting behind the button: two buttons at
+        // the same coordinates, the older one painted first, still showing the count it had when
+        // its script stopped being the live one.
+        for (const el of [...document.documentElement.children])
+            if (el.shadowRoot && el.shadowRoot.getElementById('nc-btn')) el.remove();
         const host = document.createElement('div');
         document.documentElement.appendChild(host);
         const s = host.attachShadow({mode:'open'});

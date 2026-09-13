@@ -141,6 +141,19 @@ export async function run() {
            /clienttagToggle\.onchange[\s\S]{0,200}?nostrcomments_clienttag/.test(src));
     }
 
+    // One page can run this script twice: Firefox injects content scripts into already-open matching
+    // tabs when an add-on is installed or updated. The second run used to append a second button on
+    // top of the first, and what that looks like on screen is a badge sitting *behind* the button —
+    // two buttons at the same coordinates, the older painted first and frozen at whatever count it
+    // had. The ordering is the part worth pinning: clearing after appending would take the new host
+    // away too, and the symptom of that is no button at all.
+    for (const [name, src] of Object.entries(srcs)) {
+        const clear = src.indexOf("if (el.shadowRoot && el.shadowRoot.getElementById('nc-btn')) el.remove();");
+        const create = src.indexOf('document.documentElement.appendChild(host);');
+        ok(`${name}: a host left by an earlier run is cleared`, clear >= 0);
+        ok(`${name}: and cleared before the new host is added`, clear >= 0 && create >= 0 && clear < create);
+    }
+
     // Chrome extension ids are fixed and public, so a page can fetch a web-accessible resource by
     // guessing its URL and learn whether the extension is installed — Google's own documentation
     // calls this out as fingerprinting. use_dynamic_url regenerates that id every session, which
