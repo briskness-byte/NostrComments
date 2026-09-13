@@ -366,7 +366,9 @@
         .relay-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:white;border-radius:8px;margin:5px 0;font-size:14px;color:#444;border:1px solid #eee}
         .relay-remove{background:none;border:none;color:#c62828;cursor:pointer;font-size:18px;padding:0 4px;line-height:1}
         .relay-url{display:block}
-        .relay-state{display:block;font-size:11px;margin-top:2px;color:#8a8a8a;cursor:help}
+        /* #8a8a8a was 3.45:1 on white — below AA, and this is the state most relays are in most of
+           the time. #6b6b6b is 5.33:1 and still reads as secondary next to the relay's own URL. */
+        .relay-state{display:block;font-size:11px;margin-top:2px;color:#6b6b6b;cursor:help}
         /* Settings hints. #666 measures 3.40:1 on the dark panel background, under the 4.5:1 AA
            floor — the older inline ones still do, and browser-qa does not reach into this panel to
            notice. New text at least goes in with a class that has both themes. */
