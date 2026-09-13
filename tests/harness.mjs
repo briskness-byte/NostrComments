@@ -120,11 +120,26 @@ export function seedExt(srcDir, workDir) {
     return dst;
 }
 
-// Put values into extension storage from a suite. content.js reads storage once, at init, so a
-// reload is what makes them take effect — the same thing the panel tells a user after adding a
-// relay.
+// Put values into extension storage from a suite. content.js applies relay-list and consent
+// changes as they arrive, so this takes effect without a reload; anything else it reads once at
+// init, and for those the suite has to seed before its first navigation.
 export const seedStorage = values =>
     `window.postMessage({__ncSeed:true, values:${JSON.stringify(values)}}, '*'); return 1;`;
+
+// A click the *browser* makes rather than the page. Consent and the relay controls refuse
+// untrusted events, so a suite that means to exercise those — as opposed to merely configuring —
+// has to click the way a person does. executeScript hands back an element reference even from
+// inside a shadow root, and WebDriver's own click endpoint dispatches a real event on it.
+//
+// Returns false when the element is not there, so a suite can assert on that rather than silently
+// testing nothing.
+export async function nativeClick({ wd, sid, js }, findScript) {
+    const el = await js(findScript);
+    const key = el && typeof el === 'object' && Object.keys(el).find(k => k.startsWith('element-'));
+    if (!key) return false;
+    const r = await wd('POST', `/session/${sid}/element/${el[key]}/click`, {});
+    return !(r && r.value && r.value.error);
+}
 
 export function findChromium() {
     if (process.env.CHROMIUM) return process.env.CHROMIUM;
