@@ -4274,6 +4274,13 @@
 
             let _eoseCount = 0, _repliesFetched = false, _eoseTimer;
             const _silent = new Map();     // per relay: the timer watching for a reply that never comes
+            // Per relay: the timer watching for a socket that never opens at all. Needed because a
+            // refused connection is not reported the same way by both transports. Measured against
+            // a port with nothing behind it: in the page the close arrives in 2.9s, through the
+            // background script it takes 33s — long enough that the panel kept saying the relay had
+            // never been contacted while the user sat looking at a dead entry. The state machine
+            // should not depend on which transport delivered the bad news, or how fast.
+            const _dialing = new Map();
             function _fetchReplies() {
                 if (_repliesFetched || gen !== pageGen) return;
                 _repliesFetched = true;
@@ -4295,10 +4302,15 @@
                 let ws;
                 try { ws = ncSocket(r); } catch(e) { return; }
                 _wsPool.push(ws);
+                clearTimeout(_dialing.get(r));
+                _dialing.set(r, setTimeout(() => {
+                    if ((relayState.get(r) || {}).state === undefined) setRelayState(r, 'failed');
+                }, 6000));
                 const openSub = () => ws.send(JSON.stringify(["REQ", subId+gen, ...pageFilters()]));
                 let challenge = null, authId = null, identified = false;
                 ws.onopen = () => {
                     attempt = 0;
+                    clearTimeout(_dialing.get(r));
                     setRelayState(r, 'connecting');
                     // A relay can complete the handshake and then say nothing at all, which is a
                     // different failure from refusing the connection and used to look like neither:
@@ -4402,6 +4414,7 @@
                 };
                 ws.onerror = () => { try { ws.close(); } catch(_) {} };
                 ws.onclose = () => {
+                    clearTimeout(_dialing.get(r));
                     const i = _wsPool.indexOf(ws); if (i >= 0) _wsPool.splice(i, 1);
                     // Answered once already: a later close is the socket ending, not a failure.
                     if (relayState.get(r)?.state !== 'answered') setRelayState(r, attempt >= 6 ? 'unreachable' : 'failed');
