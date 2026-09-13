@@ -18,7 +18,7 @@
 //   CHROMIUM=/path/to/chrome node tests/browser-keyexposure.mjs
 //
 // Requires: chromium (or Chrome), a matching chromedriver on PATH, openssl, Node 18+.
-import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, seedStorage, ROOT } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9536);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8096);
@@ -169,10 +169,10 @@ await js(`${ROOT}
   const w = s.getElementById('muteword-input');
   w.value = ${JSON.stringify(MUTED_WORD)};
   s.getElementById('muteword-add-btn').click();
-  const r = s.getElementById('relay-input');
-  r.value = ${JSON.stringify(ODD_RELAY)};
-  s.getElementById('relay-add-btn').click();
   return 1;`);
+// The relay goes in through storage: adding one refuses an untrusted click, and what this suite
+// is testing is whether Settings content leaks to the page, not how it got there.
+await js(seedStorage({ nostrcomments_relays: [`wss://127.0.0.1:${RELAY_PORT}`, ODD_RELAY] }));
 await wait(700);
 ok('what is in Settings is readable while Settings is open', await leaks(MUTED_WORD) === true);
 

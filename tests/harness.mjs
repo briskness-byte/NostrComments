@@ -504,15 +504,25 @@ async function startFirefox({ cdPort, prefix, onClose }) {
 // the bech32 path a seeded hex key would skip.
 export function configureScript({ relayUrl, nsec }) {
     const urls = Array.isArray(relayUrl) ? relayUrl : [relayUrl];
-    return `${ROOT}
+    // Order matters more than it looks. Importing a key is what sends the profile fetch, and that
+    // fetch goes to whatever relay list is live at that moment — so doing it in the same tick as
+    // the seed asks the *default* relays about a profile only the suite's own relay has, and the
+    // panel correctly reports that nobody published a name. Everything after the seed therefore
+    // waits for the content script to acknowledge it.
+    return `
+      window.addEventListener('message', function _ncSeeded(ev) {
+          if (!ev.data || ev.data.__ncSeeded !== true) return;
+          window.removeEventListener('message', _ncSeeded);
+          ${ROOT}
+          s.getElementById('m').style.display='grid';
+          s.getElementById('gear-btn').click();
+          ${nsec ? `s.getElementById('privkey-import').value=${JSON.stringify(nsec)};
+          s.getElementById('privkey-import-btn').click();` : ''}
+      });
       window.postMessage({__ncSeed:true, values:{
           nostrcomments_consent: true,
           nostrcomments_relays: ${JSON.stringify(urls)},
           nostrcomments_widepublish: false
       }}, '*');
-      s.getElementById('m').style.display='grid';
-      s.getElementById('gear-btn').click();
-      ${nsec ? `s.getElementById('privkey-import').value=${JSON.stringify(nsec)};
-      s.getElementById('privkey-import-btn').click();` : ''}
       return 1;`;
 }

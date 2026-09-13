@@ -14,7 +14,7 @@
 //   CHROMIUM=/path/to/chrome node tests/browser-publish.mjs
 //
 // Requires: chromium (or Chrome), a matching chromedriver on PATH, openssl, Node 18+.
-import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, matches, ROOT, EXT } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, seedStorage, matches, ROOT, EXT } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9521);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8093);
@@ -203,12 +203,9 @@ ok('it is drawn as a reply, indented under its parent', /"reply":true/.test(thre
 console.log('\n=== one relay refuses, another accepts ===');
 // The everyday case with more than one relay configured. A refusal that somebody else made good
 // is not news, and reporting it turns a vote that worked into what looks like a failure.
-await js(`${ROOT}
-  s.getElementById('gear-btn').click();
-  s.getElementById('relay-input').value=${JSON.stringify(REFUSER_URL)};
-  s.getElementById('relay-add-btn').click();
-  s.getElementById('gear-btn').click();
-  return 1;`);
+// Through storage rather than the panel: adding a relay refuses an untrusted click, and this
+// section is about what a refusal from one relay does to the report, not about the add button.
+await js(seedStorage({ nostrcomments_relays: [RELAY_URL, REFUSER_URL] }));
 await wait(800);
 await goto(site.url);
 await wait(5000);
