@@ -83,6 +83,13 @@ const hkey = (port, sid) => port._ncId + ':' + sid;
 
 function socket(url) {
     let r = pool.get(url);
+    // A pooled record whose socket has gone is not a socket. The relay closing the connection —
+    // a restart, a laptop waking, an idle timeout — leaves the record in place while handles are
+    // still attached, and the content script's reconnect then asks for this relay again. Returning
+    // the dead record handed it something that would never open: retries fired on schedule, no
+    // connection was ever made, and comments and notifications stopped for the life of the page
+    // with nothing on screen to say so. Dial again instead.
+    if (r && !r.ws && !r.ready) { dial(url, r); return r; }
     if (r) return r;
     r = { ws: null, ready: false, queue: [], handles: new Set(), closeTimer: null };
     pool.set(url, r);
