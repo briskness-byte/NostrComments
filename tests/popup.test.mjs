@@ -64,6 +64,11 @@ export async function run() {
     ok('once granted the button is gone', yes.grant === false, yes);
     ok('and it confirms the extension is live', /active/i.test(yes.status), yes.status);
     ok('with no leftover instruction', yes.hint === '', yes.hint);
+    // A page can delete the floating button, and nothing inside the page can stop it. The toolbar
+    // is browser chrome, so this is the entry that survives — but only where a content script is
+    // actually running, which is why it is tied to the grant rather than always offered.
+    ok('once granted it offers to open the panel', yes.open === true, yes);
+    ok('with no access there is nothing to open', none.open === false, none);
 
     // --- granted just now ---------------------------------------------------------------------------
     // A grant does not reach pages that are already open; the content script arrives on the next
@@ -73,6 +78,20 @@ export async function run() {
     ok('granting just now asks for a reload', /reload/i.test(fresh.hint), fresh.hint);
     ok('and still hides the button', fresh.grant === false, fresh);
     ok('the reload line is only for the moment it happened', view(true, false).hint !== fresh.hint);
+
+    // --- opening the panel from the toolbar -----------------------------------------------------------
+    // Two things keep this free of a new permission, and both are worth pinning: tabs.query returns
+    // an id without the "tabs" permission, and a message rides on host permissions the extension
+    // already holds. Reaching for scripting.executeScript instead would add a permission, and this
+    // account has had two store rejections already.
+    ok('the popup asks which tab is in front',
+       srcs.chrome.includes('api.tabs.query({ active: true, currentWindow: true })'));
+    ok('and toggles it with a message rather than injected code',
+       srcs.chrome.includes("api.tabs.sendMessage(tab.id, { t: 'nc-toggle' })"));
+    ok('it never reaches for scripting', !/scripting/.test(srcs.chrome));
+    // about:, the add-on sites and the Web Store admit no extension at all. There the message has
+    // no listener and rejects, and a button that silently does nothing reads as a broken build.
+    ok('a page where nothing can run is explained', /does not allow extensions to run/.test(srcs.chrome));
 
     // --- the wiring the popup depends on -------------------------------------------------------------
     for (const [name, dir] of [['chrome', 'NostrComments-Chrome'], ['firefox', 'NostrComments-FireFox']]) {
@@ -86,6 +105,7 @@ export async function run() {
         ok(`${name} build has popup.html`, html !== null);
         if (html === null) continue;
         ok(`${name} popup loads its script from a file`, html.includes('<script src="popup.js">'));
+        ok(`${name} popup has the open button`, html.includes('id="open"'));
         // Extension pages forbid inline script; a popup that tried would silently do nothing.
         ok(`${name} popup has no inline script`, !/<script>(?!\s*<\/script>)/.test(html));
     }

@@ -1572,6 +1572,19 @@
             setTimeout(() => s.getElementById('c')?.focus(), 0);
         };
         s.getElementById('c').onclick = closeModal;
+
+        // The toolbar button, which is the one way in that a page cannot take away. A site can
+        // delete the floating button — COUNTERMEASURES.md measures three ways that happens, and
+        // none of them can be beaten from inside the page — so the host is put back first if it
+        // went missing. The element still holds the whole panel, so re-attaching restores it.
+        chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+            if (!msg || msg.t !== 'nc-toggle') return;
+            if (!host.isConnected) document.documentElement.appendChild(host);
+            if (modal.style.display === 'grid') closeModal(); else btn.onclick();
+            // Answered synchronously. An unanswered message leaves the popup waiting on a channel
+            // that closes under it, which it would report as a page where nothing can run.
+            sendResponse({ ok: true });
+        });
         // Keyboard focus trap: keep Tab within the open dialog.
         s.addEventListener('keydown', e => {
             if (e.key !== 'Tab' || modal.style.display === 'none') return;

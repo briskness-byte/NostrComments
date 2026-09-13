@@ -154,6 +154,19 @@ export async function run() {
         ok(`${name}: and cleared before the new host is added`, clear >= 0 && create >= 0 && clear < create);
     }
 
+    // The toolbar entry. The popup sends nc-toggle and both builds have to listen for it — but the
+    // ordering carries the feature: the pages worth reaching this way are the ones that deleted the
+    // button, so the host goes back *before* anything tries to open it. Toggling first would act on
+    // a panel that is not in the document, which looks like a toolbar button that does nothing.
+    for (const [name, src] of Object.entries(srcs)) {
+        const listen = src.indexOf("msg.t !== 'nc-toggle'");
+        const reattach = src.indexOf('if (!host.isConnected) document.documentElement.appendChild(host);');
+        const toggle = src.indexOf("if (modal.style.display === 'grid') closeModal(); else btn.onclick();");
+        ok(`${name}: listens for the toolbar toggle`, listen >= 0);
+        ok(`${name}: puts the host back when the page removed it`, reattach > listen && listen >= 0);
+        ok(`${name}: and only then opens or closes the panel`, toggle > reattach && reattach >= 0);
+    }
+
     // Chrome extension ids are fixed and public, so a page can fetch a web-accessible resource by
     // guessing its URL and learn whether the extension is installed — Google's own documentation
     // calls this out as fingerprinting. use_dynamic_url regenerates that id every session, which
