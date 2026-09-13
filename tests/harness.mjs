@@ -70,10 +70,10 @@ function packedFiles() {
     return m[1].trim().split(/\s+/);
 }
 
-function packXpi(dir, into) {
+function packXpi(dir, into, extra = []) {
     const xpi = path.join(into, 'ext.xpi');
     const root = path.resolve(dir, '..');
-    const inDir = [], inRoot = [];
+    const inDir = [...extra.filter(f => fs.existsSync(path.join(dir, f)))], inRoot = [];
     for (const f of packedFiles()) {
         if (fs.existsSync(path.join(dir, f))) inDir.push(f);
         else if (fs.existsSync(path.join(root, f))) inRoot.push(path.join(root, f));
@@ -83,6 +83,48 @@ function packXpi(dir, into) {
     if (inRoot.length) execFileSync('zip', ['-qjX', xpi, ...inRoot]);
     return xpi;
 }
+
+// TEST ONLY. The panel's consent button and its relay add/remove refuse untrusted events, because
+// a page's own script can reach into an open shadow root and click them — which is precisely what
+// a WebDriver script does, since it runs in the page. So the suites stop pretending to be a user
+// for those three and put the extension into the state they need through storage instead, the way
+// a previous session would have left it.
+//
+// This file is written into a throwaway copy of the extension. It is never in build.sh's packing
+// list and never ships; a released build has no such channel.
+const SEED_JS = `// injected by tests/harness.mjs — never shipped
+(() => {
+    window.addEventListener('message', async ev => {
+        if (ev.source !== window || !ev.data || ev.data.__ncSeed !== true) return;
+        try { await chrome.storage.local.set(ev.data.values); } catch (e) {}
+        window.postMessage({ __ncSeeded: true }, '*');
+    });
+})();
+`;
+
+// A copy of the extension with the seed script added. Chromium loads the folder; Firefox gets it
+// zipped. The icons live one level up in the repo, so they are copied in as well — packXpi knows
+// that trick for the .xpi, and a folder load needs them beside the manifest.
+export function seedExt(srcDir, workDir) {
+    const dst = path.join(workDir, 'ext');
+    fs.cpSync(srcDir, dst, { recursive: true });
+    for (const f of packedFiles()) {
+        const here = path.join(dst, f), up = path.resolve(srcDir, '..', f);
+        if (!fs.existsSync(here) && fs.existsSync(up)) fs.copyFileSync(up, here);
+    }
+    fs.writeFileSync(path.join(dst, 'nc-test-seed.js'), SEED_JS);
+    const mfPath = path.join(dst, 'manifest.json');
+    const mf = JSON.parse(fs.readFileSync(mfPath, 'utf8'));
+    mf.content_scripts.unshift({ matches: ['<all_urls>'], js: ['nc-test-seed.js'], run_at: 'document_start' });
+    fs.writeFileSync(mfPath, JSON.stringify(mf, null, 2));
+    return dst;
+}
+
+// Put values into extension storage from a suite. content.js reads storage once, at init, so a
+// reload is what makes them take effect — the same thing the panel tells a user after adding a
+// relay.
+export const seedStorage = values =>
+    `window.postMessage({__ncSeed:true, values:${JSON.stringify(values)}}, '*'); return 1;`;
 
 export function findChromium() {
     if (process.env.CHROMIUM) return process.env.CHROMIUM;
@@ -337,6 +379,9 @@ export async function startBrowser({ cdPort, extPath = EXT, prefix = 'ncqa-', wi
     // Chrome derives its crashpad database from HOME; a locked-down HOME makes the crash handler
     // abort the browser before the debugging port opens, which reads as "chromium is not installed".
     const W = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    // A copy carrying the seed script: the panel refuses untrusted clicks on consent and on the
+    // relay controls now, and a suite drives the page, not the browser chrome.
+    extPath = seedExt(extPath, W);
     fs.mkdirSync(path.join(W, 'home'), { recursive: true });
     const env = { ...process.env, HOME: path.join(W, 'home'), XDG_CONFIG_HOME: path.join(W, 'home/.config'), XDG_CACHE_HOME: path.join(W, 'home/.cache'), TMPDIR: W };
     const cd = spawn('chromedriver', [`--port=${cdPort}`], { stdio: ['ignore', 'ignore', 'ignore'], env });
@@ -412,7 +457,7 @@ async function startFirefox({ cdPort, prefix, onClose }) {
 
     // Unsigned, so it has to go in as temporary — which is also what "load a fresh build" means here.
     const add = await wd('POST', `/session/${sid}/moz/addon/install`,
-        { path: packXpi(path.resolve(ROOTDIR, 'NostrComments-FireFox'), W), temporary: true });
+        { path: packXpi(seedExt(path.resolve(ROOTDIR, 'NostrComments-FireFox'), W), W, ['nc-test-seed.js']), temporary: true });
     if (!add.value) {
         console.log('✗ could not install the add-on:\n  ' + JSON.stringify(add).slice(0, 200));
         process.exit(1);
@@ -431,23 +476,27 @@ async function startFirefox({ cdPort, prefix, onClose }) {
     return { wd, js, wait, goto, sid, finish };
 }
 
+// Put the extension in the state a suite needs. Consent and the relay list go in through storage —
+// those controls refuse untrusted events now, and a suite's clicks are untrusted by definition —
+// so a **reload is required afterwards**: content.js reads storage once, at init. Suites that
+// cannot reload should call this before their first navigation instead.
+//
+// widepublish is off here, or every suite that publishes would also fire the event at the three
+// real EXTRA_PUBLISH_RELAYS. A test that touches the public network is not a test, and one that
+// writes to somebody else's relay on every run is worse than that.
+//
+// The key import stays a click: it is not one of the guarded controls, and driving it exercises
+// the bech32 path a seeded hex key would skip.
 export function configureScript({ relayUrl, nsec }) {
     const urls = Array.isArray(relayUrl) ? relayUrl : [relayUrl];
     return `${ROOT}
+      window.postMessage({__ncSeed:true, values:{
+          nostrcomments_consent: true,
+          nostrcomments_relays: ${JSON.stringify(urls)},
+          nostrcomments_widepublish: false
+      }}, '*');
       s.getElementById('m').style.display='grid';
-      const o=[...s.getElementById('p').children].find(c=>c.textContent.includes('One quick thing'));
-      if(o) o.querySelector('button').click();
       s.getElementById('gear-btn').click();
-      // Off, or every suite that publishes would also fire the event at the three real
-      // EXTRA_PUBLISH_RELAYS. A test that touches the public network is not a test, and one that
-      // writes to somebody else's relay on every run is worse than that.
-      const _wp = s.getElementById('widepub-toggle');
-      if (_wp && _wp.checked) _wp.click();
-      let guard=0;
-      while (s.getElementById('relay-list').querySelector('.relay-remove') && guard++<50)
-          s.getElementById('relay-list').querySelector('.relay-remove').click();
-      ${urls.map(u => `s.getElementById('relay-input').value=${JSON.stringify(u)};
-      s.getElementById('relay-add-btn').click();`).join('\n      ')}
       ${nsec ? `s.getElementById('privkey-import').value=${JSON.stringify(nsec)};
       s.getElementById('privkey-import-btn').click();` : ''}
       return 1;`;

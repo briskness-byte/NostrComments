@@ -1348,6 +1348,19 @@
                 : 'Failed to sign — try again.', true);
         }
 
+        // The page can reach into this panel — the shadow root is open by design, and el.click()
+        // from a page's own script runs a handler exactly as a person would. For most controls that
+        // is merely rude. For the three that change what the extension does everywhere — granting
+        // consent, adding a relay, removing one — it is not: a site could switch the extension on
+        // without being asked, or add a relay it controls and then learn every page this browser
+        // asks about, on every site, for as long as the entry survives.
+        //
+        // Only the browser can mint a trusted event; nothing in the page can forge isTrusted. So
+        // those three ask for one. The rest are deliberately left alone: guarding everything would
+        // buy no security and would cost the browser suites, which drive the panel the same way a
+        // page would. The suites configure through storage instead — see tests/harness.mjs.
+        const byUser = e => !!e && e.isTrusted === true;
+
         // Prominent disclosure + consent gate. Nothing is sent to any relay until the user
         // explicitly enables NostrComments here (Chrome Web Store user-data policy).
         const consentOverlay = document.createElement('div');
@@ -1363,7 +1376,8 @@
             const _cBtn = document.createElement('button');
             _cBtn.textContent = 'I understand — enable NostrComments';
             Object.assign(_cBtn.style, {display:'block',width:'100%',padding:'14px',background:'linear-gradient(135deg,#0c75bc,#0a68ad)',color:'white',border:'none',borderRadius:'10px',cursor:'pointer',fontSize:'15px',fontWeight:'700'});
-            _cBtn.onclick = async () => {
+            _cBtn.onclick = async e => {
+                if (!byUser(e)) return;
                 hasConsent = true;
                 try { await chrome.storage.local.set({nostrcomments_consent: true}); } catch(e) {}
                 consentOverlay.style.display = 'none';
@@ -1850,7 +1864,7 @@
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'relay-remove';
                 removeBtn.textContent = '×';
-                removeBtn.onclick = () => { RELAYS = RELAYS.filter(x => x !== r); saveRelays(); renderRelayList(); showMsg('Relay removed — reload page to apply'); };
+                removeBtn.onclick = e => { if (!byUser(e)) return; RELAYS = RELAYS.filter(x => x !== r); saveRelays(); renderRelayList(); showMsg('Relay removed — reload page to apply'); };
                 item.append(label, removeBtn);
                 relayListEl.appendChild(item);
             });
@@ -1983,8 +1997,9 @@
         };
         settingsClose.onclick = closeSettings;
 
-        relayInput.onkeydown = e => { if (e.key === 'Enter') relayAddBtn.onclick(); };
-        relayAddBtn.onclick = () => {
+        relayInput.onkeydown = e => { if (e.key === 'Enter' && byUser(e)) addRelay(); };
+        relayAddBtn.onclick = e => { if (byUser(e)) addRelay(); };
+        function addRelay() {
             const url = normRelay(relayInput.value);
             if (!url.startsWith('wss://') || url.length < 10) return showMsg('Enter a valid wss:// URL');
             if (RELAYS.includes(url)) return showMsg('Relay already in list');
@@ -1993,7 +2008,31 @@
             relayInput.value = '';
             renderRelayList();
             showMsg('Relay saved — reload page to connect');
-        };
+        }
+
+        // Storage is the authority on these two, not the copy this page happened to read at init.
+        // A relay added in another tab, or a consent granted there, used to need a reload here —
+        // which is also why the browser suites had to click their way through the panel. They now
+        // configure through storage, and the guards above mean a page's own script cannot.
+        //
+        // Existing sockets are left alone on purpose: a relay list change decides where the *next*
+        // connection goes, and tearing down live subscriptions to apply it would lose the thread
+        // somebody is reading. That is why the message above still says to reload.
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area !== 'local') return;
+            const rel = changes.nostrcomments_relays;
+            if (rel && Array.isArray(rel.newValue)) {
+                RELAYS = dedupeRelays(rel.newValue.map(normRelay));
+                renderRelayList();
+            }
+            const con = changes.nostrcomments_consent;
+            if (con && con.newValue === true && !hasConsent) {
+                hasConsent = true;
+                consentOverlay.style.display = 'none';
+                paintOnboard();
+                startNetwork();
+            }
+        });
 
         const muteWordInput = s.getElementById('muteword-input');
         const muteWordAddBtn = s.getElementById('muteword-add-btn');
