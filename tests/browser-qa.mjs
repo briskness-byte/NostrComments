@@ -122,10 +122,47 @@ ok('disclosure overlay covers the panel before consent', pre.overlayExists, pre)
 // The section sat open under every thread — heading, pitch, four buttons and two paragraphs of
 // small print, often taller than the comment box above it. It is one line now, and everything else
 // is behind a disclosure.
+// Granting consent refuses an untrusted event, and a script in the page is untrusted by
+// definition — which is the entire point of the guard, since a hostile page could otherwise switch
+// the extension on unasked. So this suite clicks it the way a person does: WebDriver hands back an
+// element reference even from inside a shadow root, and its own click endpoint dispatches a real
+// event. That also makes this the check that the guard has not broken the button for a user.
+{
+    // WebDriver's element/click refuses this one — "element not interactable", because the overlay
+    // lives in a shadow root inside a panel it cannot reason about. A focused button pressed with a
+    // real Enter is the way in: the browser fires the click itself, so it carries isTrusted, and no
+    // visibility heuristic is involved.
+    // The overlay is created hidden and only shown by the floating button's own handler, so the
+    // panel has to be opened the way a user opens it. Setting #m to grid — which the suite does
+    // above — leaves the gate invisible, and a keypress aimed at an invisible button lands nowhere.
+    // That is not a detail: the check that consent was granted passes trivially against a gate that
+    // was never shown.
+    await js(`${ROOT} s.getElementById('nc-btn').click(); return 1;`);
+    await new Promise(r => setTimeout(r, 900));
+    const shown = await js(`${ROOT}
+      const o = [...s.getElementById('p').children].find(c => c.textContent.includes('One quick thing'));
+      return !!o && getComputedStyle(o).display !== 'none';`);
+    ok('the disclosure is actually on screen before consent', shown === true, shown);
+
+    const focused = await js(`${ROOT}
+      const o = [...s.getElementById('p').children].find(c => c.textContent.includes('One quick thing'));
+      const b = o && o.querySelector('button');
+      if (b) b.focus();
+      return !!b;`);
+    ok('the consent button is there to press', focused === true, focused);
+    await wd('POST', `/session/${sid}/actions`, { actions: [{ type: 'key', id: 'kb', actions: [
+        { type: 'keyDown', value: '' }, { type: 'keyUp', value: '' }] }] });
+    await new Promise(r => setTimeout(r, 1200));
+    // A missing overlay would satisfy "hidden" without anything having happened, so the gate has to
+    // be present *and* hidden — that is the difference between consent granted and consent skipped.
+    const gate = JSON.parse(await js(`${ROOT}
+      const o = [...s.getElementById('p').children].find(c => c.textContent.includes('One quick thing'));
+      return JSON.stringify({ exists: !!o, hidden: !!o && getComputedStyle(o).display === 'none' });`));
+    ok('and pressing it granted consent', gate.exists && gate.hidden, gate);
+}
+
 console.log('\n=== collapsed by default ===');
 const C = JSON.parse(await js(`${ROOT}
-  const overlay = [...s.getElementById('p').children].find(c => c.textContent.includes('One quick thing'));
-  if (overlay) overlay.querySelector('button').click();
   const t = s.getElementById('donate-toggle');
   return JSON.stringify({
     bodyHidden: getComputedStyle(s.getElementById('donate-body')).display === 'none',
