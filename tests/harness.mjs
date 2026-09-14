@@ -417,7 +417,12 @@ export async function startBrowser({ cdPort, extPath = EXT, prefix = 'ncqa-', wi
         // Suites may add their own, which is how one can claim a domain that answers on a port:
         // `MAP name:443 127.0.0.1:8087` sends an https lookup at a local server. Firefox has no
         // equivalent, so a suite needing that has to say so itself.
-        `--host-resolver-rules=${['MAP ' + TESTHOST + ' 127.0.0.1', ...resolverRules].join(',')}`,
+        //
+        // Everything else resolves to nothing. A suite that slipped — keypaste forgot to reload, and
+        // posted 56 test comments to real relays over one afternoon — must fail against a dead
+        // address, not succeed against somebody's relay. Rules match in order, so the ones above win.
+        // The catch-all matches address literals too, hence loopback's own exclusion.
+        `--host-resolver-rules=${['MAP ' + TESTHOST + ' 127.0.0.1', ...resolverRules, 'EXCLUDE localhost', 'EXCLUDE 127.0.0.1', 'MAP * ~NOTFOUND'].join(',')}`,
         `--user-data-dir=${path.join(W, 'cd')}`, `--load-extension=${extPath}`, `--disable-extensions-except=${extPath}`,
         `--window-size=${windowSize}`] } } } });
     if (!sess.value?.sessionId) {
@@ -461,7 +466,14 @@ async function startFirefox({ cdPort, prefix, onClose }) {
     const sess = await wd('POST', '/session', { capabilities: { alwaysMatch: {
         'moz:firefoxOptions': { binary: findFirefox(), args: ['-headless'],
             // Firefox's equivalent of Chrome's --host-resolver-rules; see the note there.
-            prefs: { 'network.dns.localDomains': TESTHOST } },
+            prefs: { 'network.dns.localDomains': TESTHOST,
+                // No resolver rules here, so the same block is a proxy that is not there: every
+                // non-local connection, sockets included, goes to a port nothing listens on, and
+                // name lookups go with it. Loopback and the test host bypass it. See the note in
+                // startBrowser for why this exists.
+                'network.proxy.type': 1, 'network.proxy.socks': '127.0.0.1', 'network.proxy.socks_port': 9,
+                'network.proxy.socks_remote_dns': true,
+                'network.proxy.no_proxies_on': `localhost, 127.0.0.1, ${TESTHOST}` } },
         // The throwaway relay is self-signed; Firefox's equivalent of --ignore-certificate-errors.
         acceptInsecureCerts: true } } });
     if (!sess.value?.sessionId) {

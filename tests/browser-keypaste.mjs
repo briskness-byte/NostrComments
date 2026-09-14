@@ -45,6 +45,11 @@ if (!injected) { console.log('\nNothing to test; aborting.'); await finish(1); }
 
 await js(configureScript({ relayUrl: `wss://127.0.0.1:${RELAY_PORT}`, nsec: MINE_NSEC }));
 await wait(1500);
+// Reload, as every other suite does. This one did not, and the tab kept the settings it loaded with —
+// extra relays on — so all fourteen runs on 13 Sep 2026 published their comments to two real public
+// relays. The harness blocks public hosts now as well; this is the half that makes the suite correct.
+await goto(site.url);
+await wait(4500);
 await js(`${ROOT}
   const o = [...s.getElementById('p').children].find(c => c.style.zIndex === '28' && getComputedStyle(c).display !== 'none');
   if (o) [...o.querySelectorAll('button')].find(b => /not now/i.test(b.textContent))?.click();
