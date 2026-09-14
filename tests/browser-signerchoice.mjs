@@ -95,6 +95,7 @@ await wait(500);
 const identity = () => js(`${ROOT} return JSON.stringify({
   status: s.getElementById('status').textContent,
   npub: s.getElementById('identity-npub').textContent });`);
+const SIGNER_BUTTON = 'alby / (nos2x|attest)';
 const press = label => js(`${ROOT}
   const b = [...s.querySelectorAll('button')].find(x => new RegExp(${JSON.stringify(label)}, 'i').test(x.textContent));
   if (b) b.click(); return !!b;`);
@@ -122,7 +123,10 @@ ok('the panel does not silently become the signer', !id.status.includes(npubOf(S
 console.log('\n=== choosing the signer, and meaning that too ===');
 await js(`${ROOT} s.getElementById('gear-btn').click(); return 1;`);
 await wait(400);
-ok('the signer can be chosen', await press('alby / nos2x') === true);
+// The button names the signer this build recommends: "Alby / nos2x" on Chrome, "Alby / Attest" on Firefox
+// since 23.2.1 (parity.test.mjs pins which). Matching only the Chrome wording made every check after
+// this one fail on Firefox, for a button that worked.
+ok('the signer can be chosen', await press(SIGNER_BUTTON) === true);
 await wait(1500);
 id = JSON.parse(await identity());
 ok('it switches to the signer identity', id.npub === npubOf(SIGNER_PUB), id);
@@ -151,7 +155,7 @@ console.log('\n=== a signer that arrives late is still picked up ===');
 // signer that finished injecting a moment later was never seen again on that page.
 await js(`${ROOT} s.getElementById('gear-btn').click(); return 1;`);
 await wait(300);
-await press('alby / nos2x');
+await press(SIGNER_BUTTON);
 await wait(800);
 await goto(site.url);
 // The identity strings are only written to the DOM while the panel is on screen, so the panel has

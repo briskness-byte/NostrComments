@@ -88,9 +88,11 @@ ok('two signers are offered', wallets.links.length === 2, wallets.links.map(l =>
 ok(`both link to ${store}`, wallets.links.every(l => l.href.includes(store)), wallets.links.map(l => l.href));
 ok('neither links to the other browser\'s store', !wallets.links.some(l => l.href.includes(wrongStore)), wallets.links.map(l => l.href));
 ok('nobody is sent to a source repository', !wallets.links.some(l => /github\.com/.test(l.href)), wallets.links.map(l => l.href));
-// Firefox has no nos2x — the port there has a different name and a different author.
+// Firefox has no nos2x. It offered nos2x-fox until 23.2.1, when the Firefox build moved to Attest; this
+// check kept expecting nos2x-fox and failed on Firefox from then on, unnoticed, because it was only run
+// on Chromium. parity.test.mjs pins the same wording statically.
 ok('the label matches what they will land on',
-   wallets.links.some(l => l.text === (BROWSER === 'firefox' ? 'nos2x-fox' : 'nos2x')), wallets.links.map(l => l.text));
+   wallets.links.some(l => l.text === (BROWSER === 'firefox' ? 'Attest' : 'nos2x')), wallets.links.map(l => l.text));
 ok('links open away from the page, without handing it a window reference',
    wallets.links.every(l => l.target === '_blank' && /noopener/.test(l.rel)), wallets.links.map(l => [l.target, l.rel]));
 ok('and it says to reload afterwards', /Install it, then reload this page\./.test(wallets.hint), wallets.hint);
