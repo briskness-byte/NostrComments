@@ -40,12 +40,19 @@ for (const r of RELAYS) {
 
 const evs = [...all.values()];
 const client = e => (e.tags.find(t => t[0] === 'client') || [])[1] || '';
-const ours = evs.filter(e => /nostrcomments/i.test(client(e)));
+// The browser suites publish from pages on loopback. They are meant to reach only their own relay, but
+// one that forgot to reload posted 56 comments to real relays on 13 Sep 2026 — each with this client
+// tag and a fresh key, so they look exactly like 14 new users. They are not.
+const pageOf = e => (e.tags.find(t => t[0] === 'I') || [])[1] || '';
+const testPage = e => /^https?:\/\/(127\.0\.0\.1|localhost|[^/:]*\.nctest)([:/]|$)/i.test(pageOf(e));
+const tagged = evs.filter(e => /nostrcomments/i.test(client(e)));
+const ours = tagged.filter(e => !testPage(e));
 const keys = new Set(ours.map(e => e.pubkey));
 const pages = new Set(ours.map(e => (e.tags.find(t => t[0] === 'I') || [])[1]).filter(Boolean));
 
 console.log(`\nkind ${COMMENT_KIND} events seen : ${evs.length}`);
 console.log(`written with NostrComments : ${ours.length}`);
+console.log(`  (test pages left out)     : ${tagged.length - ours.length}`);
 console.log(`by distinct keys           : ${keys.size}`);
 console.log(`across distinct pages      : ${pages.size}`);
 
