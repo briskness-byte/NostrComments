@@ -3632,10 +3632,14 @@
                     }
                     clearTimeout(sDisarm);
                     sArmed = false; shareBtn.classList.remove('armed'); shareBtn.textContent = '\u{1F4E3} Share';
+                    // Most people who see a shared note do not have this extension, and to them the page
+                    // address alone leads to a page with no thread on it. The reader opens the thread in
+                    // any browser. A link in the text rather than a tag, for the reason given above.
+                    const readerUrl = 'https://briskness-byte.github.io/thread/?url=' + encodeURIComponent(pageUrl);
                     const note = {
                         kind: 1,
                         created_at: Math.floor(Date.now() / 1000),
-                        content: `${ev.content}\n\n${pageUrl}`,
+                        content: `${ev.content}\n\n${pageUrl}\n\nRead the thread: ${readerUrl}`,
                         tags: labelClient ? [['client', 'NostrComments']] : [],
                         pubkey: myPub
                     };
@@ -3643,7 +3647,7 @@
                         const signed = await signAsMe(note);
                         if (!(await verifyEvent(signed))) return showMsg('Signature check failed — nothing was posted.');
                         if (publishFailed(await publishToRelays(signed), 'note')) return;
-                        showMsg('Posted to your feed. It links back to this page.');
+                        showMsg('Posted to your feed. It links to this page, and to the thread for people without the extension.');
                     } catch (e) { showMsg('Could not sign the note'); }
                 };
                 actions.appendChild(shareBtn);

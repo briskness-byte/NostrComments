@@ -102,6 +102,10 @@ const n = notes[0];
 ok('it is signed by you', n.pubkey === MY_PUB, n.pubkey);
 ok('it carries the comment', n.content.includes(MINE), n.content);
 ok('and links back to the page', n.content.includes(PAGE), n.content);
+// Somebody reading the note in their feed mostly has no extension. The address alone takes them to a
+// page with no thread on it; the reader link takes them to the thread.
+const READER = 'https://briskness-byte.github.io/thread/?url=' + encodeURIComponent(PAGE);
+ok('and to the thread, for readers without the extension', n.content.includes(READER), n.content);
 ok('it names the client that wrote it', (n.tags || []).some(t => t[0] === 'client' && t[1] === 'NostrComments'), n.tags);
 
 // The one that keeps the design honest. An r tag here would be read by the panel as a legacy
