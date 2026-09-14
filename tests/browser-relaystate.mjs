@@ -169,5 +169,20 @@ await wait(300);
 // Hosts are case-insensitive, paths are not: this is a different relay and must be allowed.
 ok('a path differing only in case is a different relay', JSON.parse(await listed()).length === before + 2, await listed());
 
+console.log('\n=== extra relays follow storage without a reload ===');
+// A change made in another tab arrives here as a storage change and nothing else. The switch is the
+// visible half of publishWide, set in the same place, so it is what the reader would see.
+const wideShown = () => js(`${ROOT} return s.getElementById('widepub-toggle').checked;`);
+await js(seedStorage({ nostrcomments_widepublish: true }));
+await wait(500);
+const wideOn = await wideShown();
+await js(seedStorage({ nostrcomments_widepublish: false }));
+await wait(500);
+const wideOff = await wideShown();
+ok('turning extra relays on elsewhere reaches this tab', wideOn === true, wideOn);
+// Only means something once "on" has arrived: the suite starts with extra relays off, so a tab that
+// ignored storage altogether would pass an off-only check. The first version of this did exactly that.
+ok('turning them off elsewhere reaches it too', wideOn === true && wideOff === false, { wideOn, wideOff });
+
 console.log(`\n${state.fail ? '✗' : '✓'} relay state: ${state.pass} passed, ${state.fail} failed`);
 await finish(state.fail ? 1 : 0);

@@ -2018,6 +2018,15 @@
                 RELAYS = dedupeRelays(rel.newValue.map(normRelay));
                 renderRelayList();
             }
+            // Read once at init, this one used to stay whatever the tab loaded with: turn extra relays
+            // off in one tab and every tab already open went on publishing to them until reloaded.
+            // Same default as init — absent means on.
+            const wide = changes.nostrcomments_widepublish;
+            if (wide) {
+                publishWide = wide.newValue !== false;
+                const t = s.getElementById('widepub-toggle');
+                if (t) t.checked = publishWide;
+            }
             const con = changes.nostrcomments_consent;
             if (con && con.newValue === true && !hasConsent) {
                 hasConsent = true;
