@@ -19,7 +19,7 @@ development since December 2025, with new releases most weeks.
 article that has no comment section, the same thread appearing in a second browser under a different
 key, and then a paywalled paper, a company announcement, a government page and a post on X.
 
-**[Read a thread without installing anything](https://briskness-byte.github.io/thread/?url=https%3A%2F%2Fwww.nature.com%2Farticles%2Fd41586-026-02763-3)**
+**[Read a thread without installing anything](https://briskness-byte.github.io/thread/)**
 — a static page that queries the same relays from your own browser. Give it any address to see what
 has been said about it.
 
