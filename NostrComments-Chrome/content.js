@@ -316,6 +316,29 @@
         document.documentElement.appendChild(host);
         const s = host.attachShadow({mode:'open'});
 
+        // --- trust gate for the panel's sensitive controls --------------------------------------
+        // This panel is an open shadow root, so any script on the page can read our controls and try
+        // to work them: dispatch a click, call el.click() (both arrive isTrusted:false), or call
+        // el.onclick(...) straight, with a forged {isTrusted:true} argument it fully controls. Reading
+        // the event's own isTrusted stops the first two and not the third. So trust is kept where the
+        // page cannot reach it: a capture-phase listener records which element a real browser gesture is
+        // activating right now, and each sensitive handler asks only whether its own element is that one,
+        // never trusting what the caller passed. The page cannot set that target: not by dispatching
+        // (isTrusted:false is ignored), not by calling a handler (no event travels), and not by
+        // piggybacking a real click elsewhere (the target is then some other control). A mitigation, not
+        // a wall: the real cure is moving these onto the extension's own surface, off the page (see the
+        // sidebar work). It closes every in-page path that exists today, including the private-key reveal
+        // a page could otherwise open and read straight out of the panel.
+        let _gestureTarget = null;
+        const _markGesture = e => { _gestureTarget = e.isTrusted === true ? e.target : null; };
+        const _clearGesture = () => { _gestureTarget = null; };
+        s.addEventListener('click', _markGesture, true);
+        s.addEventListener('keydown', _markGesture, true);
+        s.addEventListener('click', _clearGesture, false);
+        s.addEventListener('keydown', _clearGesture, false);
+        // True only while the browser is activating `el` (or something inside it) through a real gesture.
+        const byUser = el => !!_gestureTarget && !!el && (el === _gestureTarget || el.contains(_gestureTarget));
+
         // Floating button — in the shadow root, not the page.
         //
         // It used to hang in the light DOM, and the host page's own CSS reached it: a plain
@@ -951,11 +974,12 @@
             applyTheme();
         };
 
-        privkeyCopy.onclick = () => { navigator.clipboard.writeText(_privHex); showMsg('Private key copied'); };
+        privkeyCopy.onclick = () => { if (!byUser(privkeyCopy)) return; navigator.clipboard.writeText(_privHex); showMsg('Private key copied'); };
         {
             const revealBtn = s.getElementById('privkey-reveal');
             const box = s.getElementById('privkey-box');
             revealBtn.onclick = () => {
+                if (!byUser(revealBtn)) return;
                 if (box.style.display !== 'none') return hidePrivkey();
                 if (!_privHex) return showMsg(encPriv ? 'Unlock your key first' : 'No key stored here');
                 privkeyDisplay.value = privDisplayText();
@@ -964,7 +988,9 @@
             };
         }
 
-        s.getElementById('copy-nsec').onclick = () => {
+        const copyNsecBtn = s.getElementById('copy-nsec');
+        copyNsecBtn.onclick = () => {
+            if (!byUser(copyNsecBtn)) return;
             const priv = _privHex;
             if (!/^[0-9a-f]{64}$/i.test(priv)) return showMsg('Unlock your key first');
             navigator.clipboard.writeText(toNsec(priv));
@@ -973,7 +999,9 @@
         // Import an identity generated elsewhere. Accepts the nsec form every other Nostr app
         // shows, as well as raw hex — asking someone to convert a key by hand is how mistakes and
         // pasted-into-a-website accidents happen.
-        s.getElementById('privkey-import-btn').onclick = async () => {
+        const privkeyImportBtn = s.getElementById('privkey-import-btn');
+        privkeyImportBtn.onclick = async () => {
+            if (!byUser(privkeyImportBtn)) return;
             const raw = s.getElementById('privkey-import').value.trim();
             if (!raw) return showMsg('Paste an nsec or hex private key first');
             const priv = /^nsec1/i.test(raw) ? fromBech32('nsec', raw) : (/^[0-9a-f]{64}$/i.test(raw) ? raw.toLowerCase() : null);
@@ -1022,6 +1050,7 @@
         };
 
         privkeyRotate.onclick = async () => {
+            if (!byUser(privkeyRotate)) return;
             const cur = _privHex;
             const curValid = /^[0-9a-f]{64}$/i.test(cur);
             const go = await askConfirm({
@@ -1056,6 +1085,7 @@
             finally { privkeyRotate.disabled = false; }
         };
         privkeyDelete.onclick = async () => {
+            if (!byUser(privkeyDelete)) return;
             const cur = _privHex;
             const curValid = /^[0-9a-f]{64}$/i.test(cur);
             const go = await askConfirm({
@@ -1134,6 +1164,9 @@
         keypairSection.appendChild(pwBtn);
 
         siteDisableBtn.onclick = async () => {
+            // A page clicking this would switch the comment layer off on its own site — exactly what
+            // this extension exists to prevent. It takes a real gesture.
+            if (!byUser(siteDisableBtn)) return;
             const _d = await chrome.storage.local.get('nostrcomments_disabled');
             const arr = Array.isArray(_d.nostrcomments_disabled) ? _d.nostrcomments_disabled : [];
             if (!arr.includes(location.origin)) arr.push(location.origin);
@@ -1341,18 +1374,7 @@
                 : 'Failed to sign — try again.', true);
         }
 
-        // The page can reach into this panel — the shadow root is open by design, and el.click()
-        // from a page's own script runs a handler exactly as a person would. For most controls that
-        // is merely rude. For the three that change what the extension does everywhere — granting
-        // consent, adding a relay, removing one — it is not: a site could switch the extension on
-        // without being asked, or add a relay it controls and then learn every page this browser
-        // asks about, on every site, for as long as the entry survives.
-        //
-        // Only the browser can mint a trusted event; nothing in the page can forge isTrusted. So
-        // those three ask for one. The rest are deliberately left alone: guarding everything would
-        // buy no security and would cost the browser suites, which drive the panel the same way a
-        // page would. The suites configure through storage instead — see tests/harness.mjs.
-        const byUser = e => !!e && e.isTrusted === true;
+        // Consent and the relay controls check the same trust gate (byUser) defined above.
 
         // Prominent disclosure + consent gate. Nothing is sent to any relay until the user
         // explicitly enables NostrComments here (Chrome Web Store user-data policy).
@@ -1370,7 +1392,7 @@
             _cBtn.textContent = 'I understand — enable NostrComments';
             Object.assign(_cBtn.style, {display:'block',width:'100%',padding:'14px',background:'linear-gradient(135deg,#0c75bc,#0a68ad)',color:'white',border:'none',borderRadius:'10px',cursor:'pointer',fontSize:'15px',fontWeight:'700'});
             _cBtn.onclick = async e => {
-                if (!byUser(e)) return;
+                if (!byUser(_cBtn)) return;
                 hasConsent = true;
                 try { await chrome.storage.local.set({nostrcomments_consent: true}); } catch(e) {}
                 consentOverlay.style.display = 'none';
@@ -1857,7 +1879,7 @@
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'relay-remove';
                 removeBtn.textContent = '×';
-                removeBtn.onclick = e => { if (!byUser(e)) return; RELAYS = RELAYS.filter(x => x !== r); saveRelays(); renderRelayList(); showMsg('Relay removed — reload page to apply'); };
+                removeBtn.onclick = () => { if (!byUser(removeBtn)) return; RELAYS = RELAYS.filter(x => x !== r); saveRelays(); renderRelayList(); showMsg('Relay removed — reload page to apply'); };
                 item.append(label, removeBtn);
                 relayListEl.appendChild(item);
             });
@@ -1990,8 +2012,8 @@
         };
         settingsClose.onclick = closeSettings;
 
-        relayInput.onkeydown = e => { if (e.key === 'Enter' && byUser(e)) addRelay(); };
-        relayAddBtn.onclick = e => { if (byUser(e)) addRelay(); };
+        relayInput.onkeydown = e => { if (e.key === 'Enter' && byUser(relayInput)) addRelay(); };
+        relayAddBtn.onclick = () => { if (byUser(relayAddBtn)) addRelay(); };
         function addRelay() {
             const url = normRelay(relayInput.value);
             if (!url.startsWith('wss://') || url.length < 10) return showMsg('Enter a valid wss:// URL');
@@ -2054,8 +2076,10 @@
                 listEl.appendChild(item);
             });
         }
-        muteWordInput.onkeydown = e => { if (e.key === 'Enter') muteWordAddBtn.onclick(); };
-        muteWordAddBtn.onclick = async () => {
+        // Muting a word hides every comment containing it, so a page could quietly censor the thread
+        // about itself. Both ways in ask for a real gesture, and share one function rather than one
+        // synthesising a click on the other (which would not carry one).
+        async function addMuteWord() {
             const w = muteWordInput.value.trim().toLowerCase();
             if (!w) return;
             // This one is never published. It would still be stored in plain text, outside every
@@ -2069,7 +2093,9 @@
             renderMuteWords();
             render();
             showMsg('Word muted');
-        };
+        }
+        muteWordInput.onkeydown = e => { if (e.key === 'Enter' && byUser(muteWordInput)) addMuteWord(); };
+        muteWordAddBtn.onclick = () => { if (byUser(muteWordAddBtn)) addMuteWord(); };
 
 
         // Normalize a page URL into a stable thread key: strip known tracking params (so
@@ -3064,8 +3090,8 @@
             } catch(e) { showMsg('Could not read the identity from that source'); }
         }
         paintIdentity();
-        signerLocalBtn.onclick = () => chooseSigner('local');
-        signerNip07Btn.onclick = () => chooseSigner('nip07');
+        signerLocalBtn.onclick = () => { if (byUser(signerLocalBtn)) chooseSigner('local'); };
+        signerNip07Btn.onclick = () => { if (byUser(signerNip07Btn)) chooseSigner('nip07'); };
         paintSignerChoice();
 
         // Publishing a name, for keys that were generated here and have none.
@@ -3139,6 +3165,7 @@
             const nameInput = s.getElementById('setname-input');
             const nameBtn = s.getElementById('setname-btn');
             if (nameBtn) nameBtn.onclick = async () => {
+                if (!byUser(nameBtn)) return;
                 if (!myPub) return showMsg('Connect first!');
                 const name = (nameInput.value || '').trim().replace(/\s+/g, ' ');
                 if (!name) return showMsg('Type a name first');
@@ -3357,7 +3384,7 @@
                 b.className = 'donate-amt';
                 b.textContent = `⚡ ${sats >= 1000 ? (sats / 1000) + 'k' : sats}`;
                 b.title = `Zap ${sats.toLocaleString('en-US')} sats`;
-                b.onclick = () => send(sats);
+                b.onclick = () => { if (byUser(b)) send(sats); };
                 return b;
             }
             SUPPORT.amounts.forEach(sats => amountsEl.appendChild(amountButton(sats)));
@@ -3371,8 +3398,8 @@
                 if (!open) customInput.focus();
             };
             amountsEl.appendChild(otherBtn);
-            customSend.onclick = () => send(parseInt(customInput.value, 10));
-            customInput.onkeydown = e => { if (e.key === 'Enter') customSend.click(); };
+            customSend.onclick = () => { if (byUser(customSend)) send(parseInt(customInput.value, 10)); };
+            customInput.onkeydown = e => { if (e.key === 'Enter' && byUser(customInput)) send(parseInt(customInput.value, 10)); };
 
             // Collapsed by default. What sat under every thread was a heading, a pitch, four
             // buttons and two paragraphs of small print — more of the panel than the comment box
@@ -3612,6 +3639,7 @@
                 shareBtn.title = 'Post this to your Nostr feed as an ordinary note';
                 let sArmed = false, sDisarm;
                 shareBtn.onclick = async () => {
+                    if (!byUser(shareBtn)) return;
                     if (!sArmed) {
                         sArmed = true;
                         shareBtn.textContent = '\u{1F4E3} Share to your feed?';
@@ -3649,6 +3677,7 @@
                 delBtn.title = 'Ask relays to delete this comment';
                 let armed = false, disarm;
                 delBtn.onclick = async () => {
+                    if (!byUser(delBtn)) return;
                     if (!armed) {
                         armed = true;
                         delBtn.textContent = '🗑 Confirm?';
@@ -3675,7 +3704,7 @@
                 muteBtn.className = 'mute-btn';
                 muteBtn.textContent = '🚫 Mute';
                 muteBtn.title = 'Hide all comments from this user';
-                muteBtn.onclick = () => { mutedPubkeys.add(ev.pubkey); saveMuted(); render(); showMsg('User muted — unmute via ⚙ Settings'); };
+                muteBtn.onclick = () => { if (!byUser(muteBtn)) return; mutedPubkeys.add(ev.pubkey); saveMuted(); render(); showMsg('User muted — unmute via ⚙ Settings'); };
                 actions.appendChild(muteBtn);
             }
             div.append(header, body, actions);
@@ -3905,6 +3934,7 @@
         loadMore.onclick = () => { pageSize += 20; render(); };
 
         s.addEventListener('click', async e => {
+            if (!e.isTrusted) return;   // a page cannot forge a trusted click; this listener is not reachable via .onclick
             if (e.target.classList.contains('v')) {
                 const id = e.target.dataset.id;
                 const val = Number(e.target.dataset.val);
@@ -4164,10 +4194,15 @@
             await openSettings();
             keypairSection.style.display = 'block';
             const box = s.getElementById('privkey-box'), btn = s.getElementById('privkey-reveal');
-            if (box && box.style.display === 'none' && btn) btn.click();
+            if (box && box.style.display === 'none' && _privHex) {
+                privkeyDisplay.value = privDisplayText();
+                box.style.display = 'block';
+                if (btn) btn.textContent = 'Hide private key';
+            }
         }
 
         send.onclick = async () => {
+            if (!byUser(send)) return;
             if (!myPub && encPriv) { const w = await unlockLocalWallet(); if (!w) return; }
             if (!myPub) return showMsg("Connect first!");
             await syncIdentity();
@@ -4238,7 +4273,11 @@
                     const useLocal = signerPref === 'local' ? true
                                    : signerPref === 'nip07' ? false
                                    : !(await signerPresent());
-                    if (useLocal) { localWallet = await makeLocalWallet(_savedPriv); connect(); }
+                    // setPrivHex too: loading the wallet makes the key usable but not viewable,
+                    // so without this a returning user opening Settings sees "Show private key" reveal
+                    // nothing. The key stays in this closure, never in the DOM until reveal — the same
+                    // place chooseSigner('local') puts it — so nothing becomes readable to the page.
+                    if (useLocal) { localWallet = await makeLocalWallet(_savedPriv); setPrivHex(_savedPriv); connect(); }
                     // A key that predates this offer gets it once as well, rather than living
                     // unencrypted forever because the feature arrived after it did.
                     offerEncryption(_savedPriv);
