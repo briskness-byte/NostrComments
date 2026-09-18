@@ -56,7 +56,7 @@ stored.push(await sign(ME, {
     content: 'A comment of mine, worth sharing.',
 }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncct-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -91,7 +91,8 @@ const postComment = async text => {
       const i = s.getElementById('input');
       i.value = ${JSON.stringify(text)};
       i.dispatchEvent(new Event('input', {bubbles:true}));
-      s.getElementById('send').click(); return 1;`);
+      return 1;`);
+await nclick("s.getElementById('send')");
     await wait(3500);
     return published.filter(e => e.kind === 1111 && e.content === text)[0] || null;
 };
@@ -142,7 +143,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'An unlabelled answer.';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 await wait(3500);
 const reply = published.find(e => e.kind === 1111 && (e.tags || []).some(t => t[0] === 'e'));
 ok('the reply is published', !!reply, published.map(e => e.kind));
@@ -152,13 +154,9 @@ ok('and carries no client tag', !!reply && !labelled(reply), reply && reply.tags
 // exactly why it is worth a browser assertion of its own.
 console.log('\n=== and so does the shared note, which builds its tags separately ===');
 published.length = 0;
-await js(`${ROOT}
-  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('worth sharing'));
-  c.querySelector('.share-btn').click(); return 1;`);
+await nclick("[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('worth sharing')).querySelector('.share-btn')");
 await wait(900);
-await js(`${ROOT}
-  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('worth sharing'));
-  c.querySelector('.share-btn').click(); return 1;`);
+await nclick("[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('worth sharing')).querySelector('.share-btn')");
 await wait(3000);
 const note = published.find(e => e.kind === 1);
 ok('the note is published', !!note, published.map(e => e.kind));

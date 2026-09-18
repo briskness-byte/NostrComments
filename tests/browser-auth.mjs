@@ -13,7 +13,7 @@
 //   CHROMIUM=/path/to/chrome node tests/browser-auth.mjs
 //
 // Requires: chromium (or Chrome), a matching chromedriver on PATH, openssl, Node 18+.
-import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, seedStorage, ROOT } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9525);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8089);
@@ -37,7 +37,7 @@ stored.push(await sign(AUTHOR, {
     content: 'BEHIND-AUTH only a client that identifies itself can read this.',
 }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncauth-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -52,6 +52,13 @@ ok('extension injects into the page', injected === true, injected);
 if (!injected) { console.log('\nNothing to test; aborting.'); await finish(1); }
 
 await js(configureScript({ relayUrl: RELAY_URL, nsec: toBech32('nsec', ME) }));
+await wait(1500);                     // let the seed land and the panel open
+// Say which signer to use, and import the key through the panel with a real click. Seeding alone
+// leaves the identity to load on the next page load, and this relay answers nothing until it knows
+// who is asking — so the key has to be live on the connection that meets the challenge.
+await js(seedStorage({ nostrcomments_signer: 'local' }));
+await js(`${ROOT} s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec', ME))}; return 1;`);
+await nclick("s.getElementById('privkey-import-btn')");
 await wait(1500);
 await goto(site.url);
 await wait(6000);
@@ -80,7 +87,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'Posted through the wall.';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 await wait(5000);
 const view = JSON.parse(await js(`${ROOT} return JSON.stringify({
     items: [...s.getElementById('list').querySelectorAll('.c')].map(c => c.textContent),

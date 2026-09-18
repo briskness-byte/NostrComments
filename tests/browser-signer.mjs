@@ -43,7 +43,7 @@ const forged = await sign(ACTUAL, {
 });
 stored.push(await sign(newKey(), { kind: 1111, created_at: now - 300, tags: [['I', PAGE], ['K', 'web'], ['i', PAGE], ['k', 'web']], content: 'An existing comment.' }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncsign-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -86,7 +86,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'Anything at all.';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 await wait(4000);
 
 const sent = published.filter(e => e.kind === 1111);

@@ -44,7 +44,7 @@ const voteOld = await sign(VOTER_OLD, { kind: 7, created_at: now - 150, tags: [[
 const voteDown = await sign(VOTER_DOWN, { kind: 7, created_at: now - 100, tags: [['e', comment.id], ['p', comment.pubkey]], content: '-' });
 stored.push(comment, voteTagged, voteOld, voteDown);
 
-const { wd, js, wait, goto, sid, finish } = await startBrowser({
+const { wd, js, wait, goto, sid, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncvote-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -98,7 +98,7 @@ ok('other people\'s votes are not marked as yours', !scores.upMine && !scores.do
 
 console.log('\n=== casting a vote ===');
 const before = published.length;
-await js(`${ROOT} s.getElementById('list').querySelector('button.v').click(); return 1;`);
+await nclick("s.getElementById('list').querySelector('button.v')");
 await wait(2500);
 
 const sent = published.slice(before).filter(e => e.kind === 7);
@@ -123,7 +123,7 @@ ok('the arrow you picked is marked as yours', after.upMine === true, after);
 ok('the arrow you did not pick is left unmarked', after.downMine === false, after);
 
 console.log('\n=== switching a vote ===');
-await js(`${ROOT} s.getElementById('list').querySelectorAll('button.v')[1].click(); return 1;`);
+await nclick("s.getElementById('list').querySelectorAll('button.v')[1]");
 await wait(2500);
 const switched = JSON.parse(await read() || 'null') || {};
 ok('switching to ↓ moves the vote rather than adding one', switched.up === '↑ 2' && switched.down === '↓ 2', switched);
@@ -143,7 +143,7 @@ ok('the counts come back unchanged', reloaded.up === '↑ 2' && reloaded.down ==
 ok('your own vote is still recognised as yours', reloaded.downMine === true, reloaded);
 ok('it is the only one marked', reloaded.upMine === false, reloaded);
 
-await js(`${ROOT} s.getElementById('list').querySelectorAll('button.v')[1].click(); return 1;`);
+await nclick("s.getElementById('list').querySelectorAll('button.v')[1]");
 await wait(2000);
 ok('voting the same way again publishes nothing', published.length === beforeReload, published.length - beforeReload);
 
@@ -177,7 +177,7 @@ const measureMarked = async direction => {
 };
 await measureMarked('↓');
 // Switch the vote back to ↑ and measure the other pair of colours.
-await js(`${ROOT} s.getElementById('list').querySelectorAll('button.v')[0].click(); return 1;`);
+await nclick("s.getElementById('list').querySelectorAll('button.v')[0]");
 await wait(2000);
 await measureMarked('↑');
 

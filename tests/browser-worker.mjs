@@ -57,7 +57,7 @@ await seed(PAGE, 'First comment, seeded before the browser started.', 120);
 await seed(PAGE, 'Second comment, so ordering has something to be wrong about.', 60);
 await seed(normalizeUrl(CSP_URL), 'A comment that exists whether or not the page lets you see it.', 90);
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncwk-',
     onClose: () => { site.close(); cspSite.close(); relay.close(); },
 });
@@ -94,7 +94,8 @@ const post = async text => {
       const i = s.getElementById('input');
       i.value = ${JSON.stringify(text)};
       i.dispatchEvent(new Event('input', {bubbles:true}));
-      s.getElementById('send').click(); return 1;`);
+      return 1;`);
+await nclick("s.getElementById('send')");
     await wait(4000);
 };
 const workerIsOn = () => js(`${ROOT}

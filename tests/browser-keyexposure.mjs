@@ -34,7 +34,7 @@ const ME = newKey();
 const MY_NSEC = toBech32('nsec', ME);
 const PASSWORD = 'correct-horse-battery-staple-9137';
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncleak-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -72,7 +72,13 @@ const leaks = async what => {
 // Import a key the way a user would, then decline the encryption offer so the panel is left in the
 // ordinary "unencrypted key stored here" state most users are in.
 await js(configureScript({ relayUrl: `wss://127.0.0.1:${RELAY_PORT}`, nsec: MY_NSEC }));
-await wait(1500);
+await wait(800);
+await goto(site.url);         // the key is seeded in storage; a reload is what loads it
+await wait(6000);
+// Open the panel and Settings. Neither is a guarded control, so a page-script click still works;
+// only the key- and publish-controls now refuse one.
+await js(`${ROOT} s.getElementById('m').style.display='grid'; s.getElementById('gear-btn').click(); return 1;`);
+await wait(800);
 await js(`${ROOT}
   const o = [...s.getElementById('p').children].find(c => c.style.zIndex === '28' && getComputedStyle(c).display !== 'none');
   if (o) [...o.querySelectorAll('button')].find(b => /not now/i.test(b.textContent))?.click();
@@ -84,8 +90,7 @@ ok('the imported key is in use', stored === 'block', stored);
 
 console.log('\n=== the key is not left lying in the DOM ===');
 
-// Settings is open at this point — configureScript clicks the gear and never closes it. This is
-// the exact state the review found the key in.
+// Settings is open (opened just above). This is the exact state the review found the key in.
 const openNow = await js(`${ROOT} return s.getElementById('settings-panel') ? getComputedStyle(s.getElementById('settings-panel')).display : 'no-panel';`);
 ok('settings is open for the checks below', openNow !== 'none', openNow);
 
@@ -96,19 +101,30 @@ ok('the nsec form is not readable either', await leaks(MY_NSEC) === false);
 const inField = await js(`${ROOT} const i = s.getElementById('privkey-display'); return i ? i.value : '(missing)';`);
 ok('#privkey-display is empty until asked', inField === '', JSON.stringify(inField));
 
-console.log('\n=== revealing it shows it, hiding it takes it back ===');
+console.log('\n=== a page cannot make it reveal the key (the fix) ===');
 
+// The reveal button is in an open shadow root, so page script can reach it. It must not be able to
+// work it: a scripted click carries isTrusted:false, and calling the handler directly — even with a
+// forged {isTrusted:true} — passes no real gesture. Both must leave the key hidden.
 await js(`${ROOT} s.getElementById('privkey-reveal').click(); return 1;`);
 await wait(300);
+ok('a scripted .click() does not reveal the key', await leaks(MY_NSEC) === false);
+await js(`${ROOT} try { const b = s.getElementById('privkey-reveal'); b.onclick({ isTrusted: true, target: b, currentTarget: b }); } catch (e) {} return 1;`);
+await wait(300);
+ok('a forged-event .onclick() does not reveal it either', await leaks(MY_NSEC) === false);
+const stillEmpty = await js(`${ROOT} return s.getElementById('privkey-display').value;`);
+ok('#privkey-display is still empty after both attempts', stillEmpty === '', JSON.stringify(stillEmpty));
+
+console.log('\n=== a real click reveals it, and hiding it takes it back ===');
+
+await nclick("s.getElementById('privkey-reveal')");
+await wait(400);
 const revealed = await js(`${ROOT} return s.getElementById('privkey-display').value;`);
-// The field shows the nsec form — what every other Nostr app asks for — so that is what the sweep
-// below has to look for. Checking for the hex here would pass whatever the field contained, which
-// would quietly turn this suite into no test at all.
 ok('“Show private key” actually shows the key', revealed === MY_NSEC, revealed === '' ? '(empty)' : 'a different value');
 ok('and it is readable from the page while shown — this is the user asking for it', await leaks(MY_NSEC) === true);
 ok('the hex form is not in the DOM alongside it', await leaks(ME) === false);
 
-await js(`${ROOT} s.getElementById('privkey-reveal').click(); return 1;`);
+await nclick("s.getElementById('privkey-reveal')");
 await wait(300);
 ok('hiding it removes it from the DOM again', await leaks(MY_NSEC) === false);
 ok('in neither form', await leaks(ME) === false);
@@ -119,8 +135,8 @@ console.log('\n=== it does not come back on its own ===');
 
 // Reveal, then close Settings while it is still showing: the close path has to put it away rather
 // than leaving a revealed key behind for whoever opens the panel next.
-await js(`${ROOT} s.getElementById('privkey-reveal').click(); return 1;`);
-await wait(300);
+await nclick("s.getElementById('privkey-reveal')");
+await wait(400);
 await js(`${ROOT} s.getElementById('gear-btn').click(); return 1;`);
 await wait(500);
 ok('closing settings while the key is shown clears it', await leaks(ME) === false);
@@ -165,11 +181,8 @@ const MUTED_WORD = 'zzqq-private-word';
 const ODD_RELAY = 'wss://relay.example-of-mine.invalid';
 await js(`${ROOT} s.getElementById('m').style.display='grid'; s.getElementById('gear-btn').click(); return 1;`);
 await wait(700);
-await js(`${ROOT}
-  const w = s.getElementById('muteword-input');
-  w.value = ${JSON.stringify(MUTED_WORD)};
-  s.getElementById('muteword-add-btn').click();
-  return 1;`);
+await js(`${ROOT} s.getElementById('muteword-input').value = ${JSON.stringify(MUTED_WORD)}; return 1;`);
+await nclick("s.getElementById('muteword-add-btn')");
 // The relay goes in through storage: adding one refuses an untrusted click, and what this suite
 // is testing is whether Settings content leaks to the page, not how it got there.
 await js(seedStorage({ nostrcomments_relays: [`wss://127.0.0.1:${RELAY_PORT}`, ODD_RELAY] }));
@@ -237,6 +250,24 @@ ok('after a reload the encrypted key is not in the DOM', await leaks(ME) === fal
 await js(`${ROOT} const b = s.getElementById('privkey-reveal'); if (b) b.click(); return 1;`);
 await wait(400);
 ok('“Show private key” cannot reveal a locked key', await leaks(ME) === false);
+
+console.log('\n=== a page cannot switch the layer off, or filter it for you ===');
+
+// The promise this project makes is that the site being discussed cannot remove the thread from its
+// own pages. Two controls would hand a page exactly that: "Disable on this site", and the muted-word
+// list — a site could mute its own name and never be criticised in its own comment section again.
+// Both are page-reachable in the shadow root, so both have to refuse a scripted click.
+await js(`${ROOT} const m=s.getElementById('m'); if(m) m.style.display='grid'; const g=s.getElementById('gear-btn'); if(g) g.click(); return 1;`);
+await wait(700);
+await js(`${ROOT} const w=s.getElementById('muteword-input'); if(w) w.value='zzqq-added-by-the-page'; const b=s.getElementById('muteword-add-btn'); if(b) b.click(); return 1;`);
+await wait(700);
+const wordList = await js(`${ROOT} const l=s.getElementById('muteword-list'); return l ? l.textContent : '(none)';`);
+ok('a page cannot add a muted word', !String(wordList).includes('zzqq-added-by-the-page'), wordList);
+
+await js(`${ROOT} const b=s.getElementById('site-disable-btn'); if(b) b.click(); return 1;`);
+await wait(900);
+const stillOn = await js(`${ROOT} const b=s.getElementById('nc-btn'); return !!b && getComputedStyle(b).display !== 'none';`);
+ok('a page cannot disable the extension on its own site', stillOn === true, stillOn);
 
 console.log(`\n${state.fail ? '✗' : '✓'} ${state.pass} passed, ${state.fail} failed`);
 await finish(state.fail ? 1 : 0);

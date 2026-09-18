@@ -87,7 +87,24 @@ if (!s.value?.sessionId) {
 }
 const sid = s.value.sessionId;
 const js = async src => (await wd('POST', `/session/${sid}/execute/sync`, { script: `return (function(){${src}})()`, args: [] })).value;
-const finish = async code => { await wd('DELETE', `/session/${sid}`).catch(() => {}); cd.kill(); site.close(); fs.rmSync(W, { recursive: true, force: true }); process.exit(code); };
+
+
+// The zap amount buttons sign an event as the user, so they refuse a scripted click now. This is the
+// same trusted-click recipe the consent gate below uses: a WebDriver click, or focusing the control and
+// pressing a real Enter, both of which the browser marks isTrusted.
+const nclick = async selector => {
+    const el = await js(`${ROOT} return (${selector}) || null;`);
+    const key = el && typeof el === 'object' && Object.keys(el).find(k => k.startsWith('element-'));
+    if (key) {
+        const r = await wd('POST', `/session/${sid}/element/${el[key]}/click`, {});
+        if (!(r && r.value && r.value.error)) return true;
+    }
+    const focused = await js(`${ROOT} const __el = (${selector}); if (__el) { if (__el.scrollIntoView) __el.scrollIntoView({block:'center'}); if (__el.focus) __el.focus(); } return !!(__el && s.activeElement === __el);`);
+    if (!focused) return false;
+    await wd('POST', `/session/${sid}/actions`, { actions: [{ type: 'key', id: 'kb', actions: [
+        { type: 'keyDown', value: '\uE007' }, { type: 'keyUp', value: '\uE007' }] }] });
+    return true;
+};const finish = async code => { await wd('DELETE', `/session/${sid}`).catch(() => {}); cd.kill(); site.close(); fs.rmSync(W, { recursive: true, force: true }); process.exit(code); };
 
 await wd('POST', `/session/${sid}/url`, { url: `http://127.0.0.1:${SITE_PORT}/` });
 await new Promise(r => setTimeout(r, 3000));
@@ -216,7 +233,7 @@ ok('clicking again hides it', T.closed === 'none', T.closed);
 
 if (LIVE) {
     console.log('\n=== payment in flight (contacts the Lightning provider) ===');
-    await js(`${ROOT} s.getElementById('donate-amounts').querySelectorAll('button')[0].click(); return 1;`);
+    await nclick("s.getElementById('donate-amounts').querySelectorAll('button')[0]");
     await new Promise(r => setTimeout(r, 250));
     const during = JSON.parse(await js(`${ROOT} return JSON.stringify([...s.getElementById('donate-amounts').querySelectorAll('button')].map(b => b.disabled));`));
     ok('every amount button is disabled while the request runs', during.every(Boolean), during);

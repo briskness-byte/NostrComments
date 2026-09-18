@@ -53,7 +53,7 @@ for (let i = 0; i < 6; i++) {
     stored.push(await sign(newKey(), { kind: 7, created_at: now - 100 + i, tags: [['e', buried.id], ['p', buried.pubkey], ['r', PAGE]], content: '-' }));
 }
 
-const { wd, js, wait, goto, sid, finish } = await startBrowser({
+const { wd, js, wait, goto, sid, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncmute-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -94,9 +94,7 @@ ok('tapping it actually reveals the comment', has('BURIED-TEXT'), items.map(i =>
 ok('the placeholder sentence is gone once revealed', !/tap to show/i.test(items.map(i => i.text).join(' ')), items.map(i => i.text.slice(0, 40)));
 
 console.log('\n=== muting somebody who has been replied to ===');
-await js(`${ROOT}
-  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('about to mute'));
-  [...c.querySelectorAll('button')].find(b => /Mute/i.test(b.textContent)).click(); return 1;`);
+await nclick("[...[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('about to mute')).querySelectorAll('button')].find(b => /Mute/i.test(b.textContent))");
 await wait(1200);
 items = JSON.parse(await read() || '[]');
 ok('the muted comment itself is hidden', !has('A comment by the person you are about to mute'), items.map(i => i.text.slice(0, 40)));
@@ -126,12 +124,9 @@ ok('the reply is still below it', has('A reply by somebody you did not mute'), i
 console.log('\n=== a muted word on a comment that has been answered ===');
 // The third place this bug lived. Muting a word is a standing choice like muting a person, not a
 // transient filter like the search box, so the replies under it must not go with it.
-await js(`${ROOT}
-  s.getElementById('gear-btn').click();
-  s.getElementById('muteword-input').value = 'flurble';
-  s.getElementById('muteword-add-btn').click();
-  s.getElementById('gear-btn').click();
-  return 1;`);
+await js(`${ROOT} s.getElementById('gear-btn').click(); s.getElementById('muteword-input').value = 'flurble'; return 1;`);
+await nclick("s.getElementById('muteword-add-btn')");
+await js(`${ROOT} s.getElementById('gear-btn').click(); return 1;`);
 await wait(1200);
 items = JSON.parse(await read() || '[]');
 ok('the comment with the muted word is hidden', !has('mentions FLURBLE'), items.map(i => i.text.slice(0, 40)));

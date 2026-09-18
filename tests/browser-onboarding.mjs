@@ -31,7 +31,7 @@ const site = await startSite({ port: SITE_PORT, heading: 'Onboarding QA page' })
 
 const MINE = newKey(), MINE_NPUB = toBech32('npub', _secp.pubKey(MINE));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncob-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -105,7 +105,8 @@ console.log('\n=== importing a key takes the block down, without reopening the p
 await js(`${ROOT}
   s.getElementById('gear-btn').click();
   s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec', MINE))};
-  s.getElementById('privkey-import-btn').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('privkey-import-btn')");
 await wait(2500);
 r = JSON.parse(await st());
 ok('the imported identity is in use', r.npub === MINE_NPUB, r.npub);
@@ -138,7 +139,8 @@ ok('and it puts the stale block away', r.onboard === 'none', r.onboard);
 // A guard that always refuses would pass everything above. Deleting the key is also the other half of
 // the same bug: that path has to bring the block back.
 console.log('\n=== after deleting the key it comes back and works ===');
-await js(`${ROOT} s.getElementById('gear-btn').click(); s.getElementById('privkey-delete').click(); return 1;`);
+await js(`${ROOT} s.getElementById('gear-btn').click(); return 1;`);
+await nclick("s.getElementById('privkey-delete')");
 await wait(800);
 ok('the delete asks first', (await confirmWith('Delete it')) === 'confirmed');
 await wait(2000);
@@ -184,7 +186,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'my first comment';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 await wait(4000);
 let d = JSON.parse(await dialog());
 ok('after the first comment it asks', d.open === true, d);
@@ -205,7 +208,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'a second comment';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 await wait(4000);
 ok('and it does not come back on the next comment', JSON.parse(await dialog()).open === false);
 
@@ -219,7 +223,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'a comment after reloading';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 await wait(4000);
 ok('nor after a reload, which is where it used to start over', JSON.parse(await dialog()).open === false);
 
@@ -239,7 +244,8 @@ await js(`window.nostr = { getPublicKey: async () => ${JSON.stringify(_secp.pubK
                            signEvent: async ev => ev }; return 1;`);
 await wait(4000);
 await js(`${ROOT} s.getElementById('m').style.display='grid'; s.getElementById('gear-btn').click();
-  s.getElementById('signer-nip07').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('signer-nip07')");
 await wait(2500);
 // Now reload without it, the way a disabled or broken signer behaves.
 await goto(site.url);

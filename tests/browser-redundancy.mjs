@@ -48,7 +48,7 @@ const site = await startSite({ port: SITE_PORT, heading: 'Redundancy QA page' })
 const PAGE = normalizeUrl(site.url);
 const KEY = newKey();
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncred-',
     onClose: () => { site.close(); A.close(); B.close(); C.close(); },
 });
@@ -78,7 +78,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'Worth asking twice.';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 
 // The first pass, then the 2s pause, then the second ask.
 await wait(9000);
@@ -104,7 +105,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'Only one relay took this.';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 await wait(9000);
 
 const thin = JSON.parse(await js(`${ROOT}
@@ -127,7 +129,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'Two relays took this one.';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 await wait(9000);
 const quiet = await js(`${ROOT} return s.getElementById('msg').textContent;`);
 ok('no thin-publish warning when two relays accepted', !/only one relay/i.test(quiet || ''), quiet);

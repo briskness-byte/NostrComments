@@ -26,7 +26,7 @@ const relay = await startRelay({ port: RELAY_PORT });
 const site = await startSite({ port: SITE_PORT, heading: 'Key password QA page' });
 const ME = newKey(), MY_PUB = _secp.pubKey(ME);
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncpw-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -61,8 +61,8 @@ ok('nothing is asked before there is a key', JSON.parse(await dialog()).shown ==
 
 console.log('\n=== a key appears ===');
 await js(`${ROOT}
-  s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec', ME))};
-  s.getElementById('privkey-import-btn').click(); return 1;`);
+  s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec', ME))}; return 1;`);
+await nclick("s.getElementById('privkey-import-btn')");
 await wait(1500);
 let d = JSON.parse(await dialog());
 ok('the offer appears', d.shown === true, d);

@@ -52,6 +52,23 @@ const sess = await wd('POST','/session',{capabilities:{alwaysMatch:{
     `--user-data-dir=${path.join(W,'cd')}`,`--load-extension=${EXT}`,`--disable-extensions-except=${EXT}`,'--window-size=1000,1700']}}}});
 const sid = sess.value.sessionId;
 const js = async c => (await wd('POST',`/session/${sid}/execute/sync`,{script:`return (function(){${c}})()`,args:[]})).value;
+
+// This suite drives its own browser, so it needs its own trusted click. The key and publish controls
+// refuse a scripted one; a WebDriver click (or, where the shadow root makes that "not interactable",
+// focusing and pressing a real Enter) is what the browser reports as isTrusted.
+const nclick = async selector => {
+    const el = await js(`${ROOT} return (${selector}) || null;`);
+    const key = el && typeof el === 'object' && Object.keys(el).find(k => k.startsWith('element-'));
+    if (key) {
+        const r = await wd('POST', `/session/${sid}/element/${el[key]}/click`, {});
+        if (!(r && r.value && r.value.error)) return true;
+    }
+    const focused = await js(`${ROOT} const __el = (${selector}); if (__el) { if (__el.scrollIntoView) __el.scrollIntoView({block:'center'}); if (__el.focus) __el.focus(); } return !!(__el && s.activeElement === __el);`);
+    if (!focused) return false;
+    await wd('POST', `/session/${sid}/actions`, { actions: [{ type: 'key', id: 'kb', actions: [
+        { type: 'keyDown', value: '\uE007' }, { type: 'keyUp', value: '\uE007' }] }] });
+    return true;
+};
 await wd('POST',`/session/${sid}/url`,{url:'http://127.0.0.1:8099/'});
 await new Promise(r=>setTimeout(r,2800));
 
@@ -67,8 +84,8 @@ ok('Connect is shown while nothing is connected', btnBefore !== 'none', btnBefor
 
 // Import identity A into an empty extension (no dialog expected — nothing to lose).
 await js(`${ROOT}
-  s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec',A))};
-  s.getElementById('privkey-import-btn').click(); return 1;`);
+  s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec',A))}; return 1;`);
+await nclick("s.getElementById('privkey-import-btn')");
 await new Promise(r=>setTimeout(r,1200));
 let st = await js(`${ROOT} return s.getElementById('status').textContent;`);
 ok('identity A imported into an empty extension without a warning', st.includes(shown(NPUB_A)), st);
@@ -77,7 +94,8 @@ ok('identity A imported into an empty extension without a warning', st.includes(
 ok('Connect disappears once an identity is connected', (await connectDisplay()) === 'none', await connectDisplay());
 
 // Now import B over A. The warning must appear.
-await js(`${ROOT} s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec',B))}; s.getElementById('privkey-import-btn').click(); return 1;`);
+await js(`${ROOT} s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec',B))}; return 1;`);
+await nclick("s.getElementById('privkey-import-btn')");
 await new Promise(r=>setTimeout(r,700));
 const dlg = JSON.parse(await js(`${ROOT}
   const ov=[...s.getElementById('p').children].find(c=>c.style.zIndex==='30');
@@ -113,7 +131,8 @@ ok('cancelling says nothing changed', /cancelled/i.test(msg), msg);
 
 // Confirming must actually replace it. Cancelling clears the pasted key out of the field — it is
 // a private key in a shadow root the page can read — so paste it again the way a user would.
-await js(`${ROOT} s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec',B))}; s.getElementById('privkey-import-btn').click(); return 1;`);
+await js(`${ROOT} s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec',B))}; return 1;`);
+await nclick("s.getElementById('privkey-import-btn')");
 await new Promise(r=>setTimeout(r,600));
 await js(`${ROOT}
   const ov=[...s.getElementById('p').children].find(c=>c.style.zIndex==='30');
@@ -127,7 +146,7 @@ ok('Connect stays hidden across an identity swap', (await connectDisplay()) === 
 // so it is the one place the button has to reappear.
 await js(`${ROOT} if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click(); return 1;`);
 await new Promise(r=>setTimeout(r,400));
-await js(`${ROOT} s.getElementById('privkey-delete').click(); return 1;`);
+await nclick("s.getElementById('privkey-delete')");
 await new Promise(r=>setTimeout(r,600));
 await js(`${ROOT}
   const ov=[...s.getElementById('p').children].find(c=>c.style.zIndex==='30');
@@ -153,24 +172,35 @@ const keyView = () => js(`${ROOT}
 // just destroyed. tests/browser-keyexposure.mjs covers the leak itself; this pins the delete.
 let kv = JSON.parse(await keyView() || '{}');
 ok('deleting leaves no key in the field', kv.hasValue === false, kv);
-await js(`${ROOT} s.getElementById('privkey-reveal').click(); return 1;`);
+await nclick("s.getElementById('privkey-reveal')");
 await new Promise(r=>setTimeout(r,300));
 kv = JSON.parse(await keyView() || '{}');
 ok('and Show cannot bring the deleted key back', kv.shown === false && kv.hasValue === false, kv);
 
 // Put an identity back, so show/hide is tested against a key that exists.
+// Deleting the key closed Settings, and a real click needs the control on screen — reopen it first.
 await js(`${ROOT}
-  s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec',B))};
-  s.getElementById('privkey-import-btn').click(); return 1;`);
+  s.getElementById('m').style.display='grid';
+  if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click();
+  return 1;`);
+await new Promise(r=>setTimeout(r,700));
+await js(`${ROOT}
+  s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec',B))}; return 1;`);
+await nclick("s.getElementById('privkey-import-btn')");
 await new Promise(r=>setTimeout(r,1400));
 kv = JSON.parse(await keyView() || '{}');
 ok('the private key is not on screen until asked for', kv.shown === false, kv);
 ok('and it is not sitting in the field either', kv.hasValue === false, kv);
 ok('and the button offers to show it', /Show private key/i.test(kv.btn || ''), kv.btn);
 
-await js(`${ROOT} s.getElementById('privkey-reveal').click(); return 1;`);
-await new Promise(r=>setTimeout(r,300));
-kv = JSON.parse(await keyView() || '{}');
+// The panel repaints after an import, which can detach the button between focusing it and the
+// keypress. Ask a few times rather than once.
+for (let i = 0; i < 4; i++) {
+    await nclick("s.getElementById('privkey-reveal')");
+    await new Promise(r=>setTimeout(r,500));
+    kv = JSON.parse(await keyView() || '{}');
+    if (kv.shown === true && kv.hasValue === true) break;
+}
 ok('asking for it shows it', kv.shown === true && kv.hasValue === true, kv);
 ok('and the button offers to hide it again', /Hide private key/i.test(kv.btn || ''), kv.btn);
 

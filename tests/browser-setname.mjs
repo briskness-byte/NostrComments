@@ -51,7 +51,7 @@ const DISPLAYONLY = newKey(), DISPLAYONLY_PUB = _secp.pubKey(DISPLAYONLY);
 relay.stored.push(await sign(DISPLAYONLY, { kind: 0, created_at: Math.floor(Date.now() / 1000) - 400,
     content: JSON.stringify({ display_name: 'Only Displayed', about: 'no name field' }), tags: [] }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncsn-',
     onClose: () => { site.close(); relay.close(); slow.close(); },
 });
@@ -65,7 +65,17 @@ if (!injected) { console.log('\nNothing to test; aborting.'); await finish(1); }
 
 const setup = async (nsec, relayUrl = `wss://127.0.0.1:${RELAY_PORT}`) => {
     await js(configureScript({ relayUrl, nsec }));
-    await wait(1500);
+    // The seed is written asynchronously. Reloading before it lands leaves the previous identity in
+    // place, which is silent and looks like the publish simply not working.
+    await wait(2500);
+    await goto(site.url);            // the key is seeded in storage; the reload is what loads it
+    await wait(6000);
+    await js(`${ROOT} s.getElementById('m').style.display='grid';
+  // The gear toggles, so clicking it blindly closes Settings as often as it opens them — and a
+  // real click needs the control on screen, so a closed panel means the press never lands.
+  if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click();
+  return 1;`);
+    await wait(1000);
     await js(`${ROOT}
       const o = [...s.getElementById('p').children].find(c => c.style.zIndex === '28' && getComputedStyle(c).display !== 'none');
       if (o) [...o.querySelectorAll('button')].find(b => /not now/i.test(b.textContent))?.click();
@@ -87,10 +97,16 @@ const row = () => js(`${ROOT} return JSON.stringify({
   btn: s.getElementById('setname-btn').textContent,
   msg: s.getElementById('msg').textContent });`);
 const publishName = async n => {
-    await js(`${ROOT}
-      s.getElementById('setname-input').value = ${JSON.stringify(n)};
-      s.getElementById('setname-btn').click(); return 1;`);
-    await wait(4000);
+    // The name field repaints often (profile fetches land, the card updates), which can detach the
+    // button between a fallback focus and its keypress. Set the value and click a few times until a
+    // kind 0 for this name is on the relay, then let it settle.
+    for (let i = 0; i < 4; i++) {
+        await js(`${ROOT} const inp=s.getElementById('setname-input'); inp.value = ${JSON.stringify(n)}; inp.dispatchEvent(new Event('input',{bubbles:true})); return 1;`);
+        await nclick("s.getElementById('setname-btn')");
+        await wait(1500);
+        if (published.some(e => e.kind === 0)) break;
+    }
+    await wait(2500);
 };
 
 // --- the dangerous half, first --------------------------------------------------------------------
@@ -180,7 +196,11 @@ await goto(site.url);
 await wait(2500);
 await setup(toBech32('nsec', FRESH));
 await wait(2500);
-await js(`${ROOT} s.getElementById('m').style.display='grid'; s.getElementById('gear-btn').click(); return 1;`);
+await js(`${ROOT} s.getElementById('m').style.display='grid';
+  // The gear toggles, so clicking it blindly closes Settings as often as it opens them — and a
+  // real click needs the control on screen, so a closed panel means the press never lands.
+  if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click();
+  return 1;`);
 await wait(1200);
 r = JSON.parse(await row());
 ok('the field is offered', r.shown === true, r);

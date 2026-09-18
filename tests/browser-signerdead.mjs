@@ -40,7 +40,7 @@ const firstSigned = await sign(SIGNER, {
     content: 'The one that gets through.',
 });
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncdead-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -83,7 +83,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'The one that gets through.';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 await wait(4000);
 ok('the first comment is published', published.filter(e => e.kind === 1111).length === 1,
    published.filter(e => e.kind === 1111).length);
@@ -93,7 +94,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'The one that hangs.';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 
 // The point of the fix: something is said within seconds, not after a minute.
 await wait(6000);

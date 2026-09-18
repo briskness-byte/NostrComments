@@ -61,7 +61,7 @@ stored.push(mine);
 const lateTarget = await sign(BYSTANDER, { kind: 1111, created_at: now - 5, tags: [['I', PAGE], ['K', 'web'], ['i', PAGE], ['k', 'web']], content: 'Posted and deleted while you are watching.' });
 const lateDeletion = await sign(BYSTANDER, { kind: 5, created_at: now - 1, tags: [['e', lateTarget.id], ['k', '1'], ['r', PAGE]], content: '' });
 
-const { wd, js, wait, goto, sid, finish } = await startBrowser({
+const { wd, js, wait, goto, sid, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncdel-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -135,17 +135,14 @@ ok('it took nothing else with it', has('An unrelated comment') && has('A reply w
 
 console.log('\n=== deleting through the UI ===');
 const before = published.length;
+await nclick("[...[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('My own comment')).querySelectorAll('button')].find(b => /Delete/i.test(b.textContent))");
 const armed = await js(`${ROOT}
   const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('My own comment'));
   if (!c) return 'no-comment';
-  const b = [...c.querySelectorAll('button')].find(b => /Delete/i.test(b.textContent));
-  if (!b) return 'no-button';
-  b.click();
-  return b.textContent;`);
+  const b = [...c.querySelectorAll('button')].find(b => /Confirm|Delete/i.test(b.textContent));
+  return b ? b.textContent : 'no-button';`);
 ok('deleting is two-step, not one click', /Confirm/i.test(armed) && published.length === before, armed);
-await js(`${ROOT}
-  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('My own comment'));
-  [...c.querySelectorAll('button')].find(b => /Confirm/i.test(b.textContent)).click(); return 1;`);
+await nclick("[...[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('My own comment')).querySelectorAll('button')].find(b => /Confirm/i.test(b.textContent))");
 await wait(2500);
 
 const sent = published.slice(before).filter(e => e.kind === 5);

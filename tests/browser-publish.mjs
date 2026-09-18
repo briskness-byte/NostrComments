@@ -54,7 +54,7 @@ const theirs = await sign(AUTHOR, { kind: 1111, created_at: now - 300, tags: [['
 const mine = await sign(ME, { kind: 1111, created_at: now - 200, tags: [['I', PAGE], ['K', 'web'], ['i', PAGE], ['k', 'web']], content: 'My own comment, for the delete attempt.' });
 stored.push(theirs, mine);
 
-const { wd, js, wait, goto, sid, finish } = await startBrowser({
+const { wd, js, wait, goto, sid, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncpub-',
     onClose: () => { site.close(); relay.close(); refuser.close(); },
 });
@@ -92,7 +92,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = ${JSON.stringify(TEXT)};
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 await wait(4000);
 view = JSON.parse(await read() || '{}');
 ok('it is not shown as if it posted', !(view.items || []).some(t => t.includes('refused by every relay')), view.items);
@@ -129,9 +130,7 @@ REFUSE_DELAY = 1500;
 const before = JSON.parse(await js(`${ROOT}
   const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('A comment to vote on'));
   return JSON.stringify([...c.querySelectorAll('button.v')].map(b => b.textContent.trim()));`) || '[]');
-await js(`${ROOT}
-  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('A comment to vote on'));
-  c.querySelector('button.v').click(); return 1;`);
+await nclick("[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('A comment to vote on')).querySelector('button.v')");
 await wait(250);
 const optimistic = JSON.parse(await js(`${ROOT}
   const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('A comment to vote on'));
@@ -150,13 +149,9 @@ ok('the vote is not left marked as yours', after.mine === false, after);
 ok('and it says so', /no relay accepted/i.test(after.msg), after.msg);
 
 console.log('\n=== a deletion no relay accepts ===');
-await js(`${ROOT}
-  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('My own comment'));
-  [...c.querySelectorAll('button')].find(b => /Delete/i.test(b.textContent)).click(); return 1;`);
+await nclick("[...[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('My own comment')).querySelectorAll('button')].find(b => /Delete/i.test(b.textContent))");
 await wait(500);
-await js(`${ROOT}
-  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('My own comment'));
-  [...c.querySelectorAll('button')].find(b => /Confirm/i.test(b.textContent)).click(); return 1;`);
+await nclick("[...[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('My own comment')).querySelectorAll('button')].find(b => /Confirm/i.test(b.textContent))");
 await wait(4000);
 view = JSON.parse(await read() || '{}');
 // Hiding it locally would be the worst outcome: gone for you, untouched for everyone else.
@@ -170,7 +165,8 @@ ok('the delete button is usable again, not stranded', JSON.parse(delBtn).disable
 
 console.log('\n=== and when a relay does accept ===');
 REFUSE = '';
-await js(`${ROOT} s.getElementById('send').click(); return 1;`);
+await js(`${ROOT} return 1;`);
+await nclick("s.getElementById('send')");
 await wait(3500);
 view = JSON.parse(await read() || '{}');
 ok('the comment appears', (view.items || []).some(t => t.includes('refused by every relay')), view.items);
@@ -185,7 +181,8 @@ await js(`${ROOT}
   const i = s.getElementById('input');
   i.value = 'An answer to it.';
   i.dispatchEvent(new Event('input', {bubbles:true}));
-  s.getElementById('send').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('send')");
 await wait(3500);
 const reply = published.find(e => e.kind === 1111 && (e.tags || []).some(t => t[0] === 'e'));
 ok('the reply is published', !!reply, published.map(e => e.kind));
@@ -216,9 +213,7 @@ await js(`${ROOT} s.getElementById('msg').textContent = ''; return 1;`);
 const arrowsBefore = JSON.parse(await js(`${ROOT}
   const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('A comment to vote on'));
   return JSON.stringify([...c.querySelectorAll('button.v')].map(b => b.textContent.trim()));`) || '[]');
-await js(`${ROOT}
-  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('A comment to vote on'));
-  c.querySelector('button.v').click(); return 1;`);
+await nclick("[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('A comment to vote on')).querySelector('button.v')");
 await wait(4000);
 const mixed = JSON.parse(await js(`${ROOT}
   const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('A comment to vote on'));

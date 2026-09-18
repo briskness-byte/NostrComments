@@ -441,7 +441,33 @@ export async function startBrowser({ cdPort, extPath = EXT, prefix = 'ncqa-', wi
         fs.rmSync(W, { recursive: true, force: true });
         process.exit(code);
     };
-    return { wd, js, wait, goto, sid, finish };
+    // Click a shadow-DOM control the way a person does: focus it, then press Enter, which the
+    // browser turns into a trusted click (isTrusted:true). WebDriver's element/click is unreliable
+    // inside a shadow root — its obscuration check lands on the shadow host and reports the inner
+    // control "not interactable" — so this is how a suite works a guarded control for real. Pass a
+    // JS *expression*, evaluated with the shadow root `s` in scope, that yields the element:
+    //   nclick("s.getElementById('send')")
+    const nclick = async selector => {
+        // Prefer WebDriver's atomic element click: one round trip, so a re-render cannot slip in
+        // between focusing a control and activating it (which detaches it and drops the keypress —
+        // seen on the name field, which repaints often). It is unreliable on some shadow controls
+        // ("not interactable"), so on failure fall back to focus + a real Enter; the browser turns
+        // both into trusted clicks (isTrusted:true), which is what the panel now requires.
+        // Scroll it into view first: an element the driver considers off-screen is where the atomic
+        // click gives up and falls through to the slower path.
+        const el = await js(`${ROOT} const __e = (${selector}); if (__e && __e.scrollIntoView) __e.scrollIntoView({block:'center'}); return __e || null;`);
+        const key = el && typeof el === 'object' && Object.keys(el).find(k => k.startsWith('element-'));
+        if (key) {
+            const r = await wd('POST', `/session/${sid}/element/${el[key]}/click`, {});
+            if (!(r && r.value && r.value.error)) return true;
+        }
+        const focused = await js(`${ROOT} const __el = (${selector}); if (__el) { if (__el.scrollIntoView) __el.scrollIntoView({block:'center'}); if (__el.focus) __el.focus(); } return !!(__el && s.activeElement === __el);`);
+        if (!focused) return false;
+        await wd('POST', `/session/${sid}/actions`, { actions: [{ type: 'key', id: 'kb', actions: [
+            { type: 'keyDown', value: '\uE007' }, { type: 'keyUp', value: '\uE007' }] }] });
+        return true;
+    };
+    return { wd, js, wait, goto, sid, finish, nclick };
 }
 
 // Consent, point the extension at our relay alone, and give it a key to sign with. Five suites
@@ -500,7 +526,33 @@ async function startFirefox({ cdPort, prefix, onClose }) {
         fs.rmSync(W, { recursive: true, force: true });
         process.exit(code);
     };
-    return { wd, js, wait, goto, sid, finish };
+    // Click a shadow-DOM control the way a person does: focus it, then press Enter, which the
+    // browser turns into a trusted click (isTrusted:true). WebDriver's element/click is unreliable
+    // inside a shadow root — its obscuration check lands on the shadow host and reports the inner
+    // control "not interactable" — so this is how a suite works a guarded control for real. Pass a
+    // JS *expression*, evaluated with the shadow root `s` in scope, that yields the element:
+    //   nclick("s.getElementById('send')")
+    const nclick = async selector => {
+        // Prefer WebDriver's atomic element click: one round trip, so a re-render cannot slip in
+        // between focusing a control and activating it (which detaches it and drops the keypress —
+        // seen on the name field, which repaints often). It is unreliable on some shadow controls
+        // ("not interactable"), so on failure fall back to focus + a real Enter; the browser turns
+        // both into trusted clicks (isTrusted:true), which is what the panel now requires.
+        // Scroll it into view first: an element the driver considers off-screen is where the atomic
+        // click gives up and falls through to the slower path.
+        const el = await js(`${ROOT} const __e = (${selector}); if (__e && __e.scrollIntoView) __e.scrollIntoView({block:'center'}); return __e || null;`);
+        const key = el && typeof el === 'object' && Object.keys(el).find(k => k.startsWith('element-'));
+        if (key) {
+            const r = await wd('POST', `/session/${sid}/element/${el[key]}/click`, {});
+            if (!(r && r.value && r.value.error)) return true;
+        }
+        const focused = await js(`${ROOT} const __el = (${selector}); if (__el) { if (__el.scrollIntoView) __el.scrollIntoView({block:'center'}); if (__el.focus) __el.focus(); } return !!(__el && s.activeElement === __el);`);
+        if (!focused) return false;
+        await wd('POST', `/session/${sid}/actions`, { actions: [{ type: 'key', id: 'kb', actions: [
+            { type: 'keyDown', value: '\uE007' }, { type: 'keyUp', value: '\uE007' }] }] });
+        return true;
+    };
+    return { wd, js, wait, goto, sid, finish, nclick };
 }
 
 // Put the extension in the state a suite needs. Consent and the relay list go in through storage —
@@ -514,27 +566,42 @@ async function startFirefox({ cdPort, prefix, onClose }) {
 //
 // The key import stays a click: it is not one of the guarded controls, and driving it exercises
 // the bech32 path a seeded hex key would skip.
+export function nsecToHex(nsec) {
+    // Minimal bech32 decode, enough for an nsec the suite just produced with toBech32.
+    const CH = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+    const data = nsec.slice(nsec.lastIndexOf('1') + 1).toLowerCase();
+    let bits = 0, val = 0; const out = [];
+    for (const c of data.slice(0, -6)) { val = (val << 5) | CH.indexOf(c); bits += 5; while (bits >= 8) { bits -= 8; out.push((val >> bits) & 0xff); } }
+    return Buffer.from(out).toString('hex');
+}
+
+// Put the extension in the state a suite needs, entirely through storage. Consent, the relay list,
+// and the stored key all go in as storage values, which the content script reads at init — so the
+// caller reloads after this and the panel comes up already configured. Nothing is clicked: the
+// consent gate, the relay controls and, since the key-theft fix, the key import all refuse an
+// untrusted (scripted) click, and a suite's clicks are untrusted by definition. Where a suite must
+// exercise one of those controls for real, it drives it with `nclick` (a WebDriver click, which the
+// browser reports as trusted) rather than page script.
+//
+// widepublish is off here, or every suite that publishes would also fire the event at the three
+// real EXTRA_PUBLISH_RELAYS. A test that touches the public network is not a test.
 export function configureScript({ relayUrl, nsec }) {
     const urls = Array.isArray(relayUrl) ? relayUrl : [relayUrl];
-    // Order matters more than it looks. Importing a key is what sends the profile fetch, and that
-    // fetch goes to whatever relay list is live at that moment — so doing it in the same tick as
-    // the seed asks the *default* relays about a profile only the suite's own relay has, and the
-    // panel correctly reports that nobody published a name. Everything after the seed therefore
-    // waits for the content script to acknowledge it.
-    return `
+    const values = { nostrcomments_consent: true, nostrcomments_relays: urls, nostrcomments_widepublish: false };
+    if (nsec) values.nostrcomments_privkey = nsecToHex(nsec);
+    // Seed storage, then (after the content script acks the write) open the panel and Settings the
+    // way the old click-based version left them, so a suite that does not reload still finds the
+    // controls visible. Opening the panel and the gear are not guarded controls, so a page-script
+    // click still drives them; only the key- and publish-controls now demand a real gesture, which a
+    // suite supplies with `nclick`. A seeded key loads on the reload most suites do next.
+    return `${ROOT}
       window.addEventListener('message', function _ncSeeded(ev) {
           if (!ev.data || ev.data.__ncSeeded !== true) return;
           window.removeEventListener('message', _ncSeeded);
           ${ROOT}
-          s.getElementById('m').style.display='grid';
-          s.getElementById('gear-btn').click();
-          ${nsec ? `s.getElementById('privkey-import').value=${JSON.stringify(nsec)};
-          s.getElementById('privkey-import-btn').click();` : ''}
+          if (s) { const m = s.getElementById('m'); if (m) m.style.display = 'grid';
+                   const g = s.getElementById('gear-btn'); if (g) g.click(); }
       });
-      window.postMessage({__ncSeed:true, values:{
-          nostrcomments_consent: true,
-          nostrcomments_relays: ${JSON.stringify(urls)},
-          nostrcomments_widepublish: false
-      }}, '*');
+      window.postMessage({__ncSeed:true, values:${JSON.stringify(values)}}, '*');
       return 1;`;
 }

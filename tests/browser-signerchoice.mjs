@@ -33,7 +33,7 @@ const STORED = newKey(), STORED_PUB = _secp.pubKey(STORED);
 const SIGNER = newKey(), SIGNER_PUB = _secp.pubKey(SIGNER);
 const npubOf = p => toBech32('npub', p);
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncsc-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -66,7 +66,10 @@ await goto(site.url);                 // a reload, so the signer is there from t
 await wait(2500);
 await putSigner();
 await wait(8000);                     // the availability check runs on the auto-connect interval
-await js(`${ROOT} s.getElementById('m').style.display='grid'; s.getElementById('gear-btn').click(); return 1;`);
+await js(`${ROOT} s.getElementById('m').style.display='grid';
+  // Open Settings if it is closed rather than toggling: a real click needs the control on screen.
+  if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click();
+  return 1;`);
 await wait(1500);
 
 const lit = () => js(`${ROOT}
@@ -96,9 +99,9 @@ const identity = () => js(`${ROOT} return JSON.stringify({
   status: s.getElementById('status').textContent,
   npub: s.getElementById('identity-npub').textContent });`);
 const SIGNER_BUTTON = 'alby / (nos2x|attest)';
-const press = label => js(`${ROOT}
-  const b = [...s.querySelectorAll('button')].find(x => new RegExp(${JSON.stringify(label)}, 'i').test(x.textContent));
-  if (b) b.click(); return !!b;`);
+// These are guarded controls (choosing which key signs), so a real gesture is required: focus the
+// button and press Enter, which the browser turns into a trusted click.
+const press = label => nclick(`[...s.querySelectorAll('button')].find(x => new RegExp(${JSON.stringify(label)}, 'i').test(x.textContent))`);
 // Install a signer holding a different identity, the way Alby or nos2x would.
 const installSigner = () => js(`window.nostr = {
     getPublicKey: async () => ${JSON.stringify(SIGNER_PUB)},
@@ -121,7 +124,10 @@ ok('and after a reload with a signer installed it is still the stored key',
 ok('the panel does not silently become the signer', !id.status.includes(npubOf(SIGNER_PUB).slice(0, 10)), id.status);
 
 console.log('\n=== choosing the signer, and meaning that too ===');
-await js(`${ROOT} s.getElementById('gear-btn').click(); return 1;`);
+await js(`${ROOT} s.getElementById('m').style.display='grid';
+  // Open Settings if it is closed rather than toggling: a real click needs the control on screen.
+  if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click();
+  return 1;`);
 await wait(400);
 // The button names the signer this build recommends: "Alby / nos2x" on Chrome, "Alby / Attest" on Firefox
 // since 23.2.1 (parity.test.mjs pins which). Matching only the Chrome wording made every check after
@@ -137,23 +143,27 @@ ok('and a stored key does not take it back on reload', id.npub === npubOf(SIGNER
    { got: id.npub, wanted: npubOf(SIGNER_PUB) });
 
 console.log('\n=== the stored key is never destroyed by switching ===');
-await js(`${ROOT} s.getElementById('gear-btn').click(); return 1;`);
+await js(`${ROOT} s.getElementById('m').style.display='grid';
+  // Open Settings if it is closed rather than toggling: a real click needs the control on screen.
+  if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click();
+  return 1;`);
 await wait(400);
 await press('key stored here');
 await wait(1500);
 id = JSON.parse(await identity());
 ok('switching back returns the original identity', id.npub === npubOf(STORED_PUB), id);
-const still = await js(`${ROOT}
-  s.getElementById('privkey-reveal').click();
-  const v = s.getElementById('privkey-display').value;
-  s.getElementById('privkey-reveal').click();
-  return v;`);
+await nclick("s.getElementById('privkey-reveal')");
+const still = await js(`${ROOT} return s.getElementById('privkey-display').value;`);
+await nclick("s.getElementById('privkey-reveal')");
 ok('and the key itself was there the whole time', still === toBech32('nsec', STORED), still ? 'a value' : '(empty)');
 
 console.log('\n=== a signer that arrives late is still picked up ===');
 // The auto-connect loop used to stop for good the first time the check came back empty, so a
 // signer that finished injecting a moment later was never seen again on that page.
-await js(`${ROOT} s.getElementById('gear-btn').click(); return 1;`);
+await js(`${ROOT} s.getElementById('m').style.display='grid';
+  // Open Settings if it is closed rather than toggling: a real click needs the control on screen.
+  if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click();
+  return 1;`);
 await wait(300);
 await press(SIGNER_BUTTON);
 await wait(800);

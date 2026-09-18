@@ -47,7 +47,7 @@ stored.push(await sign(THEM, {
     content: 'Somebody else wrote this one.',
 }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncshare-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -83,7 +83,7 @@ ok('somebody else\'s does not', !where.some(c => !c.own && c.share), where);
 
 console.log('\n=== one click arms, it does not post ===');
 published.length = 0;
-await js(`${ROOT} s.getElementById('list').querySelector('.share-btn').click(); return 1;`);
+await nclick("s.getElementById('list').querySelector('.share-btn')");
 await wait(900);
 const armed = await js(`${ROOT} const b = s.getElementById('list').querySelector('.share-btn'); return JSON.stringify({ armed: b.classList.contains('armed'), text: b.textContent });`);
 ok('the button arms itself', JSON.parse(armed).armed === true, armed);
@@ -92,7 +92,7 @@ ok('and asks before doing anything', /feed\?/i.test(JSON.parse(armed).text), arm
 ok('nothing was published yet', published.length === 0, published.map(e => e.kind));
 
 console.log('\n=== the second click posts a note ===');
-await js(`${ROOT} s.getElementById('list').querySelector('.share-btn').click(); return 1;`);
+await nclick("s.getElementById('list').querySelector('.share-btn')");
 await wait(2500);
 const notes = published.filter(e => e.kind === 1);
 ok('exactly one note was published', notes.length === 1, published.map(e => e.kind));

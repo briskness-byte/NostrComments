@@ -61,7 +61,7 @@ function deliver(ev, { notificationsFirst = true } = {}) {
     }, 500));
 }
 
-const { wd, js, wait, goto, sid, finish } = await startBrowser({
+const { wd, js, wait, goto, sid, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncnotif-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -134,8 +134,8 @@ console.log('\n=== after switching identity ===');
 await js(`${ROOT}
   s.getElementById('gear-btn').click();
   s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec', SECOND))};
-  s.getElementById('privkey-import-btn').click();
   return 1;`);
+await nclick("s.getElementById('privkey-import-btn')");
 await wait(1000);
 // Importing over a stored key asks first; this is the same dialog browser-identity.mjs covers.
 await js(`${ROOT}

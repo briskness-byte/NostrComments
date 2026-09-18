@@ -53,7 +53,7 @@ for (let i = 0; i < 3; i++)
         content: `Buy my thing number ${i} ${IMG}/shot${i}.png`,
     }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncempty-',
     onClose: () => { site.close(); relay.close(); imgHost.close(); },
 });
@@ -112,11 +112,13 @@ ok('clearing the box brings the thread back', (await js(`${ROOT} return s.getEle
 
 console.log('\n=== muting the only author does not mean the page is empty ===');
 await js(`${ROOT}
-  s.getElementById('gear-btn').click();
-  const i = s.getElementById('muteword-input');
-  i.value = 'Buy my thing';
-  s.getElementById('muteword-add-btn').click();
-  s.getElementById('settings-close').click(); return 1;`);
+  // Open Settings if closed rather than toggling: a real click needs the control on screen.
+  if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click();
+  s.getElementById('muteword-input').value = 'Buy my thing';
+  return 1;`);
+// Muting a word is guarded now — a page could otherwise hide every comment that names it.
+await nclick("s.getElementById('muteword-add-btn')");
+await js(`${ROOT} s.getElementById('settings-close').click(); return 1;`);
 await wait(1500);
 
 const muted = await emptyText();

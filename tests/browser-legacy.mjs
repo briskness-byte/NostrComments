@@ -48,7 +48,7 @@ const legacyMention = await sign(OTHER, { kind: 1, created_at: now - 100, conten
 const modern = await sign(OTHER, { kind: 1111, created_at: now - 50, content: 'modern comment', tags: [['I', pageUrl], ['K', 'web'], ['i', pageUrl], ['k', 'web']] });
 relay.stored.push(legacyTop, legacyReply, legacyMention, modern);
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'nclegacy-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -130,7 +130,8 @@ const replyToNote = async (idx, text) => {
       label: s.getElementById('reply-to-label').textContent,
       hint: s.getElementById('reply-hint').textContent,
       hintShown: getComputedStyle(s.getElementById('reply-hint')).display !== 'none' });`));
-    await js(`${ROOT} s.getElementById('input').value = ${JSON.stringify(text)}; s.getElementById('send').click(); return 1;`);
+    await js(`${ROOT} s.getElementById('input').value = ${JSON.stringify(text)}; return 1;`);
+    await nclick("s.getElementById('send')");
     await wait(2500);
     return { strip, ev: published.find(e => e.kind === 1 || e.kind === 1111) };
 };
@@ -209,7 +210,7 @@ ok('and no r tag of the old shape', !(r.ev?.tags || []).some(t => t[0] === 'r'),
 // pointed at a different comment — which is how this read as a broken vote rather than a stale test.
 const voteIdx = JSON.parse(await rows()).findIndex(x => x.text.includes('legacy top level'));
 published.length = 0;
-await js(`${ROOT} s.getElementById('list').querySelectorAll('.c')[${voteIdx}].querySelector('button.v').click(); return 1;`);
+await nclick(`s.getElementById('list').querySelectorAll('.c')[${voteIdx}].querySelector('button.v')`);
 await wait(2000);
 const vote = published.find(e => e.kind === 7);
 ok('a legacy note can be upvoted', !!vote, published.map(e => e.kind));
@@ -221,9 +222,8 @@ ok('and the button is marked as mine', await js(`${ROOT}
 
 console.log('\n=== nothing writes kind 1 again ===');
 published.length = 0;
-await js(`${ROOT}
-  s.getElementById('input').value = 'a brand new comment';
-  s.getElementById('send').click(); return 1;`);
+await js(`${ROOT} s.getElementById('input').value = 'a brand new comment'; return 1;`);
+await nclick("s.getElementById('send')");
 await wait(2500);
 const posted = published.filter(e => e.kind === 1 || e.kind === 1111);
 ok('a new comment is published', posted.length === 1, published.map(e => e.kind));

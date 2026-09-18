@@ -31,7 +31,7 @@ const MINE_NSEC = toBech32('nsec', MINE);
 const OTHER = newKey();                     // somebody else's key: still must never be published
 const SOMEONES_PUBKEY = _secp.pubKey(OTHER); // 64 hex, and perfectly ordinary to quote
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'nckp-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -64,7 +64,8 @@ const postComment = async text => {
       const i = s.getElementById('input');
       i.value = ${JSON.stringify(text)};
       i.dispatchEvent(new Event('input', {bubbles:true}));
-      s.getElementById('send').click(); return 1;`);
+      return 1;`);
+await nclick("s.getElementById('send')");
     await wait(3500);
 };
 const publishedText = () => relay.published.filter(e => e.kind === 1111 || e.kind === 1).map(e => e.content);
@@ -116,7 +117,8 @@ await js(`${ROOT}
   s.getElementById('m').style.display='grid';
   s.getElementById('gear-btn').click();
   s.getElementById('setname-input').value = ${JSON.stringify(MINE_NSEC)};
-  s.getElementById('setname-btn').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('setname-btn')");
 await wait(4000);
 ok('no profile is published', relay.published.filter(e => e.kind === 0).length === 0,
    relay.published.filter(e => e.kind === 0).map(e => e.content));
@@ -126,7 +128,8 @@ ok('and it says why', /looks like a private key/i.test(await msg()), await msg()
 console.log('\n=== a private key is not kept as a muted word ===');
 await js(`${ROOT}
   s.getElementById('muteword-input').value = ${JSON.stringify(MINE_NSEC)};
-  s.getElementById('muteword-add-btn').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('muteword-add-btn')");
 await wait(1500);
 const muted = await js(`${ROOT}
   return JSON.stringify([...s.getElementById('muteword-list').querySelectorAll('*')].map(e => e.textContent).join(' '));`);
@@ -135,7 +138,8 @@ ok('and it says why', /looks like a private key/i.test(await msg()), await msg()
 
 await js(`${ROOT}
   s.getElementById('muteword-input').value = 'spam';
-  s.getElementById('muteword-add-btn').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('muteword-add-btn')");
 await wait(1200);
 ok('an ordinary word is still muted', /muted/i.test(await msg()), await msg());
 

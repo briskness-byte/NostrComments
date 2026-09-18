@@ -43,7 +43,11 @@ ok('extension injects into the page', injected === true, injected);
 if (!injected) { console.log('\nNothing to test; aborting.'); await finish(1); }
 
 await js(configureScript({ relayUrl: `wss://127.0.0.1:${RELAY_PORT}`, nsec: toBech32('nsec', ME) }));
-await wait(1500);
+await wait(800);
+await goto(site.url);          // the key is seeded into storage; the reload is what loads it
+await wait(6000);
+await js(`${ROOT} s.getElementById('m').style.display='grid'; return 1;`);
+await wait(1000);
 await js(`${ROOT}
   const o = [...s.getElementById('p').children].find(c => c.style.zIndex === '28' && getComputedStyle(c).display !== 'none');
   if (o) [...o.querySelectorAll('button')].find(b => /not now/i.test(b.textContent))?.click();

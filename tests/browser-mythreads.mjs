@@ -51,7 +51,7 @@ stored.push(await sign(THEM, {
     content: 'Not yours.',
 }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncmt-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -106,7 +106,7 @@ console.log('\n=== rotating the key empties it ===');
 // Reported from real use: after generating a new identity the list went on showing the previous
 // one's pages until the page was reloaded, which reads as the rotation not having happened at all.
 // The list is fetched once per page load behind a latch, and nothing reset that latch.
-await js(`${ROOT} s.getElementById('privkey-rotate').click(); return 1;`);
+await nclick("s.getElementById('privkey-rotate')");
 await wait(800);
 // The confirmation is deliberate and cannot be skipped, so the suite answers it the way a reader
 // would rather than reaching past it.

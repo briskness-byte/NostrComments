@@ -41,7 +41,7 @@ const now = Math.floor(Date.now() / 1000);
 relay.stored.push(await sign(A, { kind: 0, created_at: now - 600, content: JSON.stringify(A_PROFILE), tags: [] }));
 relay.stored.push(await sign(B, { kind: 0, created_at: now - 600, content: JSON.stringify(B_PROFILE), tags: [] }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncsns-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -92,7 +92,8 @@ console.log('\n=== the signer answers as somebody else ===');
 relay.published.length = 0;
 await js(`${ROOT}
   s.getElementById('setname-input').value = 'Renamed While Switching';
-  s.getElementById('setname-btn').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('setname-btn')");
 
 // Wait for the event to reach the signer, then sign it as B — the account switch.
 let pending = null;
@@ -128,7 +129,8 @@ console.log('\n=== the same signer, staying on its account, still works ===');
 relay.published.length = 0;
 await js(`${ROOT}
   s.getElementById('setname-input').value = 'Renamed Properly';
-  s.getElementById('setname-btn').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('setname-btn')");
 pending = null;
 for (let i = 0; i < 60 && !pending; i++) {
     await wait(500);
@@ -154,7 +156,8 @@ console.log('\n=== a signer approval that takes its time still counts ===');
 relay.published.length = 0;
 await js(`${ROOT}
   s.getElementById('setname-input').value = 'Renamed Slowly';
-  s.getElementById('setname-btn').click(); return 1;`);
+  return 1;`);
+await nclick("s.getElementById('setname-btn')");
 pending = null;
 for (let i = 0; i < 60 && !pending; i++) {
     await wait(500);
