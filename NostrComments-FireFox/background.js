@@ -98,6 +98,7 @@ function socket(url) {
 }
 
 function dial(url, r) {
+    r.lastAuth = null;                 // a new connection gets a new challenge
     try { r.ws = new WebSocket(url); }
     catch (e) {
         // Nothing is listening yet — the handle that asked for this socket is registered by the
@@ -170,6 +171,13 @@ function deliver(r, frame) {
         return;
     }
 
+    // NIP-42's AUTH belongs to the connection, not to a subscription, and the relay sends it the
+    // moment the socket opens — before a handle has necessarily asked for anything. Broadcasting it
+    // only to whoever happens to be attached at that instant loses it, and a challenge that is lost
+    // can never be answered: the content script sees the auth-required refusal with no challenge to
+    // sign, so a relay that demands identification simply never works. Keep the last one and give it
+    // to handles that arrive afterwards as well.
+    if (kind === 'AUTH') r.lastAuth = frame.slice();
     each(r, h => post(h.port, { t: 'frame', sid: h.sid, frame }));
 }
 
@@ -219,7 +227,10 @@ function translate(port, sid, frame) {
         const wire = forget(port, sid, frame[1]);
         return wire ? ['CLOSE', wire] : null;
     }
-    if (kind === 'EVENT' && frame[1] && typeof frame[1].id === 'string') {
+    // AUTH counts as a publish here: a relay answers NIP-42 with an OK naming the auth event, and
+    // that OK is what tells the panel it may ask for the thread again. Without an owner recorded it
+    // has none to go to and is dropped, so the reader authenticates and then waits forever.
+    if ((kind === 'EVENT' || kind === 'AUTH') && frame[1] && typeof frame[1].id === 'string') {
         if (pubOwner.size >= PUB_MAX) pubOwner.delete(pubOwner.keys().next().value);
         // Keyed by handle *and* event id, not by event id alone. Publishing sends one event to
         // every relay at the same time, so several handles carry the same id — and keying by id
@@ -268,6 +279,8 @@ api.runtime.onConnect.addListener(port => {
             cancelClose(r);
             if (r.failed) return post(port, { t: 'error', sid: msg.sid });
             if (r.ready) post(port, { t: 'open', sid: msg.sid });
+            // Already challenged on this socket: replay it, or this handle could never authenticate.
+            if (r.lastAuth) post(port, { t: 'frame', sid: msg.sid, frame: r.lastAuth });
             return;
         }
         if (msg.t === 'send') {

@@ -44,6 +44,14 @@ export async function run() {
     if (Object.values(srcs).some(v => v === null)) return { name: 'background relay pipe', pass: p, fail: f };
 
     ok('it is identical in both extension builds', srcs.chrome === srcs.firefox);
+
+    // The challenge belongs to the connection, not to a subscription, and a relay sends it the moment
+    // the socket opens — before a handle has necessarily asked for anything. Broadcast only to whoever
+    // is attached at that instant it is lost, and a lost challenge can never be answered: the panel
+    // sees the auth-required refusal with no challenge to sign.
+    ok('the last AUTH challenge is kept on the socket', /r\.lastAuth = frame/.test(srcs.chrome));
+    ok('and replayed to a handle that attaches afterwards', /if \(r\.lastAuth\) post\(port/.test(srcs.chrome));
+    ok('a fresh dial clears the old challenge', /r\.lastAuth = null/.test(srcs.chrome));
     ok('it picks the API object at runtime rather than hard-coding one',
        srcs.chrome.includes("typeof browser !== 'undefined' ? browser : chrome"));
 
@@ -117,6 +125,15 @@ export async function run() {
         ok('and two relays publishing the same event keep separate owners',
            maps.pubOwner.get('abc123|' + B._ncId + ':' + S)?.port === B &&
            maps.pubOwner.get('abc123|' + A._ncId + ':' + S)?.port === A);
+        // NIP-42. A relay that demands identification answers the AUTH with an OK naming the auth
+        // event, and that OK is the signal to ask for the thread again. It is not a publish, so it
+        // had no owner recorded and was dropped on the way back: the reader authenticated and then
+        // waited forever on a thread that never arrived. Measured against a relay demanding NIP-42
+        // in tests/browser-auth.mjs; this pins the routing that makes it possible.
+        translate(A, S, ['AUTH', { id: 'auth42', kind: 22242 }]);
+        ok('an AUTH is owned like a publish, so the relay\'s answer can be routed back',
+           maps.pubOwner.get('auth42|' + A._ncId + ':' + S)?.port === A);
+
         // The event itself must not be rewritten on the way out: the id is signed over, so any
         // change to it invalidates the signature.
         const ev = { id: 'deadbeef', kind: 1, content: 'x' };
