@@ -85,9 +85,10 @@ open on their own, and are described as such:
 - **Identifying yourself to a relay (NIP-42):** some relays refuse to serve or accept anything
   until a client proves which key it is. When one of yours does, the extension signs a short
   event naming that relay and its challenge, which tells the relay your public key. This happens
-  only in response to an actual refusal — never because a relay merely offered it — so relays
-  that do not ask never learn who is reading. It needs a connected identity; without one the
-  refusal is simply reported.
+  only in response to an actual refusal — never because a relay merely offered it. But a relay
+  decides for itself when to refuse, so a relay that wants to know who is reading can simply ask:
+  every relay on your list is one you are trusting with your public key to that degree. It needs a
+  connected identity; without one the refusal is simply reported.
 - **Verified names (off by default):** a profile can claim a `name@domain`. If you switch
   **Verified names** on in Settings, the extension asks that domain whether the name really
   belongs to that key, once per commenter. That domain then knows somebody is reading a page

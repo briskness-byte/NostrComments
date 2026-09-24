@@ -2,7 +2,13 @@
 
 `NostrComments.js` is the last userscript release, byte-identical to tag `v23.2.0` and to the copy
 on Greasyfork. It still works, but it is no longer updated: no new features and no fixes, security
-fixes included. The browser extensions are where NostrComments continues:
+fixes included.
+
+**Please do not keep using it.** It predates the protections added in extension version 23.3.1: on a
+site you visit, a script in that site's own page can operate the userscript's panel, including reading
+the private key it stores and posting as you. The extensions have that closed. Move over using the
+steps below, and delete the userscript afterwards. The browser extensions are where NostrComments
+continues:
 
 - Firefox: https://addons.mozilla.org/firefox/addon/nostrcomments/
 - Chrome, Brave, Edge: https://chromewebstore.google.com/detail/nostrcomments/ebmgdpicceaencegknannfaljhbfgido

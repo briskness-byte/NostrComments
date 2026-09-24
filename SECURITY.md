@@ -71,7 +71,9 @@ Please do not report these as new; they are documented decisions, with the reaso
   `Element.prototype.attachShadow`, and it would cut off the test suites, which reach the panel
   exactly the way an attacker would. The rule adopted instead is that nothing sensitive is left in
   the DOM — the private key is held in a variable, and the identity strings and Settings lists are
-  written only while the panel is open and cleared when it closes.
+  written only while the panel is open and cleared when it closes. "Open" means opened by a real
+  click on the button or from the toolbar: a page that clicks the button, or writes the panel's own
+  style, gets an empty panel. Once the reader has opened it, what is on screen is readable by the page.
 - **A page can read what you type into the comment box, if it sets out to.** Two ways, both measured
   rather than assumed: a `keydown` listener registered in the capture phase sees every key before
   anything in the shadow tree does, and the value of the box can be read straight out of the open
