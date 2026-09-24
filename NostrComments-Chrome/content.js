@@ -219,24 +219,43 @@
         // check that ev.id === sha256(serialization) AND the Schnorr signature is valid.
         // Verification is pure-JS and expensive, so results are cached per id and the work is
         // serialized with a yield between events to keep the tab responsive under a burst.
-        const _verifyCache = new Map(); // id -> boolean | Promise<boolean>
+        // A signature covers an event's serialisation, not its shape: `content` can be a number and
+        // `tags` a list of nulls and the event still verifies. Everything downstream reads these as
+        // a string and an array of arrays, and one that is not throws inside render() — after which
+        // no comment on the page is drawn for anybody. So shape is checked before anything else, and
+        // an event that fails it is treated as if it had never arrived.
+        function wellFormed(ev) {
+            return !!ev && typeof ev === 'object'
+                && typeof ev.id === 'string' && typeof ev.pubkey === 'string'
+                && Number.isInteger(ev.kind) && Number.isInteger(ev.created_at)
+                && typeof ev.content === 'string' && ev.content.length <= 100000
+                && Array.isArray(ev.tags) && ev.tags.length <= 2000
+                && ev.tags.every(t => Array.isArray(t) && t.length <= 20 && t.every(x => typeof x === 'string'));
+        }
+        // The id is a claim about the content, so it is checked against the content every time — one
+        // SHA-256, which is cheap. Only the signature check is remembered, and under the id, key and
+        // signature together: a cache on the id alone answered "valid" for any later event that merely
+        // repeated the id of one that had been, and "invalid" for the genuine event after a forged
+        // copy had been seen first.
+        const _verifyCache = new Map(); // id|pubkey|sig -> boolean | Promise<boolean>
         async function verifyEvent(ev) {
-            if (!ev || typeof ev.id !== 'string' || !/^[0-9a-f]{64}$/i.test(ev.id)) return false;
-            if (typeof ev.pubkey !== 'string' || !/^[0-9a-f]{64}$/i.test(ev.pubkey)) return false;
+            if (!wellFormed(ev)) return false;
+            if (!/^[0-9a-f]{64}$/i.test(ev.id) || !/^[0-9a-f]{64}$/i.test(ev.pubkey)) return false;
             if (typeof ev.sig !== 'string' || !/^[0-9a-f]{128}$/i.test(ev.sig)) return false;
-            const hit = _verifyCache.get(ev.id);
+            let idBytes;
+            try {
+                const serial = JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
+                idBytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(serial)));
+                if (_secp.b2h(idBytes) !== ev.id.toLowerCase()) return false;
+            } catch(_) { return false; }
+            const key = ev.id + '|' + ev.pubkey + '|' + ev.sig;
+            const hit = _verifyCache.get(key);
             if (hit !== undefined) return hit;
-            const pr = (async () => {
-                try {
-                    const serial = JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
-                    const idBytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(serial)));
-                    if (_secp.b2h(idBytes) !== ev.id.toLowerCase()) return false;
-                    return await _secp.verify(ev.pubkey, idBytes, ev.sig);
-                } catch(_) { return false; }
-            })();
-            _verifyCache.set(ev.id, pr);
+            if (_verifyCache.size > 5000) _verifyCache.clear();
+            const pr = (async () => { try { return await _secp.verify(ev.pubkey, idBytes, ev.sig); } catch(_) { return false; } })();
+            _verifyCache.set(key, pr);
             const ok = await pr;
-            _verifyCache.set(ev.id, ok);
+            _verifyCache.set(key, ok);
             return ok;
         }
         // Serialized verification queue — one event at a time, yielding after each so a flood of
@@ -248,12 +267,16 @@
         // whichever socket delivered it first used to mark it seen for the other, and the thread
         // then skipped it entirely: the badge counted a reply that never appeared. The thread's set
         // is also cleared on every page load, which a session-long notification sub must not be.
+        //
+        // An id goes into `seen` when an event carrying it has *passed*, never before. Marking it on
+        // arrival meant a forged copy — same id, other content — that reached us first used the id up,
+        // and the genuine copy from every honest relay was then skipped as already seen.
         function queueVerify(ev, onValid, seen = _seenEv) {
-            if (!ev || typeof ev.id !== 'string' || seen.has(ev.id)) return;
-            seen.add(ev.id);
+            if (!wellFormed(ev) || seen.has(ev.id)) return;
             _vq = _vq.then(async () => {
+                if (seen.has(ev.id)) return;          // another copy passed while this one waited
                 const ok = await verifyEvent(ev);
-                if (ok) { try { onValid(); } catch(_) {} }
+                if (ok && !seen.has(ev.id)) { seen.add(ev.id); try { onValid(); } catch(_) {} }
                 await new Promise(r => setTimeout(r, 0));
             });
         }
@@ -2223,6 +2246,7 @@
             _threadsAsked = true;
             box.textContent = 'Looking\u2026';
             const seen = new Map();   // page url -> newest created_at
+            const mtSeen = new Set();
             let done = 0;
             const paint = () => {
                 box.textContent = '';
@@ -2237,9 +2261,9 @@
             };
             RELAYS.forEach(r => {
                 let ws;
-                try { ws = ncSocket(r); } catch (_) { if (++done === RELAYS.length) paint(); return; }
+                try { ws = ncSocket(r); } catch (_) { if (++done === RELAYS.length) _vq.then(paint); return; }
                 const qid = 'mt' + Math.random().toString(36).slice(2, 6);
-                const stop = () => { try { ws.close(); } catch (_) {} if (++done === RELAYS.length) paint(); };
+                const stop = () => { try { ws.close(); } catch (_) {} if (++done === RELAYS.length) _vq.then(paint); };
                 const t = setTimeout(stop, 8000);
                 ws.onopen = () => ws.send(JSON.stringify(["REQ", qid, {kinds:[COMMENT_KIND], authors:[myPub], limit: 50}]));
                 ws.onmessage = m => {
@@ -2248,10 +2272,12 @@
                     const [type, , ev] = parsed;
                     if (type === 'EOSE') { clearTimeout(t); stop(); return; }
                     if (type !== 'EVENT' || ev?.kind !== COMMENT_KIND || ev.pubkey !== myPub) return;
-                    const tag = (ev.tags || []).find(x => x[0] === 'I');
-                    const url = tag && typeof tag[1] === 'string' ? tag[1] : '';
-                    if (!url) return;
-                    if (!seen.has(url) || seen.get(url) < ev.created_at) seen.set(url, ev.created_at);
+                    queueVerify(ev, () => {
+                        const tag = ev.tags.find(x => x[0] === 'I');
+                        const url = tag && typeof tag[1] === 'string' ? tag[1] : '';
+                        if (!url) return;
+                        if (!seen.has(url) || seen.get(url) < ev.created_at) seen.set(url, ev.created_at);
+                    }, mtSeen);
                 };
                 ws.onerror = () => { clearTimeout(t); stop(); };
             });
@@ -3108,7 +3134,11 @@
         function lookupProfile(pubkey, ms = 6000) {
             return new Promise(resolve => {
                 let best = null, answered = 0, open = RELAYS.length, done = false;
-                const finish = () => { if (!done) { done = true; resolve({ event: best, answered }); } };
+                // Whatever is found here is merged into a profile published under the reader's own
+                // key, so it has to have been signed by that key. Nothing else stops a relay writing
+                // fields — a lightning address, say — into somebody's profile through this path.
+                const checking = [];
+                const finish = () => { if (!done) { done = true; Promise.all(checking).then(() => resolve({ event: best, answered })); } };
                 const t = setTimeout(finish, ms);
                 if (!RELAYS.length) return finish();
                 RELAYS.forEach(r => {
@@ -3119,7 +3149,8 @@
                     ws.onmessage = m => {
                         let p; try { p = JSON.parse(m.data); } catch(e) { return; }
                         if (p[0] === 'EVENT' && p[2]?.kind === 0 && p[2].pubkey === pubkey) {
-                            if (!best || p[2].created_at > best.created_at) best = p[2];
+                            const cand = p[2];
+                            checking.push(verifyEvent(cand).then(good => { if (good && (!best || cand.created_at > best.created_at)) best = cand; }));
                         } else if (p[0] === 'EOSE' || p[0] === 'CLOSED') {
                             if (!replied) { replied = true; answered++; }
                             shut();
@@ -4420,7 +4451,7 @@
                     if (type !== 'EVENT') return;
                     setRelayState(r, relayState.get(r)?.state === 'answered' ? 'answered' : 'connecting', true);
                     const ev = parsed[2];
-                    if (!ev) return;
+                    if (!wellFormed(ev)) return;
                     if (typeof ev.pubkey !== 'string' || !/^[0-9a-f]{64}$/i.test(ev.pubkey)) return;
                     if (typeof ev.id !== 'string' || !/^[0-9a-f]{64}$/i.test(ev.id)) return;
                     if (ev.kind === COMMENT_KIND || ev.kind === LEGACY_KIND) {
