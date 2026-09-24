@@ -74,8 +74,8 @@ await new Promise(r=>setTimeout(r,2800));
 
 // With nothing connected, Connect is the one thing left to do, so it has to be on screen.
 const connectDisplay = () => js(`${ROOT} return getComputedStyle(s.getElementById('connect')).display;`);
+await nclick("s.getElementById('nc-btn')"); await new Promise(r=>setTimeout(r,800));
 const btnBefore = await js(`${ROOT}
-  s.getElementById('m').style.display='grid';
   const o=[...s.getElementById('p').children].find(c=>c.textContent.includes('One quick thing'));
   if(o) o.querySelector('button').click();
   s.getElementById('gear-btn').click();

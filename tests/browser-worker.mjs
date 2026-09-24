@@ -18,7 +18,7 @@
 //
 // Requires: chromium (or Chrome) and chromedriver, or Firefox and geckodriver; openssl; Node 18+.
 import http from 'http';
-import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT, BROWSER } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT, BROWSER, setToggle } from './harness.mjs';
 
 const CD_PORT    = Number(process.env.QA_PORT       || 9600);
 const SITE_PORT  = Number(process.env.QA_SITE_PORT  || 8160);
@@ -105,14 +105,7 @@ const workerIsOn = () => js(`${ROOT}
   const v = t ? t.checked : null;
   s.getElementById('settings-close')?.click();
   return JSON.stringify(v);`);
-const setWorker = want => js(`${ROOT}
-  s.getElementById('m').style.display='grid';
-  s.getElementById('gear-btn').click();
-  const t = s.getElementById('worker-toggle');
-  if (!t) return 'no toggle';
-  if (t.checked !== ${want}) t.click();
-  s.getElementById('settings-close')?.click();
-  return String(t.checked);`);
+const setWorker = async want => { const v = await setToggle({ js, nclick, wait }, 'worker-toggle', want); return v === null ? 'no toggle' : String(v); };
 
 // --- the toggle exists and is on -----------------------------------------------------------------
 // On by default since browser-workerlife.mjs showed the worker surviving five idle minutes on both

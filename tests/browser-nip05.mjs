@@ -15,7 +15,7 @@
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
-import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, makeCert, ROOT, BROWSER } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, makeCert, ROOT, BROWSER, setToggle } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9526);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8088);
@@ -77,7 +77,7 @@ if (BROWSER === 'firefox') {
     process.exit(0);
 }
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     resolverRules: [`MAP ${DOMAIN}:443 127.0.0.1:${WELLKNOWN_PORT}`],
     cdPort: CD_PORT, prefix: 'ncnip05-',
     onClose: () => { site.close(); relay.close(); wellKnown.close(); fs.rmSync(wkCert, { recursive: true, force: true }); },
@@ -112,11 +112,7 @@ ok('the claimed domain was never asked', lookups.length === 0, lookups);
 ok('and no verification mark is shown', v.ticks === 0, v);
 
 console.log('\n=== once switched on ===');
-await js(`${ROOT}
-  s.getElementById('gear-btn').click();
-  s.getElementById('nip05-toggle').click();
-  s.getElementById('gear-btn').click();
-  return 1;`);
+await setToggle({ js, nclick, wait }, 'nip05-toggle', true);
 await wait(3000);
 v = JSON.parse(await view() || '{}');
 ok('the domain is asked', lookups.length >= 1, lookups);
@@ -125,11 +121,7 @@ ok('the mark appears once the domain confirms the key', v.ticks === 1, v);
 
 console.log('\n=== and switched off again ===');
 const seen = lookups.length;
-await js(`${ROOT}
-  s.getElementById('gear-btn').click();
-  s.getElementById('nip05-toggle').click();
-  s.getElementById('gear-btn').click();
-  return 1;`);
+await setToggle({ js, nclick, wait }, 'nip05-toggle', false);
 await wait(2000);
 v = JSON.parse(await view() || '{}');
 ok('the mark goes away again', v.ticks === 0, v);

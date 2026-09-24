@@ -110,7 +110,12 @@
             _reBtn.textContent = '💬';
             _reBtn.onmouseenter = () => _reBtn.style.opacity = '1';
             _reBtn.onmouseleave = () => _reBtn.style.opacity = '0.4';
+            // Its own gesture gate: this button lives outside the panel's shadow root, which does not exist
+            // yet. A page that could click it would switch the extension back on where the reader had
+            // switched it off.
+            let _rg = null;
             _reBtn.onclick = async () => {
+                if (_rg !== _reBtn) return;
                 const _d = await chrome.storage.local.get('nostrcomments_disabled');
                 const arr = (Array.isArray(_d.nostrcomments_disabled) ? _d.nostrcomments_disabled : []).filter(o => o !== location.origin);
                 await chrome.storage.local.set({nostrcomments_disabled: arr});
@@ -125,7 +130,10 @@
             // button, which had missed this one.
             const _reHost = document.createElement('div');
             document.documentElement.appendChild(_reHost);
-            _reHost.attachShadow({mode:'open'}).appendChild(_reBtn);
+            const _rs = _reHost.attachShadow({mode:'open'});
+            _rs.addEventListener('click', e => { _rg = e.isTrusted === true ? e.target : null; }, true);
+            _rs.addEventListener('click', () => { _rg = null; }, false);
+            _rs.appendChild(_reBtn);
             return;
         }
 
@@ -149,7 +157,23 @@
                 if(ax===bx){if(ay!==by)return null;const l=m(3n*ax*ax*inv(2n*ay));const x=m(l*l-2n*ax);return[x,m(l*(ax-x)-ay)];}
                 const l=m((by-ay)*inv(bx-ax));const x=m(l*l-ax-bx);return[x,m(l*(ax-x)-ay)];
             };
-            const pm=(k,Pt)=>{let R=null,Q=Pt;while(k>0n){if(k&1n)R=pa(R,Q);Q=pa(Q,Q);k>>=1n;}return R;};
+            // Scalar multiplication in Jacobian coordinates, which need one inversion at the end rather than
+            // one for every addition. Verifying a signature is the dearest thing this extension does and it
+            // does it for every event in a thread, so the affine version — an extended-Euclid inversion per
+            // step, some eight hundred of them — was twenty milliseconds an event. tests/secp-differential
+            // holds this against a plain affine implementation.
+            const jd=Pt=>{if(!Pt)return null;const[X,Y,Z]=Pt;if(Y===0n)return null;
+                const A=X*X%P,B=Y*Y%P,C=B*B%P,D=m(2n*((X+B)*(X+B)-A-C)),E=3n*A,F=E*E%P,X3=m(F-2n*D);
+                return[X3,m(E*(D-X3)-8n*C),2n*Y*Z%P];};
+            const ja=(p1,p2)=>{if(!p1)return p2;if(!p2)return p1;
+                const[X1,Y1,Z1]=p1,[X2,Y2,Z2]=p2,Z1Z1=Z1*Z1%P,Z2Z2=Z2*Z2%P;
+                const U1=X1*Z2Z2%P,U2=X2*Z1Z1%P,S1=Y1*Z2%P*Z2Z2%P,S2=Y2*Z1%P*Z1Z1%P;
+                if(U1===U2)return S1===S2?jd(p1):null;
+                const H=m(U2-U1),R=m(S2-S1),HH=H*H%P,HHH=H*HH%P,V=U1*HH%P,X3=m(R*R-HHH-2n*V);
+                return[X3,m(R*(V-X3)-S1*HHH),H*Z1%P*Z2%P];};
+            const pm=(k,Pt)=>{if(!Pt)return null;let R=null,Q=[Pt[0],Pt[1],1n];
+                while(k>0n){if(k&1n)R=ja(R,Q);Q=jd(Q);k>>=1n;}
+                if(!R)return null;const zi=inv(R[2]),z2=zi*zi%P;return[R[0]*z2%P,R[1]*z2%P*zi%P];};
             const h2b=h=>{const b=new Uint8Array(h.length/2);for(let i=0;i<h.length;i+=2)b[i/2]=parseInt(h.slice(i,i+2),16);return b;};
             const b2h=b=>Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');
             const n2h=(n,l=32)=>n.toString(16).padStart(l*2,'0');
@@ -353,7 +377,14 @@
         // sidebar work). It closes every in-page path that exists today, including the private-key reveal
         // a page could otherwise open and read straight out of the panel.
         let _gestureTarget = null;
-        const _markGesture = e => { _gestureTarget = e.isTrusted === true ? e.target : null; };
+        // A checkbox reports its new state in `change`, which the browser fires *after* the click has
+        // finished travelling — by which point the target above has been cleared. So the last real
+        // gesture is remembered for a moment as well, and only for handlers that run that way.
+        let _lastGesture = { el: null, at: 0 };
+        const _markGesture = e => {
+            _gestureTarget = e.isTrusted === true ? e.target : null;
+            if (e.isTrusted === true) _lastGesture = { el: e.target, at: performance.now() };
+        };
         const _clearGesture = () => { _gestureTarget = null; };
         s.addEventListener('click', _markGesture, true);
         s.addEventListener('keydown', _markGesture, true);
@@ -361,6 +392,17 @@
         s.addEventListener('keydown', _clearGesture, false);
         // True only while the browser is activating `el` (or something inside it) through a real gesture.
         const byUser = el => !!_gestureTarget && !!el && (el === _gestureTarget || el.contains(_gestureTarget));
+        // For `change` on a checkbox. Same property: the page cannot produce a trusted event, and a
+        // real click on some other control leaves a different element here.
+        const byUserSettled = el => !!_lastGesture.el && !!el && (el === _lastGesture.el || el.contains(_lastGesture.el))
+            && performance.now() - _lastGesture.at < 500;
+        // Whether the panel is on screen because somebody opened it. Its style is the page's to write,
+        // so "the panel is showing" cannot be read off the DOM: a page that sets it, or clicks the
+        // button, would then have everything that is only drawn while the panel is open drawn for it —
+        // the reader's public key, the pages they have commented on, the sites they switched off, their
+        // muted words. This is set only by a real gesture on the button, or by the toolbar, and
+        // cleared whenever the panel stops being visible.
+        let _trusted = false;
 
         // Floating button — in the shadow root, not the page.
         //
@@ -1149,6 +1191,7 @@
             if (lbl) lbl.classList.toggle('backup-warn', !keyBackedUp);
         }
         privkeyBackup.onchange = () => {
+            if (!byUserSettled(privkeyBackup)) { privkeyBackup.checked = keyBackedUp; return; }
             keyBackedUp = privkeyBackup.checked;
             chrome.storage.local.set({nostrcomments_keybackup: keyBackedUp});
             updateBackupUI();
@@ -1225,6 +1268,7 @@
             genBtn.className = 'ob-primary';
             genBtn.textContent = '🔑 Start commenting — generate your key';
             genBtn.onclick = async () => {
+                if (!byUser(genBtn)) return;
                 genBtn.disabled = true;
                 try {
                     // This writes straight to storage with no undo, and it is the only key path
@@ -1301,7 +1345,7 @@
             _obUseLocal.className = 'ob-primary';
             _obUseLocal.textContent = '🔑 Use the key stored here';
             _obUseLocal.style.display = 'none';
-            _obUseLocal.onclick = () => chooseSigner('local');
+            _obUseLocal.onclick = () => { if (byUser(_obUseLocal)) chooseSigner('local'); };
 
             // Offering to install a signer to somebody who already has one — which is what the two
             // links below did unconditionally — sends them to a store page for an extension that is
@@ -1316,7 +1360,7 @@
             _obSigner.className = 'ob-primary';
             _obSigner.textContent = '⚡ Connect your Nostr signer';
             _obSigner.style.display = 'none';
-            _obSigner.onclick = () => chooseSigner('nip07');
+            _obSigner.onclick = () => { if (byUser(_obSigner)) chooseSigner('nip07'); };
 
             _obGen = genBtn;
             _obOr = orLine;
@@ -1329,7 +1373,7 @@
             _obUnlock.className = 'ob-primary';
             _obUnlock.textContent = '🔒 Unlock to comment';
             _obUnlock.style.display = 'none';
-            _obUnlock.onclick = () => unlockLocalWallet();
+            _obUnlock.onclick = () => { if (byUser(_obUnlock)) unlockLocalWallet(); };
             _obPitch = pitch;
             onboard.append(headline, pitch, _obNew, _obUnlock);
         })();
@@ -1628,19 +1672,21 @@
             });
         }
 
-        function closeModal() { modal.style.display = 'none'; try { btn.focus(); } catch(e) {} }
-        btn.onclick = () => {
+        function closeModal() { _trusted = false; modal.style.display = 'none'; try { btn.focus(); } catch(e) {} }
+        function openPanel() {
+            _trusted = true;
             startNetwork();   // asked for by hand: no waiting
             modal.style.display = 'grid';
             if (_pendingKeyOffer) { const k = _pendingKeyOffer; _pendingKeyOffer = null; offerEncryption(k); }
             if (!hasConsent) { consentOverlay.style.display = 'flex'; setTimeout(() => consentOverlay.querySelector('button')?.focus(), 0); return; }
             markPageSeen();
             paintOnboard();
-            if (unreadReplies > 0) paintNotifBanner();
+            if (unreadReplies > 0 || unreadPages.size > 0) paintNotifBanner();
             unreadReplies = 0;
             updateNotifBadge();
             setTimeout(() => s.getElementById('c')?.focus(), 0);
-        };
+        }
+        btn.onclick = () => { if (byUser(btn)) openPanel(); };
         s.getElementById('c').onclick = closeModal;
 
         // The toolbar button, which is the one way in that a page cannot take away. A site can
@@ -1650,7 +1696,7 @@
         chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             if (!msg || msg.t !== 'nc-toggle') return;
             if (!host.isConnected) document.documentElement.appendChild(host);
-            if (modal.style.display === 'grid') closeModal(); else btn.onclick();
+            if (modal.style.display === 'grid') closeModal(); else openPanel();
             // Answered synchronously. An unanswered message leaves the popup waiting on a channel
             // that closes under it, which it would report as a page where nothing can run.
             sendResponse({ ok: true });
@@ -1859,6 +1905,7 @@
         // the panel can at least stop blaming the absence of comments.
         const _relayHost = u => { try { return new URL(u).host; } catch(e) { return ''; } };
         document.addEventListener('securitypolicyviolation', e => {
+            if (!e.isTrusted) return;   // a page can dispatch one of these itself
             if (!/^connect-src/.test(e.effectiveDirective || e.violatedDirective || '')) return;
             const host = _relayHost(e.blockedURI);
             if (!host) return;
@@ -1877,6 +1924,7 @@
 
         function renderRelayList() {
             relayListEl.replaceChildren();
+            if (!panelOpen()) return;
             RELAYS.forEach(r => {
                 const item = document.createElement('div');
                 item.className = 'relay-item';
@@ -1933,6 +1981,7 @@
             const mutedSection = s.getElementById('muted-section');
             mutedSection.style.display = 'block';
             mutedList.replaceChildren();
+            if (!panelOpen()) return;
             if (mutedPubkeys.size === 0) {
                 mutedList.appendChild(emptyNote('Nobody is muted. Use 🚫 Mute under a comment to hide everything from its author.'));
                 return;
@@ -1945,7 +1994,7 @@
                 const unmuteBtn = document.createElement('button');
                 unmuteBtn.className = 'unmute-btn';
                 unmuteBtn.textContent = 'Unmute';
-                unmuteBtn.onclick = () => { mutedPubkeys.delete(pub); saveMuted(); renderMutedList(); render(); showMsg('User unmuted'); };
+                unmuteBtn.onclick = () => { if (!byUser(unmuteBtn)) return; mutedPubkeys.delete(pub); saveMuted(); renderMutedList(); render(); showMsg('User unmuted'); };
                 item.append(label, unmuteBtn);
                 mutedList.appendChild(item);
             });
@@ -1958,6 +2007,7 @@
             const arr = Array.isArray(_d.nostrcomments_disabled) ? _d.nostrcomments_disabled : [];
             sectionEl.style.display = 'block';
             listEl.replaceChildren();
+            if (!panelOpen()) return;
             if (arr.length === 0) {
                 listEl.appendChild(emptyNote('NostrComments is switched on everywhere. "Disable on this site" below adds one here.'));
                 return;
@@ -1972,6 +2022,7 @@
                 enableBtn.type = 'button';
                 enableBtn.textContent = 'Enable';
                 enableBtn.onclick = async () => {
+                    if (!byUser(enableBtn)) return;
                     const _c = await chrome.storage.local.get('nostrcomments_disabled');
                     const next = (Array.isArray(_c.nostrcomments_disabled) ? _c.nostrcomments_disabled : []).filter(o => o !== origin);
                     await chrome.storage.local.set({nostrcomments_disabled: next});
@@ -2025,10 +2076,11 @@
         // dull while it is the default one — somebody running their own relay has their domain in
         // there.
         function clearSettingsDom() {
-            for (const id of ['relay-list', 'muted-list', 'disabled-list', 'muteword-list']) {
+            for (const id of ['relay-list', 'muted-list', 'disabled-list', 'muteword-list', 'mythreads', 'notiflist']) {
                 const el = s.getElementById(id);
                 if (el) el.replaceChildren();
             }
+            _threadsAsked = false;   // the list is gone, so the next look has to fetch it again
         }
         const closeSettings = () => {
             settings.style.display = 'none';
@@ -2095,6 +2147,7 @@
         function renderMuteWords() {
             const listEl = s.getElementById('muteword-list');
             listEl.replaceChildren();
+            if (!panelOpen()) return;
             muteWords.forEach(w => {
                 const item = document.createElement('div');
                 item.className = 'relay-item';
@@ -2103,7 +2156,7 @@
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'relay-remove'; removeBtn.type = 'button';
                 removeBtn.textContent = '×'; removeBtn.setAttribute('aria-label', 'Remove muted word');
-                removeBtn.onclick = () => { muteWords = muteWords.filter(x => x !== w); saveMuteWords(); renderMuteWords(); render(); };
+                removeBtn.onclick = () => { if (!byUser(removeBtn)) return; muteWords = muteWords.filter(x => x !== w); saveMuteWords(); renderMuteWords(); render(); };
                 item.append(label, removeBtn);
                 listEl.appendChild(item);
             });
@@ -2174,7 +2227,8 @@
         // has no page and belongs in a Nostr client, so it is labelled as such rather than dressed
         // up as something this panel can open.
         function notifDest(n) {
-            if (n.where) return { href: n.where, label: n.where.replace(/^https?:\/\//, '') };
+            const w = safeLink(n.where);   // the log is kept across sessions, so it is checked on the way out too
+            if (w) return { href: w, label: w.replace(/^https?:\/\//, '') };
             try { return { href: 'https://njump.me/' + toBech32('note', n.id), label: 'on Nostr' }; }
             catch (e) { return null; }
         }
@@ -2183,6 +2237,7 @@
             const box = s.getElementById('notiflist');
             if (!box) return;
             box.textContent = '';
+            if (!panelOpen()) return;
             if (!notifLog.length) {
                 box.textContent = 'Nothing yet — replies to your comments and mentions of you will be listed here.';
                 return;
@@ -2211,7 +2266,7 @@
         // Opening the list is what marks it read: the badge should reflect whether you have looked,
         // not whether you pressed a button afterwards.
         function markNotifsSeen() {
-            if (!notifLog.some(n => !n.seen)) return;
+            if (!panelOpen() || !notifLog.some(n => !n.seen)) return;
             notifLog.forEach(n => { n.seen = true; });
             saveNotifs();
             unreadReplies = 0;
@@ -2250,6 +2305,7 @@
         function loadMyThreads() {
             const box = s.getElementById('mythreads');
             if (!box) return;
+            if (!panelOpen()) return;
             if (!myPub) { box.textContent = 'Connect a key to see this.'; return; }
             if (_threadsAsked) return;
             _threadsAsked = true;
@@ -2283,7 +2339,7 @@
                     if (type !== 'EVENT' || ev?.kind !== COMMENT_KIND || ev.pubkey !== myPub) return;
                     queueVerify(ev, () => {
                         const tag = ev.tags.find(x => x[0] === 'I');
-                        const url = tag && typeof tag[1] === 'string' ? tag[1] : '';
+                        const url = tag ? (safeLink(tag[1]) || '') : '';
                         if (!url) return;
                         if (!seen.has(url) || seen.get(url) < ev.created_at) seen.set(url, ev.created_at);
                     }, mtSeen);
@@ -2481,6 +2537,22 @@
         }
         // safeMediaUrl: end
 
+        // An address that came out of somebody else's event and is about to become a link. Only http(s),
+        // and nothing with a name and password in it. `javascript:`, `data:` and the rest do nothing
+        // useful in a new tab today, but a link the panel draws is the panel vouching for it, and there
+        // is no reason for it to vouch for anything that is not a web page.
+        //
+        // safeLink: start
+        function safeLink(raw) {
+            if (typeof raw !== 'string' || !raw || raw.length > 2048) return null;
+            let u;
+            try { u = new URL(raw.trim()); } catch (_) { return null; }
+            if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+            if (u.username || u.password) return null;
+            return u.href;
+        }
+        // safeLink: end
+
         // Pictures are fetched from wherever their author chose, which hands that server the
         // reader's IP — and nothing here is moderated, so a thread can carry a picture nobody should
         // have downloaded. Automatic loading makes both of those the reader's problem before they
@@ -2523,7 +2595,7 @@
             if (!host) { nip05ok.set(pubkey, false); scheduleRender(); return; }
             nip05ok.set(pubkey, null);
             try {
-                const res = await fetch(`https://${host}/.well-known/nostr.json?name=${encodeURIComponent(m[1])}`);
+                const res = await fetch(`https://${host}/.well-known/nostr.json?name=${encodeURIComponent(m[1])}`, { redirect: 'error', credentials: 'omit' });
                 const data = await res.json();
                 nip05ok.set(pubkey, data?.names?.[m[1]] === pubkey);
             } catch(e) { nip05ok.set(pubkey, false); }
@@ -2532,6 +2604,7 @@
         const autoImgToggle = s.getElementById('autoimg-toggle');
         autoImgToggle.checked = autoImages;
         autoImgToggle.onchange = () => {
+            if (!byUserSettled(autoImgToggle)) { autoImgToggle.checked = autoImages; return; }
             autoImages = autoImgToggle.checked;
             chrome.storage.local.set({nostrcomments_autoimg: autoImages});
             render();
@@ -2541,6 +2614,7 @@
         const nip05Toggle = s.getElementById('nip05-toggle');
         nip05Toggle.checked = nip05Check;
         nip05Toggle.onchange = () => {
+            if (!byUserSettled(nip05Toggle)) { nip05Toggle.checked = nip05Check; return; }
             nip05Check = nip05Toggle.checked;
             chrome.storage.local.set({nostrcomments_nip05: nip05Check});
             if (nip05Check) nip05s.forEach((_id, pub) => verifyNip05(pub));
@@ -2556,6 +2630,7 @@
         const workerToggle = s.getElementById('worker-toggle');
         workerToggle.checked = useWorker;
         workerToggle.onchange = () => {
+            if (!byUserSettled(workerToggle)) { workerToggle.checked = useWorker; return; }
             chrome.storage.local.set({nostrcomments_worker: workerToggle.checked});
             showMsg(workerToggle.checked ? 'Background connections on — reload the page to use them'
                                          : 'Background connections off — reload the page to go back');
@@ -2564,6 +2639,7 @@
         const widepubToggle = s.getElementById('widepub-toggle');
         widepubToggle.checked = publishWide;
         widepubToggle.onchange = () => {
+            if (!byUserSettled(widepubToggle)) { widepubToggle.checked = publishWide; return; }
             publishWide = widepubToggle.checked;
             chrome.storage.local.set({nostrcomments_widepublish: publishWide});
             showMsg(publishWide ? 'Extra relays on — what you post goes to three more, and is read from none of them'
@@ -2573,6 +2649,7 @@
         const clienttagToggle = s.getElementById('clienttag-toggle');
         clienttagToggle.checked = labelClient;
         clienttagToggle.onchange = () => {
+            if (!byUserSettled(clienttagToggle)) { clienttagToggle.checked = labelClient; return; }
             labelClient = clienttagToggle.checked;
             chrome.storage.local.set({nostrcomments_clienttag: labelClient});
             showMsg(labelClient ? 'Labelling on — what you post from now on says it was written here'
@@ -2895,7 +2972,7 @@
                         // 1111 carries the page in an uppercase I tag; a legacy kind 1 uses r. A
                         // mention that is neither still counts, only without a destination.
                         const _wt = (ev.tags || []).find(x => x[0] === 'I') || (ev.tags || []).find(x => x[0] === 'r');
-                        const _where = _wt && typeof _wt[1] === 'string' ? _wt[1] : '';
+                        const _where = _wt ? (safeLink(_wt[1]) || '') : '';
                         if (_where) {
                             unreadReplies++;
                             unreadPages.set(_where, (unreadPages.get(_where) || 0) + 1);
@@ -2908,7 +2985,7 @@
                         // Arriving while the panel is open used to update the badge and nothing
                         // else, so the one moment somebody was definitely looking was the one
                         // moment they were not told.
-                        if (modal.style.display !== 'none') paintNotifBanner();
+                        if (panelOpen()) paintNotifBanner();
                         updateNotifBadge();
                     }, _seenNotif);
                 };
@@ -2997,7 +3074,7 @@
         // to the button, because the panel is also opened by setting the style directly — which is
         // how every browser suite opens it, and an escape hatch for tests would mean shipping
         // something other than what is tested.
-        const panelOpen = () => modal.style.display === 'grid';
+        const panelOpen = () => _trusted && modal.style.display === 'grid';
         function clearIdentityDom() {
             status.textContent = ''; status.className = '';
             identityName.textContent = ''; identityNpub.textContent = ''; identityHex.textContent = '';
@@ -3005,10 +3082,11 @@
         }
         let _panelWasOpen = false;
         new MutationObserver(() => {
+            if (modal.style.display !== 'grid') _trusted = false;
             const open = panelOpen();
             if (open === _panelWasOpen) return;
             _panelWasOpen = open;
-            if (!open) { clearIdentityDom(); clearSettingsDom(); return; }
+            if (!open) { clearIdentityDom(); clearSettingsDom(); notifBanner.replaceChildren(); notifBanner.style.display = 'none'; return; }
             // Re-ask whether a signer is in the page. Cheaper and more reliable than polling: the
             // onboarding block is only worth being right about while somebody is looking at it, and
             // signers get switched on and off underneath us. This sits on the observer rather than
@@ -3310,10 +3388,21 @@
         // Returns true only when a wallet confirmed the payment; every other path reports via showMsg.
         async function lnurlPay({lud16, pubkey, eventId, amount, target, successMsg}) {
             if (!/^[a-z0-9._+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(lud16)) return showMsg('Invalid Lightning address');
+            // What a BOLT 11 invoice asks for, in millisatoshi, read from its human-readable part:
+            // "ln", the network, the amount, an optional multiplier, then the "1" that separates it from
+            // the data. null when it names no amount, or one that is not a whole number of millisatoshi.
+            const invoiceMsats = inv => {
+                const m = /^ln(?:bcrt|tbs|bc|tb)(\d+)([munp]?)1/i.exec(String(inv));
+                if (!m) return null;
+                const per = { '': 1n, m: 1000n, u: 1000000n, n: 1000000000n, p: 1000000000000n }[m[2].toLowerCase()];
+                const scaled = BigInt(m[1]) * 100000000000n;
+                return scaled % per === 0n ? scaled / per : null;
+            };
             const [name, domain] = lud16.split('@');
             const endpoint = `https://${domain}/.well-known/lnurlp/${name}`;
             let lnurlData;
             try { lnurlData = await fetch(endpoint).then(r => r.json()); } catch(e) { return showMsg('Could not reach Lightning address'); }
+            if (!lnurlData || typeof lnurlData !== 'object') return showMsg('Lightning provider gave an unusable answer');
             if (lnurlData.status === 'ERROR') return showMsg(lnurlData.reason || 'Lightning error');
             if (amount < lnurlData.minSendable || amount > lnurlData.maxSendable) return showMsg(`${amount / 1000} sats out of range${target ? ' for ' + target : ''}`);
             let nostrJson = '';
@@ -3350,8 +3439,13 @@
             if (nostrJson) payUrl.searchParams.set('nostr', nostrJson);
             let invoiceData;
             try { invoiceData = await fetch(payUrl.href).then(r => r.json()); } catch(e) { return showMsg('Could not get invoice'); }
+            if (!invoiceData || typeof invoiceData !== 'object') return showMsg('Could not get invoice');
             if (invoiceData.status === 'ERROR') return showMsg(invoiceData.reason || 'Invoice error');
             const pr = invoiceData.pr;
+            // LNURL-pay leaves this check to the payer, on purpose: the provider builds the invoice, so
+            // the provider can ask for more than was requested and nothing else will say so.
+            if (typeof pr !== 'string' || invoiceMsats(pr) !== BigInt(Math.round(amount)))
+                return showMsg('The invoice does not ask for the amount requested — payment stopped');
             if (window.webln) {
                 try { await window.webln.enable(); await window.webln.sendPayment(pr); showMsg(successMsg); return true; } catch(e) {}
             }
@@ -3466,12 +3560,19 @@
             // and on plenty of desktops nothing is registered — the link then silently does
             // nothing, which reads as broken. Copy the address as well so it is never a dead end.
             // The href is untouched, so a registered wallet still opens as before.
-            for (const [id, label] of [['donate-btc', 'Bitcoin'], ['donate-xmr', 'Monero']]) {
+            // The addresses are held here and put back on the link at the moment of the click. Read from
+            // the link they could be whatever the page had rewritten it to, and the copy would then have
+            // been the page's address rather than the developer's.
+            const _addrs = {
+                'donate-btc': ['Bitcoin', 'bitcoin:198yNVWJz2H8PwmNsX72URVVV9pRbxMb18'],
+                'donate-xmr': ['Monero', 'monero:87aDTPD9HQx2QenKsS7MvHDdqsziFPD7UB37X6G5XVXc2ZPhAs8DdEKUPYJijVcRjj1gU5KvxLCTfWUKWqrd1D5o8uw5EpM'],
+            };
+            for (const [id, [label, uri]] of Object.entries(_addrs)) {
                 const a = s.getElementById(id);
                 if (!a) continue;
                 a.onclick = () => {
-                    const addr = (a.getAttribute('href') || '').split(':')[1] || '';
-                    if (addr) navigator.clipboard.writeText(addr).then(() => showMsg(`${label} address copied`), () => {});
+                    a.setAttribute('href', uri);
+                    navigator.clipboard.writeText(uri.split(':')[1]).then(() => showMsg(`${label} address copied`), () => {});
                 };
             }
         })();
@@ -3480,6 +3581,10 @@
             const frag = document.createDocumentFragment();
             text.split('\n').forEach((line, i) => {
                 if (i > 0) frag.appendChild(document.createElement('br'));
+                // The pattern below backtracks: a line of tens of thousands of "[" takes seconds, and
+                // the thread is drawn again on every event, panel open or not. Nobody writes a
+                // paragraph of four thousand characters with formatting in it.
+                if (line.length > 4000) { frag.appendChild(document.createTextNode(line)); return; }
                 const pat = /\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^)]+)\)|(https?:\/\/\S+)/g;
                 let last = 0, m;
                 while ((m = pat.exec(line)) !== null) {
@@ -3512,7 +3617,9 @@
                             img.decoding = 'async';
                             img.src = media;
                             img.className = 'nc-img';
-                            img.onclick = () => window.open(url, '_blank');
+                            // noopener: without it the page that opens has window.opener, and a server that
+                            // answers with HTML for a .png can send the tab somebody was reading elsewhere.
+                            img.onclick = () => window.open(url, '_blank', 'noopener,noreferrer');
                             img.onerror = () => { const a = document.createElement('a'); a.href = url; a.textContent = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; img.replaceWith(a); };
                             return img;
                             };
@@ -3653,7 +3760,9 @@
             zapBtn.className = 'zap-btn';
             zapBtn.textContent = '⚡';
             zapBtn.title = 'Zap 21 sats';
-            zapBtn.onclick = () => zap(ev);
+            // Signs a zap request with the reader's key and hands it to a server named in somebody
+            // else's profile, so it takes a real gesture like every other control that signs.
+            zapBtn.onclick = () => { if (byUser(zapBtn)) zap(ev); };
             actions.appendChild(zapBtn);
             const copyBtn = document.createElement('button');
             copyBtn.className = 'copy-btn';

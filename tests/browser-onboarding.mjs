@@ -50,18 +50,21 @@ const st = () => js(`${ROOT}
     buttons: [...ob.querySelectorAll('button')].map(b => b.textContent),
     npub: s.getElementById('identity-npub').textContent,
     msg: s.getElementById('msg').textContent });`);
-const clickGenerate = () => js(`${ROOT}
-  const b = [...s.getElementById('onboard').querySelectorAll('button')].find(x => /generate your key/i.test(x.textContent));
-  if (!b) return 'no button';
-  if (b.disabled) return 'disabled';
-  b.click(); return 'clicked';`);
+// The onboarding buttons change which key exists and which one signs, so they take a real click.
+const clickGenerate = async () => {
+  const find = "[...s.getElementById('onboard').querySelectorAll('button')].find(x => /generate your key/i.test(x.textContent))";
+  const state = await js(`${ROOT} const b = ${find}; return !b ? 'no button' : b.disabled ? 'disabled' : 'ok';`);
+  if (state !== 'ok') return state;
+  return (await nclick(find)) ? 'clicked' : 'not clickable';
+};
 // Answer whichever confirmation is up, by the label on its button.
-const confirmWith = label => js(`${ROOT}
-  const ov = [...s.getElementById('p').children].find(c => c.style.zIndex === '30' && getComputedStyle(c).display !== 'none');
-  if (!ov) return 'no dialog';
-  const b = [...ov.querySelectorAll('button')].find(x => x.textContent.trim() === ${JSON.stringify(label)});
-  if (!b) return 'no button: ' + [...ov.querySelectorAll('button')].map(x => x.textContent).join('|');
-  b.click(); return 'confirmed';`);
+const confirmWith = async label => {
+  const dlg = "[...s.getElementById('p').children].find(c => c.style.zIndex === '30' && getComputedStyle(c).display !== 'none')";
+  const find = `(${dlg} ? [...${dlg}.querySelectorAll('button')].find(x => x.textContent.trim() === ${JSON.stringify(label)}) : null)`;
+  const state = await js(`${ROOT} const ov = ${dlg}; if (!ov) return 'no dialog'; const b = ${find}; return b ? 'ok' : 'no button: ' + [...ov.querySelectorAll('button')].map(x => x.textContent).join('|');`);
+  if (state !== 'ok') return state;
+  await nclick(find); return 'confirmed';
+};
 
 // --- with no key, the block is the way in ---------------------------------------------------------
 console.log('\n=== with no identity the block is shown ===');
@@ -102,6 +105,7 @@ ok('and it says to reload afterwards', /Install it, then reload this page\./.tes
 // identity and repainted everything except the block, which stayed up until the panel was closed and
 // reopened, offering to generate a key over the one that had just been imported.
 console.log('\n=== importing a key takes the block down, without reopening the panel ===');
+await js(`${ROOT} s.getElementById('m').style.display='grid'; return 1;`); await wait(600);
 await js(`${ROOT}
   s.getElementById('gear-btn').click();
   s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec', MINE))};
@@ -125,7 +129,11 @@ r = JSON.parse(await st());
 ok('a reload knows the identity', r.npub === MINE_NPUB, r.npub);
 ok('and does not offer to onboard', r.onboard === 'none', r.onboard);
 
-await js(`${ROOT} s.getElementById('onboard').style.display='block'; return 1;`);
+// Forced on screen the way a page could: the block, and the generate button inside it, which is
+// hidden while a stored key is available. A person can only press what is visible.
+await js(`${ROOT} const ob = s.getElementById('onboard'); ob.style.display = 'block';
+  ob.querySelectorAll('div, button').forEach(e => { if (e.style.display === 'none' && (e.tagName === 'DIV' || /generate your key/i.test(e.textContent))) e.style.display = 'block'; });
+  return 1;`);
 await wait(400);
 ok('the block can be forced back on screen', JSON.parse(await st()).onboard === 'block');
 ok('and the button there is live, not disabled', (await clickGenerate()) === 'clicked');
@@ -195,10 +203,7 @@ ok('it explains what would be lost', /only in this browser/i.test(d.text || ''),
 ok('and offers to put it off', (d.buttons || []).some(b => /^Later$/.test(b)), d.buttons);
 ok('rather than saying "Cancel"', !(d.buttons || []).some(b => /^Cancel$/.test(b)), d.buttons);
 
-await js(`${ROOT}
-  const ov = [...s.getElementById('p').children].find(c => c.style.zIndex === '30' && getComputedStyle(c).display !== 'none');
-  const b = ov && [...ov.querySelectorAll('button')].find(x => /^Later$/.test(x.textContent));
-  if (b) b.click(); return !!b;`);
+await nclick("(() => { const ov = [...s.getElementById('p').children].find(c => c.style.zIndex === '30' && getComputedStyle(c).display !== 'none'); return ov && [...ov.querySelectorAll('button')].find(x => /^Later$/.test(x.textContent)); })()");
 await wait(1200);
 ok('the dialog closes', JSON.parse(await dialog()).open === false);
 
@@ -265,9 +270,7 @@ ok('and stops offering to generate one that would be refused',
    !stranded.buttons.some(b => /generate your key/i.test(b)), stranded.buttons);
 ok('it says the signer is the reason', /not answering/i.test(stranded.pitch), stranded.pitch);
 
-await js(`${ROOT}
-  const b = [...s.getElementById('onboard').querySelectorAll('button')].find(x => /use the key stored here/i.test(x.textContent));
-  if (b) b.click(); return !!b;`);
+await nclick("[...s.getElementById('onboard').querySelectorAll('button')].find(x => /use the key stored here/i.test(x.textContent))");
 await wait(3000);
 r = JSON.parse(await st());
 ok('pressing it connects with the stored key', r.npub === regenerated, { now: r.npub, expected: regenerated });

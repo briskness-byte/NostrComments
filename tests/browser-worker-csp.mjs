@@ -21,7 +21,7 @@
 //
 // Requires: chromium (or Chrome) and chromedriver, or Firefox and geckodriver; openssl; Node 18+.
 import http from 'http';
-import { extensionCode, reporter, startRelay, startBrowser, configureScript, ROOT, BROWSER } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startBrowser, configureScript, ROOT, BROWSER, setToggle } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9610);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8170);
@@ -51,7 +51,7 @@ relay.stored.push(await sign(newKey(), {
     content: COMMENT,
 }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncwcsp-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -73,14 +73,7 @@ const look = async () => JSON.parse(await js(`${ROOT}
     empty: e ? e.textContent : '',
     body: s.getElementById('list').textContent });`) || '{}');
 
-const setWorker = async on => js(`${ROOT}
-  s.getElementById('m').style.display='grid';
-  if (getComputedStyle(s.getElementById('settings')).display === 'none') s.getElementById('gear-btn').click();
-  const t = s.getElementById('worker-toggle');
-  if (!t) return 'no toggle';
-  if (t.checked !== ${on ? 'true' : 'false'}) t.click();
-  s.getElementById('settings-close')?.click();
-  return t.checked;`);
+const setWorker = async on => setToggle({ js, nclick, wait }, 'worker-toggle', on);
 
 // --- in the page: still blocked, which is what makes the other half mean anything ------------------
 console.log('\n=== with the socket opened in the page ===');

@@ -16,7 +16,7 @@
 //
 // Requires: chromium (or Chrome), a matching chromedriver on PATH, openssl, Node 18+.
 import http from 'http';
-import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT, TESTHOST } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT, TESTHOST, setToggle } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9580);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8140);
@@ -58,7 +58,7 @@ stored.push(await sign(THEM, {
     content: JSON.stringify({ name: 'Picture Poster', picture: `${IMG}/avatar.png` }),
 }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncpic-',
     onClose: () => { site.close(); relay.close(); imgHost.close(); },
 });
@@ -95,7 +95,7 @@ ok('the host was asked for both', hits.length >= 2, hits);
 ok('nothing is waiting behind a placeholder', r.holds.length === 0, r.holds);
 
 console.log('\n=== switched off ===');
-await js(`${ROOT} const t = s.getElementById('autoimg-toggle'); t.checked = false; t.dispatchEvent(new Event('change')); return 1;`);
+await setToggle({ js, nclick, wait }, 'autoimg-toggle', false);
 await wait(800);
 hits = [];
 await goto(site.url);

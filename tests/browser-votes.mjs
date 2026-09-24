@@ -64,6 +64,7 @@ await wait(1500);
 
 // .relay-url, not every span: each row also carries a status line now, and reading both would
 // concatenate the URL with whatever that relay happens to be doing.
+await js(`${ROOT} s.getElementById('m').style.display='grid'; return 1;`); await wait(800);
 const relayList = await js(`${ROOT} return [...s.getElementById('relay-list').querySelectorAll('.relay-url')].map(e=>e.textContent).join(',');`);
 ok('the only configured relay is the local one', relayList === RELAY_URL, relayList);
 

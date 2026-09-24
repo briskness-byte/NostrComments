@@ -19,7 +19,7 @@
 //
 // Requires: chromium (or Chrome), a matching chromedriver on PATH, openssl, Node 18+.
 import http from 'http';
-import { extensionCode, reporter, startRelay, startBrowser, configureScript, ROOT, BROWSER } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startBrowser, configureScript, ROOT, BROWSER, setToggle } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9537);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8105);
@@ -48,7 +48,7 @@ relay.stored.push(await sign(newKey(), {
     content: 'A comment that exists whether or not the page lets you see it.',
 }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'nccsp-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -65,11 +65,7 @@ await js(configureScript({ relayUrl: relay.url }));
 // asked for explicitly — otherwise the page would load through the worker, the "blocked" assertions
 // would fail for the right reason, and the suite would stop proving anything about the in-page path.
 // The background half of the same page is browser-worker-csp.mjs.
-const workerOff = await js(`${ROOT}
-  const t = s.getElementById('worker-toggle');
-  if (!t) return 'no toggle';
-  if (t.checked) t.click();
-  return String(t.checked);`);
+const workerOff = String(await setToggle({ js, nclick, wait }, 'worker-toggle', false));
 ok('the in-page transport is selected for this suite', workerOff === 'false', workerOff);
 await wait(1500);
 await goto(SITE_URL);

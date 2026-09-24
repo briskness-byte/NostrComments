@@ -161,7 +161,7 @@ export async function run() {
     for (const [name, src] of Object.entries(srcs)) {
         const listen = src.indexOf("msg.t !== 'nc-toggle'");
         const reattach = src.indexOf('if (!host.isConnected) document.documentElement.appendChild(host);');
-        const toggle = src.indexOf("if (modal.style.display === 'grid') closeModal(); else btn.onclick();");
+        const toggle = src.indexOf("if (modal.style.display === 'grid') closeModal(); else openPanel();");
         ok(`${name}: listens for the toolbar toggle`, listen >= 0);
         ok(`${name}: puts the host back when the page removed it`, reattach > listen && listen >= 0);
         ok(`${name}: and only then opens or closes the panel`, toggle > reattach && reattach >= 0);

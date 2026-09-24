@@ -92,7 +92,8 @@ await js(`${ROOT} s.getElementById('setname-input').value='Robin'; return 1;`);
 await nclick("s.getElementById('setname-btn')");
 await wait(9000);
 const named = [...evil.published, ...honest.published].filter(e => e.kind === 0 && e.pubkey === ME_PUB);
-ok('the name was published', named.length >= 1, named.length);
+const why = await js(`${ROOT} return s.getElementById('msg').textContent;`);
+ok('the name was published', named.length >= 1, { published: named.length, panelSays: why });
 ok('nothing the hostile relay invented went out under the reader\'s key', named.every(e => !/thief@evil/.test(e.content)), named.map(e => e.content));
 
 console.log(`\n${state.fail === 0 ? '✓' : '✗'} hostile relay: ${state.pass} passed, ${state.fail} failed`);

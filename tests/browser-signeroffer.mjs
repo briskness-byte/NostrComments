@@ -32,7 +32,7 @@ const relay = await startRelay({ port: RELAY_PORT });
 const site = await startSite({ port: SITE_PORT, heading: 'Signer offer QA page' });
 const SIGNER_PUB = _secp.pubKey(newKey());
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncoffer-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -92,10 +92,8 @@ ok('generating a key is still offered, as the second option', sh.generate === tr
 
 console.log('\n=== approving it and pressing the button ===');
 await js(`window.__approved = true; return 1;`);
-const clicked = await js(`${ROOT}
-  const b = [...s.getElementById('onboard').querySelectorAll('button')].find(x => /connect your nostr signer/i.test(x.textContent));
-  if (!b) return 'no button';
-  b.click(); return 'clicked';`);
+const findSignerBtn = "[...s.getElementById('onboard').querySelectorAll('button')].find(x => /connect your nostr signer/i.test(x.textContent))";
+const clicked = (await nclick(findSignerBtn)) ? 'clicked' : 'no button';
 ok('the button is there to press', clicked === 'clicked', clicked);
 await wait(3500);
 sh = JSON.parse(await shape());

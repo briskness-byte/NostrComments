@@ -29,10 +29,13 @@ export async function run() {
 
     const LIVE = { minSendable: 1000, maxSendable: 100000000, callback: 'https://pay.example/cb', allowsNostr: true, nostrPubkey: 'bb'.repeat(32) };
     let LNURL = LIVE;
+    let PR;                       // when set, the whole answer to the invoice request
     const fetch = async url => {
         fetches.push(url);
         if (url.includes('/.well-known/lnurlp/')) return { json: async () => LNURL };
-        return { json: async () => ({ pr: 'lnbc1invoice...' }) };
+        // An invoice for whatever amount was asked for: 1 nBTC is 100 msat, and that is the unit used.
+        if (PR !== undefined) return { json: async () => PR };
+        return { json: async () => ({ pr: 'lnbc' + (Number(new URL(url).searchParams.get('amount')) / 100) + 'n1invoice' }) };
     };
 
     const lnurlPay = new Function('showMsg', 'RELAYS', 'myPub', 'getWallet', 'signAsMe', 'window', 'navigator', 'fetch',
@@ -52,7 +55,7 @@ export async function run() {
     ok('support zap carries no e tag', !zapReq().tags.some(t => t[0] === 'e'), zapReq().tags);
     ok('zap request amount tag in msat', zapReq().tags.some(t => t[0] === 'amount' && t[1] === '5000000'), zapReq().tags);
     ok('success message shown', msgs.includes('⚡ Sent 5000 sats — thank you!'), msgs);
-    ok('invoice handed to the wallet', paid === 'lnbc1invoice...', paid);
+    ok('invoice handed to the wallet', paid === 'lnbc50000n1invoice', paid);
 
     // Comment zap keeps its existing 21-sat behaviour and its e tag.
     reset();
@@ -131,6 +134,31 @@ export async function run() {
     ok('provider error surfaced verbatim', msgs[0] === 'wallet offline', msgs);
     ok('provider error returns falsy', !r, r);
     ok('provider error stops before the invoice call', fetches.length === 1, fetches);
+
+    LNURL = LIVE;
+    // The invoice is the payee's too. LNURL-pay leaves it to the payer to check that it asks for what
+    // was requested, and a provider that asks for more says nothing.
+    for (const [label, answer] of [
+        ['a larger amount', { pr: 'lnbc5000000n1invoice' }],
+        ['a smaller amount', { pr: 'lnbc1n1invoice' }],
+        ['no amount at all', { pr: 'lnbc1pvjluezpp5invoice' }],
+        ['something that is not an invoice', { pr: 'hello' }],
+        ['no invoice', {}],
+        ['a number', { pr: 42 }],
+        ['nothing', null],
+    ]) {
+        reset(); PR = answer;
+        r = await lnurlPay({ lud16: 'dev@example.com', amount: 5000 * 1000, successMsg: 'x' });
+        ok(`an invoice for ${label} is not paid or copied`, !r && paid === null && !msgs.includes('x'), { msgs, paid });
+    }
+    reset(); PR = { pr: 'lnbc50u1pinvoice' };          // 50 microbitcoin = 5000 sat, written another way
+    r = await lnurlPay({ lud16: 'dev@example.com', amount: 5000 * 1000, successMsg: 'x' });
+    ok('the same amount in another unit is accepted', r === true && paid === 'lnbc50u1pinvoice', { msgs, paid });
+    PR = undefined;
+    reset(); LNURL = null;
+    await lnurlPay({ lud16: 'dev@example.com', amount: 21000, successMsg: 'x' });
+    ok('an empty answer from the provider is reported, not thrown', /unusable/i.test(msgs[0] || ''), msgs);
+    LNURL = LIVE;
 
     return { name: 'zap / lnurl-pay', pass, fail };
 }

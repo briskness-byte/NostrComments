@@ -154,7 +154,7 @@ ok('disclosure overlay covers the panel before consent', pre.overlayExists, pre)
     // above — leaves the gate invisible, and a keypress aimed at an invisible button lands nowhere.
     // That is not a detail: the check that consent was granted passes trivially against a gate that
     // was never shown.
-    await js(`${ROOT} s.getElementById('nc-btn').click(); return 1;`);
+    await nclick("s.getElementById('nc-btn')");
     await new Promise(r => setTimeout(r, 900));
     const shown = await js(`${ROOT}
       const o = [...s.getElementById('p').children].find(c => c.textContent.includes('One quick thing'));

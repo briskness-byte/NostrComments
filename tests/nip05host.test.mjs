@@ -11,7 +11,7 @@
 import { extensionCode } from './harness.mjs';
 
 export async function run() {
-    const { nip05Host, safeMediaUrl } = extensionCode();
+    const { nip05Host, safeMediaUrl, safeLink } = extensionCode();
     const out = { name: 'host and media URL validation', pass: 0, fail: 0, lines: [] };
     const ok = (n, c, e) => c ? (out.pass++, out.lines.push('  ✓ ' + n))
                               : (out.fail++, out.lines.push('  ✗ ' + n + (e !== undefined ? '  → ' + JSON.stringify(e) : '')));
@@ -82,6 +82,28 @@ export async function run() {
         const got = safeMediaUrl(input);
         ok(`${allowed ? 'allows' : 'refuses'} ${JSON.stringify(input)} — ${why}`,
            allowed ? typeof got === 'string' : got === null, got);
+    }
+
+    // Links that come out of somebody else's event: the page a reply was written on. Web pages only,
+    // and unlike a picture a local address is fine — somebody developing on localhost is a reader too.
+    const links = [
+        ['https://example.com/post?id=3#top', true, 'an ordinary page'],
+        ['http://localhost:3000/docs',       true, 'a local development server'],
+        ['javascript:alert(document.domain)', false, 'script'],
+        ['JaVaScRiPt:alert(1)',              false, 'script, in disguise'],
+        ['data:text/html,<script>alert(1)</script>', false, 'a document'],
+        ['file:///etc/passwd',               false, 'a local file'],
+        ['ftp://example.com/x',              false, 'not a web page'],
+        ['https://user:pw@example.com/',     false, 'credentials in the address'],
+        ['//example.com/x',                  false, 'no scheme at all'],
+        ['x'.repeat(3000),                   false, 'far too long'],
+        ['',                                 false, 'nothing'],
+        [42,                                 false, 'not a string'],
+    ];
+    for (const [input, allowed, why] of links) {
+        const got = safeLink(input);
+        ok(`link: ${allowed ? 'allows' : 'refuses'} ${JSON.stringify(String(input).slice(0, 40))} — ${why}`,
+           allowed ? typeof got === 'string' && /^https?:/.test(got) : got === null, got);
     }
 
     return out;

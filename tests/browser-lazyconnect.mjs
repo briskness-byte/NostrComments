@@ -30,7 +30,7 @@ relay.stored.push(await sign(AUTHOR, {
     content: 'A comment waiting to be loaded.',
 }));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'nclazy-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -74,7 +74,7 @@ await goto(site.url);
 await wait(400);
 const beforeOpen = pageSubs();
 await js(`${ROOT} return !!s;`);
-await js(`${ROOT} const b = s.getElementById('nc-btn'); if (b) b.click(); return 1;`);
+await nclick("s.getElementById('nc-btn')");
 await wait(2000);
 ok('nothing had been asked yet at that point', beforeOpen === 0, beforeOpen);
 ok('opening the panel asks straight away', pageSubs() > 0, pageSubs());

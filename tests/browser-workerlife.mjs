@@ -24,7 +24,7 @@
 // changes, or before turning the flag on.
 //
 // Requires: chromium (or Chrome) and chromedriver, or Firefox and geckodriver; openssl; Node 18+.
-import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT, BROWSER } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT, BROWSER, setToggle } from './harness.mjs';
 
 const CD_PORT    = Number(process.env.QA_PORT       || 9615);
 const SITE_PORT  = Number(process.env.QA_SITE_PORT  || 8175);
@@ -52,7 +52,7 @@ const comment = async text => sign(AUTHOR, {
 // One comment already on the relay, so "the thread loaded" is settled before anything is timed.
 relay.stored.push(await comment('Seeded before the browser started.'));
 
-const { js, wait, goto, finish } = await startBrowser({
+const { js, wait, goto, finish, nclick } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncwl-',
     onClose: () => { site.close(); relay.close(); },
 });
@@ -67,14 +67,7 @@ const thread = () => js(`${ROOT}
       .filter((t, i, a) => a.indexOf(t) === i)
       .sort());`);
 
-const setWorker = want => js(`${ROOT}
-  s.getElementById('m').style.display='grid';
-  s.getElementById('gear-btn').click();
-  const t = s.getElementById('worker-toggle');
-  if (!t) return 'no toggle';
-  if (t.checked !== ${want}) t.click();
-  s.getElementById('settings-close')?.click();
-  return String(t.checked);`);
+const setWorker = async want => { const v = await setToggle({ js, nclick, wait }, 'worker-toggle', want); return v === null ? 'no toggle' : String(v); };
 
 /** Push an event at whoever is subscribed, the way another client's comment would arrive. */
 const arrives = async (text, waitMs = 6000) => {

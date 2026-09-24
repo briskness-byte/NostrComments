@@ -164,6 +164,8 @@ export function extensionCode(extPath = EXT) {
     const nip05Host = eval(src.slice(n0, n1) + '; nip05Host');
     const m0 = src.indexOf('// safeMediaUrl: start'), m1 = src.indexOf('// safeMediaUrl: end', m0);
     const safeMediaUrl = eval(src.slice(m0, m1) + '; safeMediaUrl');
+    const l0 = src.indexOf('// safeLink: start'), l1 = src.indexOf('// safeLink: end', l0);
+    const safeLink = eval(src.slice(l0, l1) + '; safeLink');
 
     const enc = new TextEncoder();
     const sign = async (priv, ev) => {
@@ -178,7 +180,7 @@ export function extensionCode(extPath = EXT) {
         return _secp.b2h(idb) === ev.id && await _secp.verify(ev.pubkey, idb, ev.sig);
     };
     const newKey = () => _secp.b2h(crypto.getRandomValues(new Uint8Array(32)));
-    return { _secp, normalizeUrl, toBech32, nip05Host, safeMediaUrl, sign, verify, newKey, enc };
+    return { _secp, normalizeUrl, toBech32, nip05Host, safeMediaUrl, safeLink, sign, verify, newKey, enc };
 }
 
 export function reporter() {
@@ -389,7 +391,7 @@ export const BADGE = `${ROOT}
   const ncText = el => el ? el.textContent : null;
   const ncShown = el => !!el && getComputedStyle(el).display !== 'none';`;
 
-export async function startBrowser({ cdPort, extPath = EXT, prefix = 'ncqa-', windowSize = '1000,1700', onClose = () => {}, resolverRules = [] }) {
+async function startBrowserRaw({ cdPort, extPath = EXT, prefix = 'ncqa-', windowSize = '1000,1700', onClose = () => {}, resolverRules = [] }) {
     if (BROWSER === 'firefox') return startFirefox({ cdPort, prefix, onClose });
     // Chrome derives its crashpad database from HOME; a locked-down HOME makes the crash handler
     // abort the browser before the debugging port opens, which reads as "chromium is not installed".
@@ -460,11 +462,15 @@ export async function startBrowser({ cdPort, extPath = EXT, prefix = 'ncqa-', wi
         if (key) {
             const r = await wd('POST', `/session/${sid}/element/${el[key]}/click`, {});
             if (!(r && r.value && r.value.error)) return true;
+            if (process.env.NC_DEBUG) console.log('  (element click refused:', r.value.error, String(r.value.message || '').split('\n')[0].slice(0, 120) + ')');
         }
         const focused = await js(`${ROOT} const __el = (${selector}); if (__el) { if (__el.scrollIntoView) __el.scrollIntoView({block:'center'}); if (__el.focus) __el.focus(); } return !!(__el && s.activeElement === __el);`);
         if (!focused) return false;
+        // Enter activates a button; a checkbox is switched by Space.
+        const isBox = await js(`${ROOT} const __b = (${selector}); return !!__b && __b.type === 'checkbox';`);
+        const k = isBox ? '\uE00D' : '\uE007';
         await wd('POST', `/session/${sid}/actions`, { actions: [{ type: 'key', id: 'kb', actions: [
-            { type: 'keyDown', value: '\uE007' }, { type: 'keyUp', value: '\uE007' }] }] });
+            { type: 'keyDown', value: k }, { type: 'keyUp', value: k }] }] });
         return true;
     };
     return { wd, js, wait, goto, sid, finish, nclick };
@@ -545,11 +551,15 @@ async function startFirefox({ cdPort, prefix, onClose }) {
         if (key) {
             const r = await wd('POST', `/session/${sid}/element/${el[key]}/click`, {});
             if (!(r && r.value && r.value.error)) return true;
+            if (process.env.NC_DEBUG) console.log('  (element click refused:', r.value.error, String(r.value.message || '').split('\n')[0].slice(0, 120) + ')');
         }
         const focused = await js(`${ROOT} const __el = (${selector}); if (__el) { if (__el.scrollIntoView) __el.scrollIntoView({block:'center'}); if (__el.focus) __el.focus(); } return !!(__el && s.activeElement === __el);`);
         if (!focused) return false;
+        // Enter activates a button; a checkbox is switched by Space.
+        const isBox = await js(`${ROOT} const __b = (${selector}); return !!__b && __b.type === 'checkbox';`);
+        const k = isBox ? '\uE00D' : '\uE007';
         await wd('POST', `/session/${sid}/actions`, { actions: [{ type: 'key', id: 'kb', actions: [
-            { type: 'keyDown', value: '\uE007' }, { type: 'keyUp', value: '\uE007' }] }] });
+            { type: 'keyDown', value: k }, { type: 'keyUp', value: k }] }] });
         return true;
     };
     return { wd, js, wait, goto, sid, finish, nclick };
@@ -604,4 +614,50 @@ export function configureScript({ relayUrl, nsec }) {
       });
       window.postMessage({__ncSeed:true, values:${JSON.stringify(values)}}, '*');
       return 1;`;
+}
+
+// Most suites were written when opening the panel meant writing its style, which is what a page can do
+// too — and a page that does so is now given an empty panel, because what it draws about the reader is
+// only drawn once somebody has opened it. So a script that opens the panel that way is run the way a
+// person would open it: a real click on the button first, then the rest of the script without the
+// opening. `jsRaw` is the unwrapped call, for the suite that is about exactly what a page can do
+// (browser-pagedrive).
+const OPENS_PANEL = /(?:const m=s\.getElementById\('m'\);\s*if\s*\(m\)\s*m\.style\.display='grid';|s\.getElementById\('m'\)\.style\.display\s*=\s*'grid'\s*;?)/;
+export async function startBrowser(opts) {
+    const api = await startBrowserRaw(opts);
+    const { js: raw, nclick, wait } = api;
+    // Whether the panel on screen was opened by a real click. Opening it by style — which
+    // configureScript does after seeding — leaves it open but not trusted, so "already open" is not
+    // enough: it is closed and opened again the way a person would.
+    let trusted = false;
+    const goto = async url => { trusted = false; return api.goto(url); };
+    const js = async code => {
+        if (OPENS_PANEL.test(code)) {
+            const grid = await raw(`${ROOT} return s.getElementById('m').style.display === 'grid';`);
+            if (!trusted || !grid) {
+                await raw(`${ROOT} s.getElementById('m').style.display='none'; return 1;`);
+                await wait(300);
+                await nclick("s.getElementById('nc-btn')");
+                await wait(600);
+                trusted = true;
+            }
+            code = code.replace(OPENS_PANEL, '');
+        }
+        return raw(code);
+    };
+    return { ...api, goto, js, jsRaw: raw };
+}
+
+// Operate a settings checkbox the way a person does. The panel refuses a scripted change to these —
+// what they switch decides what leaves the browser — so a suite has to click them for real, and it
+// has to read the state back afterwards rather than trust that the click landed. Returns the state
+// the box is in, or null when there is no such box.
+export async function setToggle({ js, nclick, wait }, id, want) {
+    await js(`${ROOT} s.getElementById('m').style.display='grid'; if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click(); return 1;`);
+    const cur = await js(`${ROOT} const t = s.getElementById('${id}'); return t ? t.checked : null;`);
+    if (cur === null || cur === undefined) return null;
+    if (cur !== want) { await nclick(`s.getElementById('${id}')`); await wait(600); }
+    const now = await js(`${ROOT} const t = s.getElementById('${id}'); return t ? t.checked : null;`);
+    await js(`${ROOT} s.getElementById('settings-close')?.click(); return 1;`);
+    return now;
 }

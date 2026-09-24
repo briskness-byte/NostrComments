@@ -94,6 +94,8 @@ await js(`${ROOT}
   if (o) [...o.querySelectorAll('button')].find(b => /not now/i.test(b.textContent))?.click();
   return 1;`);
 await wait(500);
+// configureScript leaves the panel open by style, which shows nothing about the reader; open it as a person would.
+await js(`${ROOT} s.getElementById('m').style.display='grid'; return 1;`); await wait(800);
 
 const identity = () => js(`${ROOT} return JSON.stringify({
   status: s.getElementById('status').textContent,

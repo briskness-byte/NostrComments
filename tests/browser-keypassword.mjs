@@ -80,6 +80,7 @@ await js(`${ROOT}
   [...o.querySelectorAll('button')].find(b => /Not now/i.test(b.textContent)).click(); return 1;`);
 await wait(1200);
 ok('the dialog closes', JSON.parse(await dialog()).shown === false, await dialog());
+await js(`${ROOT} s.getElementById('m').style.display='grid'; return 1;`); await wait(600);
 const after = JSON.parse(await js(`${ROOT} return JSON.stringify({
     status: s.getElementById('status').textContent,
     msg: s.getElementById('msg').textContent,

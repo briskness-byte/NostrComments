@@ -81,7 +81,7 @@ const openSettings = () => js(`${ROOT}
   return 1;`);
 const closeSettings = () => js(`${ROOT} s.getElementById('settings-close')?.click(); return 1;`);
 const toggleState = () => js(`${ROOT} return s.getElementById('clienttag-toggle').checked;`);
-const clickToggle = () => js(`${ROOT} s.getElementById('clienttag-toggle').click(); return 1;`);
+const clickToggle = async () => { await nclick("s.getElementById('clienttag-toggle')"); await wait(500); };
 const labelled = ev => (ev.tags || []).some(t => t[0] === 'client' && t[1] === 'NostrComments');
 
 const postComment = async text => {
