@@ -317,10 +317,14 @@
             const chk=pm([...ex(hrp),...w,0,0,0,0,0,0])^1;
             return hrp+'1'+[...w,...Array.from({length:6},(_,i)=>(chk>>(5*(5-i)))&31)].map(d=>CS[d]).join('');
         }
-        // bech32 → hex, for importing an existing identity. The checksum is verified: without it a
-        // mistyped nsec would silently decode to a different, valid-looking key and the user would
-        // end up posting as an identity nobody knows, with no error to tell them why.
-        function fromBech32(expectedHrp, str) {
+        // bech32-to-hex-string: start
+        //
+        // Shared by fromBech32 (nsec/npub/note — always a 32-byte payload) and decodeLinkedEntity
+        // below (naddr/nevent — a TLV-structured payload of no fixed length). The checksum is
+        // verified either way: without it a mistyped key would silently decode to a different,
+        // valid-looking one and the user would end up posting as an identity nobody knows, with no
+        // error to say why — and a mistyped link would silently claim to be a different entity.
+        function _bech32Decode(expectedHrp, str) {
             const CS = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
             const GEN = [0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];
             const pm = v => { let c=1; for (const d of v){const t=c>>25;c=(c&0x1ffffff)<<5^d;for(let i=0;i<5;i++)if((t>>i)&1)c^=GEN[i];} return c; };
@@ -332,9 +336,53 @@
             if (vals.length < 7 || pm([...ex(expectedHrp), ...vals]) !== 1) return null;
             let acc = 0, bits = 0; const out = [];
             for (const v of vals.slice(0, -6)) { acc = (acc<<5)|v; bits += 5; while (bits >= 8) { bits -= 8; out.push((acc>>bits)&0xff); } }
-            if (out.length !== 32) return null;
-            return out.map(b => b.toString(16).padStart(2,'0')).join('');
+            return out;
         }
+        function fromBech32(expectedHrp, str) {
+            const out = _bech32Decode(expectedHrp, str);
+            return out && out.length === 32 ? out.map(b => b.toString(16).padStart(2,'0')).join('') : null;
+        }
+        // NIP-19 TLV decode for the two entity types NIP-LINK-style discovery names: naddr (an
+        // addressable event — a NIP-23 article, say) and nevent (a regular one), plus the simpler
+        // note1 form some pages use for the latter. Returns { addr } for an addressable event — the
+        // "kind:pubkey:d-tag" string NIP-22 root-scopes a comment to with an A tag — or { id } for a
+        // regular one, scoped with E. Never both, never neither; null on anything that does not
+        // decode cleanly. Capped well above anything a real naddr needs, so a page cannot hand this
+        // a string built to make TLV parsing expensive.
+        //
+        // decodeLinkedEntity: start
+        function decodeLinkedEntity(uri) {
+            if (typeof uri !== 'string' || uri.length > 2000) return null;
+            const str = uri.replace(/^nostr:/i, '').trim().toLowerCase();
+            const sep = str.lastIndexOf('1');
+            if (sep < 1) return null;
+            const hrp = str.slice(0, sep);
+            if (hrp === 'note') { const id = fromBech32('note', str); return id ? { addr: null, id } : null; }
+            if (hrp !== 'naddr' && hrp !== 'nevent') return null;
+            const bytes = _bech32Decode(hrp, str);
+            if (!bytes || bytes.length > 500) return null;
+            let i = 0, id = null, addr = null, kind = null, pubkey = null;
+            while (i + 2 <= bytes.length) {
+                const t = bytes[i], l = bytes[i + 1];
+                if (l < 0 || i + 2 + l > bytes.length) break;
+                const v = bytes.slice(i + 2, i + 2 + l);
+                if (t === 0) {
+                    if (hrp === 'nevent') { const h = v.map(b=>b.toString(16).padStart(2,'0')).join(''); if (/^[0-9a-f]{64}$/.test(h)) id = h; }
+                    else { try { addr = new TextDecoder().decode(new Uint8Array(v)); } catch(_) {} }
+                } else if (t === 2 && !pubkey) {
+                    const h = v.map(b=>b.toString(16).padStart(2,'0')).join('');
+                    if (/^[0-9a-f]{64}$/.test(h)) pubkey = h;
+                } else if (t === 3 && v.length === 4) {
+                    kind = ((v[0]<<24) | (v[1]<<16) | (v[2]<<8) | v[3]) >>> 0;
+                }
+                i += 2 + l;
+            }
+            if (hrp === 'nevent') return id ? { addr: null, id } : null;
+            if (!addr || !pubkey || kind === null) return null;
+            return { addr: `${kind}:${pubkey}:${addr}`, id: null };
+        }
+        // decodeLinkedEntity: end
+        // bech32-to-hex-string: end
 
         const toNpub = hex => toBech32('npub', hex);
         const toNote = hex => toBech32('note', hex);
@@ -2197,6 +2245,48 @@
         }
         let pageUrl = normalizeUrl(location.href);
 
+        // Other addresses to read this page's thread under, alongside pageUrl — never to publish
+        // under. A page can name its own canonical form with <link rel="canonical">, and other
+        // Nostr clients key a comment's page tag to whatever address the page itself used, not to
+        // our normalisation. Without this, two honest threads about the same page never meet.
+        //
+        // Only ever widens what is read. A wrong or hostile value here adds a real, unrelated
+        // conversation to the panel — visible, ignorable, the same cost as a noisy relay. It
+        // cannot narrow or replace pageUrl: publishing, "my threads", and the last-seen map all
+        // still read pageUrl alone, untouched by whatever a page's own head claims.
+        let altPageUrls = [];
+        function findAltPageUrls() {
+            const out = [];
+            try {
+                const href = document.querySelector('link[rel~="canonical"]')?.getAttribute('href');
+                if (href) {
+                    const abs = new URL(href, location.href);
+                    // Same restriction as safeLink and for the same reason: this becomes a relay
+                    // filter value, and there is no reason for it to be anything but a web page.
+                    if (abs.protocol === 'http:' || abs.protocol === 'https:') {
+                        const norm = normalizeUrl(abs.href);
+                        if (norm && norm !== pageUrl) out.push(norm);
+                    }
+                }
+            } catch(_) {}
+            return out;
+        }
+        // A page can name the Nostr entity it natively is with a <link rel="alternate"
+        // href="nostr:..."> tag — the discovery convention a NIP draft proposed to this project in
+        // Sep 2026 (nostr:naddr1qvzqqqrcvypzq3hnc7an8npsryzfkaku38dmjm35cfrmmkngk6kcvvngy7fllzs6qqsku6ts94kxjmnt94mk2c3dw3hj6mn0wd68ytt9de6xjare94kxjmnt7pzrp0).
+        // Only ever widens what is read, same reasoning as findAltPageUrls, and for the same reason
+        // stops there: the tag's own value is an unauthenticated claim by the page, and NIP-22 scopes
+        // a comment by A/E tags that name exactly one entity, so trusting it for what gets published
+        // would let a page decide which real, unrelated conversation a reader's own words are filed
+        // into. publishing (buildEvent) never reads this.
+        let linkedEntity = null;
+        function findLinkedEntity() {
+            try {
+                const href = document.querySelector('link[rel~="alternate"][href^="nostr:"]')?.getAttribute('href');
+                return href ? decodeLinkedEntity(href) : null;
+            } catch(_) { return null; }
+        }
+
         // A thread is filed under the normalised address, not under what is in the address bar, and
         // the two disagree more often than it looks: an anchor is dropped, tracking parameters are
         // removed, query parameters are sorted. Somebody who followed a link to #section-3 is
@@ -2369,6 +2459,7 @@
         // Hence two shapes: the page subscription asks by I for comments and by r for the rest,
         // while the refetch asks all three by the comment ids it already knows.
         const NOTE_EXPLANATION = 'This is an ordinary Nostr note that links to this page, not a comment written here. You can vote on it, and “Reply on Nostr” opens it where its author will see your answer.';
+        const LINKED_EXPLANATION = 'This page names itself as a Nostr note or article, and this comment was written about that — filed under its own address, not this page\'s. Shown because the two are the same content. A reply you write here goes to this page\'s own address, same as any other comment.';
         const COMMENT_KIND = 1111;
         // Kind 1 notes carrying an r tag for this page are read as well, and never written.
         //
@@ -2382,6 +2473,17 @@
         // back in everybody's feed, which is the thing kind 1111 exists to stop.
         const LEGACY_KIND = 1;
         const isLegacy = ev => ev.kind === LEGACY_KIND;
+        // True only for a comment that reached the thread through the linked-entity filter and not
+        // also through the page's own address — the ordinary case is both are the same, in which
+        // case there is nothing to explain.
+        const isFromLinkedEntity = ev => {
+            if (!linkedEntity || ev.kind !== COMMENT_KIND || !Array.isArray(ev.tags)) return false;
+            const own = ev.tags.some(t => t[0] === 'I' && (t[1] === pageUrl || altPageUrls.includes(t[1])));
+            if (own) return false;
+            return ev.tags.some(t =>
+                (linkedEntity.addr && t[0] === 'A' && t[1] === linkedEntity.addr) ||
+                (linkedEntity.id && t[0] === 'E' && t[1] === linkedEntity.id));
+        };
         // NIP-10, read from the NIPs repository rather than from memory:
         //   ["e", <id>, <relay>, <marker>, <pubkey>]  with marker "root" or "reply"
         //   "A direct reply to the root of a thread should have a single marked 'e' tag of type
@@ -2414,12 +2516,22 @@
             if (!es.length) return null;
             return (es.find(t => t[3] === 'root') || es[0])[1];
         };
-        const pageFilters = () => [
-            {kinds:[COMMENT_KIND], "#I":[pageUrl], limit: COMMENT_LIMIT},
-            {kinds:[LEGACY_KIND], "#r":[pageUrl], limit: COMMENT_LIMIT},
-            {kinds:[5], "#r":[pageUrl], limit: COMMENT_LIMIT},
-            {kinds:[7], "#r":[pageUrl], limit: REACTION_LIMIT},
-        ];
+        const pageFilters = () => {
+            const urls = [pageUrl, ...altPageUrls];
+            const filters = [
+                {kinds:[COMMENT_KIND], "#I":urls, limit: COMMENT_LIMIT},
+                {kinds:[LEGACY_KIND], "#r":urls, limit: COMMENT_LIMIT},
+                {kinds:[5], "#r":urls, limit: COMMENT_LIMIT},
+                {kinds:[7], "#r":urls, limit: REACTION_LIMIT},
+            ];
+            // NIP-22: an addressable event is root-scoped with an A tag, a regular one with E — never
+            // I, which is for external identifiers like a URL. Comments only: a legacy kind-1 note or
+            // a reaction naming a native Nostr entity already reaches its audience the ordinary way,
+            // through that entity's own id, not through this page.
+            if (linkedEntity?.addr) filters.push({kinds:[COMMENT_KIND], "#A":[linkedEntity.addr], limit: COMMENT_LIMIT});
+            else if (linkedEntity?.id) filters.push({kinds:[COMMENT_KIND], "#E":[linkedEntity.id], limit: COMMENT_LIMIT});
+            return filters;
+        };
         const refetchFilters = ids => [
             {kinds:[COMMENT_KIND], "#e": ids, limit: COMMENT_LIMIT},
             {kinds:[LEGACY_KIND], "#e": ids, limit: COMMENT_LIMIT},
@@ -3719,6 +3831,15 @@
                 lt.onclick = () => showMsg(NOTE_EXPLANATION);
                 header.appendChild(lt);
             }
+            if (isFromLinkedEntity(ev)) {
+                const kt = document.createElement('button');
+                kt.type = 'button';
+                kt.className = 'nc-notetag';
+                kt.textContent = 'linked';
+                kt.title = LINKED_EXPLANATION;
+                kt.onclick = () => showMsg(LINKED_EXPLANATION);
+                header.appendChild(kt);
+            }
             if (_newSince > 0 && ev.created_at > _newSince && ev.pubkey !== myPub) {
                 const nt = document.createElement('span');
                 nt.className = 'nc-newtag';
@@ -4454,6 +4575,8 @@
         // a generation token discards stale relay/verification callbacks from the previous page.
         function loadPage() {
             paintPageKey();
+            altPageUrls = findAltPageUrls();
+            linkedEntity = findLinkedEntity();
             const gen = ++pageGen;
             _wsPool.forEach(w => { try { w.close(); } catch(_) {} });
             _wsPool = [];
@@ -4570,9 +4693,12 @@
                             // uses the r tag the old versions wrote, which is also what any other
                             // client uses to link a note to a URL.
                             const pageTag = ev.kind === COMMENT_KIND ? "I" : "r";
-                            const hasPageTag = ev.tags?.some(t => t[0]===pageTag && t[1]===pageUrl);
+                            const hasPageTag = ev.tags?.some(t => t[0]===pageTag && (t[1]===pageUrl || altPageUrls.includes(t[1])));
+                            const hasLinkedTag = ev.kind === COMMENT_KIND && !!linkedEntity && ev.tags?.some(t =>
+                                (linkedEntity.addr && t[0] === 'A' && t[1] === linkedEntity.addr) ||
+                                (linkedEntity.id && t[0] === 'E' && t[1] === linkedEntity.id));
                             const isReply = ev.tags?.some(t => t[0]==="e" && commentIds.has(t[1]));
-                            if (hasPageTag || isReply) {
+                            if (hasPageTag || hasLinkedTag || isReply) {
                                 queueVerify(ev, () => {
                                     if (gen !== pageGen || comments.find(c => c.id === ev.id)) return;
                                     comments.push(ev);

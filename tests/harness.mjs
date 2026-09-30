@@ -166,6 +166,10 @@ export function extensionCode(extPath = EXT) {
     const safeMediaUrl = eval(src.slice(m0, m1) + '; safeMediaUrl');
     const l0 = src.indexOf('// safeLink: start'), l1 = src.indexOf('// safeLink: end', l0);
     const safeLink = eval(src.slice(l0, l1) + '; safeLink');
+    // Wraps _bech32Decode, fromBech32 and decodeLinkedEntity together: the last two both call the
+    // first, so the slice has to carry all three or the eval below throws ReferenceError.
+    const d0 = src.indexOf('// bech32-to-hex-string: start'), d1 = src.indexOf('// bech32-to-hex-string: end', d0);
+    const decodeLinkedEntity = eval(src.slice(d0, d1) + '; decodeLinkedEntity');
 
     const enc = new TextEncoder();
     const sign = async (priv, ev) => {
@@ -180,7 +184,7 @@ export function extensionCode(extPath = EXT) {
         return _secp.b2h(idb) === ev.id && await _secp.verify(ev.pubkey, idb, ev.sig);
     };
     const newKey = () => _secp.b2h(crypto.getRandomValues(new Uint8Array(32)));
-    return { _secp, normalizeUrl, toBech32, nip05Host, safeMediaUrl, safeLink, sign, verify, newKey, enc };
+    return { _secp, normalizeUrl, toBech32, nip05Host, safeMediaUrl, safeLink, decodeLinkedEntity, sign, verify, newKey, enc };
 }
 
 export function reporter() {

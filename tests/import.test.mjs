@@ -10,7 +10,9 @@ const SRC = new URL('../NostrComments-Chrome/content.js', import.meta.url);
 
 export async function run() {
     const src = fs.readFileSync(SRC, 'utf8');
-    const a = src.indexOf('        function fromBech32(expectedHrp, str) {');
+    // fromBech32 now calls the shared _bech32Decode (also used to decode naddr/nevent TLV
+    // payloads), so the slice has to start there or the eval below throws ReferenceError.
+    const a = src.indexOf('        function _bech32Decode(expectedHrp, str) {');
     const b = src.indexOf('        const toNpub =', a);
     const t0 = src.indexOf('        function toBech32(hrp, hex) {');
     const t1 = src.indexOf('        function fromBech32', t0);
