@@ -267,7 +267,8 @@ const ratio = (a, b) => { const [x, y] = [lum(rgb(a)), lum(rgb(b))].sort((p, q) 
 //
 // Only elements holding their own text node are sampled: a wrapper inherits its colour and would
 // report the same failure several times over, once per ancestor.
-const sample = async () => JSON.parse(await js(`${ROOT}
+const sample = async (reassert = '') => JSON.parse(await js(`${ROOT}
+  ${reassert}
   // A gradient reports backgroundColor: transparent, so walking past it lands on whatever is
   // behind the button and measures white text against a pale panel — 1.08:1 for something that is
   // really white on blue. Take the gradient's first colour stop instead; it is an approximation,
@@ -349,7 +350,13 @@ const setTheme = async want => {
 // COVERAGE is what makes this a fix rather than a longer list. A scene that silently fails to open
 // leaves the same hole as before and the suite would pass, so every selector below has to be seen
 // at least once or the run fails and names it.
-const scene = (name, setup) => ({ name, setup });
+// `reassert`, when given, is a snippet that has to run in the same script execution as the
+// measurement — not a moment before it. The extension's own 700ms navigation poll calls
+// paintPageKey() on every tick regardless of whether the URL changed, and hides #pagekey whenever
+// pageUrl === location.href, which is true on this synthetic page. A scene that forces it visible
+// and then waits before sampling is racing that poll; folded into sample()'s own script, with no
+// await between reassert and the walk, nothing can run in between the two.
+const scene = (name, setup, reassert) => ({ name, setup, reassert });
 const SCENES = [
     scene('thread', `${ROOT}
         const list = s.getElementById('list');
@@ -398,7 +405,8 @@ const SCENES = [
         empty.className = 'nc-empty';
         empty.textContent = 'No comments yet \u2013 be the first!';
         list.appendChild(empty);
-        return 1;`),
+        return 1;`,
+        `const pk = s.getElementById('pagekey'); pk.textContent = 'Thread for example.com/article'; pk.style.display = 'block';`),
 
     scene('reply banner', `${ROOT}
         const b = s.getElementById('notif-banner');
@@ -465,7 +473,7 @@ for (const theme of ['light', 'dark']) {
     for (const sc of SCENES) {
         await js(sc.setup);
         await new Promise(r => setTimeout(r, 250));
-        const data = await sample();
+        const data = await sample(sc.reassert || '');
         Object.keys(data).forEach(k => seen.add(k.split(' ')[0]));
         checkContrast(`${theme}/${sc.name}`, data);
     }
