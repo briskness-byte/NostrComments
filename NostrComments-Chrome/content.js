@@ -466,8 +466,8 @@
         btn.classList.add('nc-' + btnCorner);
         btn.type = 'button';
         btn.setAttribute('aria-label', 'Open NostrComments');
-        btn.onmouseenter = () => btn.classList.add('nc-hover');
-        btn.onmouseleave = () => btn.classList.remove('nc-hover');
+        btn.onmouseenter = () => { btn.classList.add('nc-hover'); dismiss.style.display = 'block'; };
+        btn.onmouseleave = () => { btn.classList.remove('nc-hover'); dismiss.style.display = 'none'; };
         const badge = document.createElement('span');
         badge.id = 'nc-badge';
         // Inline, because inline beats anything the page can throw at it — that is the whole point
@@ -480,6 +480,17 @@
         nBadge.id = 'nc-nbadge';
         Object.assign(nBadge.style, {position:'absolute',top:'-5px',left:'-5px',background:'#f59e0b',color:'white',borderRadius:'10px',fontSize:'11px',fontWeight:'bold',padding:'1px 5px',minWidth:'16px',textAlign:'center',display:'none',fontFamily:'system-ui,sans-serif',lineHeight:'1.45',pointerEvents:'none'});
         btn.appendChild(nBadge);
+        // A quick way to turn the extension off on this one site without opening the panel — shown
+        // only while hovering the button (toggled in onmouseenter/leave above), inline for the same
+        // reason as the badges: a page's own stylesheet cannot force this open or pin it shut.
+        const dismiss = document.createElement('button');
+        dismiss.id = 'nc-dismiss';
+        dismiss.type = 'button';
+        dismiss.textContent = '×';
+        dismiss.title = 'Turn off on this site';
+        dismiss.setAttribute('aria-label', 'Turn off NostrComments on this site');
+        Object.assign(dismiss.style, {position:'absolute',bottom:'-6px',left:'50%',transform:'translateX(-50%)',width:'18px',height:'18px',border:'none',padding:'0',margin:'0',borderRadius:'50%',background:'#50555c',color:'white',fontSize:'13px',fontWeight:'bold',lineHeight:'18px',textAlign:'center',display:'none',cursor:'pointer',fontFamily:'system-ui,sans-serif',boxShadow:'0 1px 3px rgba(0,0,0,.4)'});
+        btn.appendChild(dismiss);
         s.appendChild(btn);
 
 
@@ -761,7 +772,7 @@
         .nc-actions{margin-top:12px}
         .nc-img{max-width:100%;border-radius:10px;margin:8px 0;display:block;cursor:pointer}
         .nc-vid{max-width:100%;border-radius:10px;margin:8px 0;display:block}
-        #nc-btn{border:0;padding:0;position:fixed;width:48px;height:48px;background:linear-gradient(135deg,#1d9bf0,#0d8bf0);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2147483647;box-shadow:0 6px 18px rgba(29,155,240,0.45);transition:transform .25s ease;user-select:none}
+        #nc-btn{border:0;padding:0;position:fixed;width:48px;height:48px;background:linear-gradient(135deg,#1d9bf0,#0d8bf0);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2147483647;box-shadow:0 6px 18px rgba(29,155,240,0.45);transition:transform .25s ease,opacity .2s ease;user-select:none;opacity:.72}
         /* Bottom right is the most contested corner on the web — every support chat widget defaults
            there, along with back-to-top buttons and cookie bars. So the corner is a per-site choice
            rather than an assumption, and bottom left is the escape hatch, which is nearly always
@@ -770,7 +781,7 @@
         #nc-btn.nc-bl{left:18px;bottom:18px}
         #nc-btn.nc-tr{right:18px;top:18px}
         #nc-btn.nc-tl{left:18px;top:18px}
-        #nc-btn.nc-hover{transform:scale(1.12)}
+        #nc-btn.nc-hover{transform:scale(1.12);opacity:1}
         /* Sized against the button, not against nothing: the two badges sit at opposite top
            corners, so on a 48px button they have to be small enough not to meet in the middle.
            They fitted at 68px and browser-buttoncss caught them touching at 48. */
@@ -1726,6 +1737,20 @@
             setTimeout(() => s.getElementById('c')?.focus(), 0);
         }
         btn.onclick = () => { if (byUser(btn)) openPanel(); };
+        // dismiss sits inside btn, so letting its click bubble would also satisfy byUser(btn) via
+        // containment and pop the panel open on the same gesture — stopPropagation keeps the two
+        // from both firing on one click.
+        dismiss.onclick = async e => {
+            e.stopPropagation();
+            if (!byUser(dismiss)) return;
+            const _d = await chrome.storage.local.get('nostrcomments_disabled');
+            const arr = Array.isArray(_d.nostrcomments_disabled) ? _d.nostrcomments_disabled : [];
+            if (!arr.includes(location.origin)) arr.push(location.origin);
+            await chrome.storage.local.set({nostrcomments_disabled: arr});
+            modal.style.display = 'none';
+            btn.style.display = 'none';
+            host.remove();
+        };
         s.getElementById('c').onclick = closeModal;
 
         // The toolbar button, which is the one way in that a page cannot take away. A site can
