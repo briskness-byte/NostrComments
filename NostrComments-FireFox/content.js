@@ -493,6 +493,67 @@
         btn.appendChild(dismiss);
         s.appendChild(btn);
 
+        // Drag-to-reposition, without free placement: a push or swipe nudges the button to whichever
+        // of the four corners the settings picker already offers, snapping each axis independently
+        // once it clears a small threshold — push up and it goes to the top, push left and it goes to
+        // that side, the other axis keeps whatever it already was. Free (any-pixel) placement was
+        // considered and rejected: clamping against the viewport, a resize leaving a saved spot
+        // off-screen, and touch conflicting with page scroll. Snapping to an existing corner
+        // sidesteps all three — there is never an arbitrary position to clamp or lose.
+        //
+        // Pointer Events unify mouse, touch and pen, so a swipe on mobile falls out of this for free,
+        // no separate touch handling.
+        let _dragFrom = null, _justNudged = false;
+        const NUDGE_PX = 18; // a deliberate push, not an accidental wobble
+        function nudgeToCorner(next) {
+            if (next === btnCorner) return;
+            // A slide, not a jump: measure before, apply the class change (which snaps instantly to
+            // the new corner), measure after, then animate a transform from the old spot back to
+            // zero — so the button visibly travels there instead of vanishing and reappearing.
+            const before = btn.getBoundingClientRect();
+            btn.classList.remove('nc-tl', 'nc-tr', 'nc-bl', 'nc-br');
+            btnCorner = next;
+            btn.classList.add('nc-' + next);
+            saveBtnCorner();
+            paintBtnPos();
+            const after = btn.getBoundingClientRect();
+            const dx = before.left - after.left, dy = before.top - after.top;
+            if (!dx && !dy) return;
+            btn.style.transition = 'none';
+            btn.style.transform = `translate(${dx}px,${dy}px)`;
+            btn.getBoundingClientRect(); // force the jump to apply before animating away from it
+            requestAnimationFrame(() => {
+                btn.style.transition = 'transform .28s cubic-bezier(.22,.8,.3,1)';
+                btn.style.transform = '';
+            });
+            btn.addEventListener('transitionend', () => { btn.style.transition = ''; btn.style.transform = ''; }, { once: true });
+        }
+        btn.addEventListener('pointerdown', e => {
+            if (e.target === dismiss || (e.button !== undefined && e.button > 0)) return;
+            _justNudged = false;
+            _dragFrom = { x: e.clientX, y: e.clientY };
+            // Keeps pointermove/up targeting btn even once it has visually slid out from under the
+            // pointer — without this, a fast swipe would hand off to whatever page content ends up
+            // underneath and the gesture would stop partway through.
+            try { btn.setPointerCapture(e.pointerId); } catch (err) {}
+        });
+        btn.addEventListener('pointermove', e => {
+            if (!_dragFrom) return;
+            const dx = e.clientX - _dragFrom.x, dy = e.clientY - _dragFrom.y;
+            let v = btnCorner[0], h = btnCorner[1];
+            if (Math.abs(dy) > NUDGE_PX) v = dy < 0 ? 't' : 'b';
+            if (Math.abs(dx) > NUDGE_PX) h = dx < 0 ? 'l' : 'r';
+            const next = v + h;
+            if (next !== btnCorner) {
+                _justNudged = true;
+                nudgeToCorner(next);
+                _dragFrom = { x: e.clientX, y: e.clientY }; // lets one continuous swipe cross more than one corner
+            }
+        });
+        const _endDrag = () => { _dragFrom = null; };
+        btn.addEventListener('pointerup', _endDrag);
+        btn.addEventListener('pointercancel', _endDrag);
+
 
         const _cssText = `
         #m{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.94);z-index:2147483647;place-items:center;font-family:system-ui,sans-serif;overflow:hidden}
@@ -1745,7 +1806,9 @@
             updateNotifBadge();
             setTimeout(() => s.getElementById('c')?.focus(), 0);
         }
-        btn.onclick = () => { if (byUser(btn)) openPanel(); };
+        // A drag that ended in a corner change leaves a click behind (pointerup always fires one) —
+        // skip it once, so dragging the button never also opens the panel on release.
+        btn.onclick = () => { if (_justNudged) { _justNudged = false; return; } if (byUser(btn)) openPanel(); };
         // dismiss sits inside btn, so letting its click bubble would also satisfy byUser(btn) via
         // containment and pop the panel open on the same gesture — stopPropagation keeps the two
         // from both firing on one click.
