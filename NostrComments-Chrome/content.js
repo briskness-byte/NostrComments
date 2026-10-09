@@ -9,7 +9,7 @@
     async function init() {
 
         // Load all persistent storage up front (cross-origin, unlike localStorage)
-        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker','nostrcomments_clienttag']);
+        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_btndefault','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker','nostrcomments_clienttag']);
         let hasConsent = _st.nostrcomments_consent === true;
 
         // ---- where relay sockets get opened ---------------------------------------------------
@@ -100,8 +100,14 @@
         let signerPref = _st.nostrcomments_signer === 'nip07' || _st.nostrcomments_signer === 'local' ? _st.nostrcomments_signer : null;
         // Per origin, so moving it out of the way on one site does not move it everywhere.
         const _btnPosAll = (_st.nostrcomments_btnpos && typeof _st.nostrcomments_btnpos === 'object') ? _st.nostrcomments_btnpos : {};
-        let btnCorner = /^(tl|tr|bl|br)$/.test(_btnPosAll[location.origin]) ? _btnPosAll[location.origin] : 'br';
+        // A site with no corner of its own falls back to this instead of always bottom right, so
+        // someone who repositions every new site the same way only has to say so once. Set from
+        // "Use this corner on every new site" in settings; a site this extension has already placed
+        // — through either that picker or a drag — keeps its own choice regardless of this.
+        let btnDefault = /^(tl|tr|bl|br)$/.test(_st.nostrcomments_btndefault) ? _st.nostrcomments_btndefault : null;
+        let btnCorner = /^(tl|tr|bl|br)$/.test(_btnPosAll[location.origin]) ? _btnPosAll[location.origin] : (btnDefault || 'br');
         const saveBtnCorner = () => { try { _btnPosAll[location.origin] = btnCorner; chrome.storage.local.set({nostrcomments_btnpos: _btnPosAll}); } catch(e) {} };
+        const saveBtnDefault = () => { btnDefault = btnCorner; try { chrome.storage.local.set({nostrcomments_btndefault: btnCorner}); } catch(e) {} };
         if (Array.isArray(_st.nostrcomments_disabled) && _st.nostrcomments_disabled.includes(location.origin)) {
             const _reBtn = document.createElement('button');
             _reBtn.type = 'button';
@@ -995,6 +1001,8 @@
         <button class="btnpos" data-c="bl" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↙ Bottom left</button>
         <button class="btnpos" data-c="br" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↘ Bottom right</button>
         </div>
+        <button id="btndefault-btn" class="set-btn" style="margin-top:10px;padding:7px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Use this corner on every new site</button>
+        <p class="set-p" style="font-size:12px;margin:4px 0 0;line-height:1.45">A site you have not set a corner for yourself starts bottom right. Setting a default here changes that starting point going forward — it never moves a site you have already placed differently.</p>
         <button id="site-disable-btn" class="set-btn red" style="margin-top:14px;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Disable on this site</button>
         <p id="site-thread">Comments here are filed under <code id="site-thread-url"></code> — this is the address your relays are asked about.</p>
         </div>
@@ -1099,11 +1107,17 @@
         const notifBanner = s.getElementById('notif-banner');
         const themeBtn = s.getElementById('theme-btn');
         const siteDisableBtn = s.getElementById('site-disable-btn');
+        const btnDefaultBtn = s.getElementById('btndefault-btn');
         function paintBtnPos() {
             for (const b of s.querySelectorAll('.btnpos')) {
                 const on = b.dataset.c === btnCorner;
                 b.classList.toggle('on', on);
             }
+            const isDefault = btnCorner === btnDefault;
+            btnDefaultBtn.textContent = isDefault ? '✓ Default for new sites' : 'Use this corner on every new site';
+            btnDefaultBtn.disabled = isDefault;
+            btnDefaultBtn.style.opacity = isDefault ? '0.6' : '1';
+            btnDefaultBtn.style.cursor = isDefault ? 'default' : 'pointer';
         }
         for (const b of s.querySelectorAll('.btnpos')) b.onclick = () => {
             const c = b.dataset.c;
@@ -1114,6 +1128,11 @@
             saveBtnCorner();
             paintBtnPos();
             showMsg('Moved — this site only.');
+        };
+        btnDefaultBtn.onclick = () => {
+            saveBtnDefault();
+            paintBtnPos();
+            showMsg('Set as the starting corner for sites you have not placed yet.');
         };
         paintBtnPos();
         s.getElementById('site-origin').textContent = location.hostname;
