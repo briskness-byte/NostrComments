@@ -2902,6 +2902,12 @@
         // happened and refuses to say what. Capped at 50: this is a log to glance at, not an inbox.
         let notifLog = Array.isArray(_st.nostrcomments_notifs) ? _st.nostrcomments_notifs.slice(0, 50) : [];
         const saveNotifs = () => { try { chrome.storage.local.set({nostrcomments_notifs: notifLog.slice(0, 50)}); } catch(e) {} };
+        // Reconstructs what the badge would already be showing if this tab had been open when
+        // those replies arrived — same filter a live arrival uses below (has a page, not yet seen),
+        // so three unread replies from yesterday show up on a fresh tab today instead of only after
+        // the next one streams in live or the reader happens to open the panel.
+        unreadReplies = notifLog.filter(n => !n.seen && n.where).length;
+        updateNotifBadge();
         // Where each unread reply is, so the banner can take you there. "3 new replies" without a
         // page is a dead end: only the person who wrote the comments could work out where to look,
         // and they would have to remember. The address is already in the event that arrives.
