@@ -898,7 +898,6 @@
         </div>
         <label id="widepub-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="widepub-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Also send what you post to three extra relays, so one relay removing it is not the end of it. They are never read from.</span></label>
         <label id="worker-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="worker-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Open relay connections in the background instead of in the page. Some sites forbid the page from reaching a relay at all, and this gets past that. On by default; it takes effect on the next page load.</span></label>
-        <label id="hidebtn-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="hidebtn-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Hide the floating button on every page. The panel stays reachable from this extension's toolbar icon — click it, then "Open comments on this page". You will not see the little reply-count badges without opening it that way. Off by default; it takes effect on the next page load.</span></label>
         <div id="identity-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
         <strong class="set-h" style="font-size:15px">Your identity</strong>
@@ -1001,8 +1000,9 @@
         </div>
         <div style="margin-top:14px">
         <hr style="margin:0 0 12px;border:none;border-top:1px solid #eee">
-        <strong class="set-h" style="font-size:15px">This site</strong>
-        <p class="set-p" style="font-size:13px;margin:6px 0 10px">Where the NostrComments button sits on <span id="site-origin"></span> — or whether it appears at all.</p>
+        <strong class="set-h" style="font-size:15px">The floating button</strong>
+        <label id="hidebtn-label" style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="hidebtn-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Hide it on every page. The panel stays reachable from this extension's toolbar icon — click it, then "Open comments on this page". You will not see the little reply-count badges without opening it that way. Off by default; it takes effect on the next page load.</span></label>
+        <p class="set-p" style="font-size:13px;margin:12px 0 10px">Where it sits on <span id="site-origin"></span>, when it is shown at all.</p>
         <div id="btnpos-row" style="display:flex;gap:8px">
         <button class="btnpos" data-c="tl" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↖ Top left</button>
         <button class="btnpos" data-c="tr" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↗ Top right</button>
@@ -1011,7 +1011,11 @@
         </div>
         <button id="btndefault-btn" class="set-btn" style="margin-top:10px;padding:7px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Use this corner on every new site</button>
         <p class="set-p" style="font-size:12px;margin:4px 0 0;line-height:1.45">A site you have not set a corner for yourself starts bottom right. Setting a default here changes that starting point going forward — it never moves a site you have already placed differently.</p>
-        <button id="site-disable-btn" class="set-btn red" style="margin-top:14px;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Disable on this site</button>
+        </div>
+        <div style="margin-top:14px">
+        <hr style="margin:0 0 12px;border:none;border-top:1px solid #eee">
+        <strong class="set-h" style="font-size:15px">This site</strong>
+        <button id="site-disable-btn" class="set-btn red" style="margin-top:8px;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Disable on this site</button>
         <p id="site-thread">Comments here are filed under <code id="site-thread-url"></code> — this is the address your relays are asked about.</p>
         </div>
         <div style="margin-top:14px">

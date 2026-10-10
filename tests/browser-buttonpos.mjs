@@ -120,10 +120,15 @@ const order = JSON.parse(await js(`${ROOT}
     picker: all.indexOf(row), disable: all.indexOf(off),
     intro: s.getElementById('site-origin') ? s.getElementById('site-origin').parentElement.textContent : null });`));
 ok('both controls are present', order.picker >= 0 && order.disable >= 0, order);
-ok('the position picker comes first', order.picker < order.disable, order);
-// The sentence above them has to describe both, not only the red button underneath it.
-ok('the text covers moving it', /where the nostrcomments button sits/i.test(order.intro || ''), order.intro);
-ok('and covers hiding it', /appears at all/i.test(order.intro || ''), order.intro);
+// "The floating button" section (hide it, move it) comes before "This site" (disable the whole
+// extension here) — the mild fix before the drastic one, now a section order rather than one
+// paragraph covering both, since grouping the button's own settings together moved the picker
+// away from the disable button entirely.
+ok('the position picker comes before the disable button', order.picker < order.disable, order);
+// The sentence above the picker only has to describe the picker now — hiding it entirely is the
+// checkbox right above both, in the same section, not this paragraph's job any more.
+ok('the text covers moving it', /where it sits/i.test(order.intro || ''), order.intro);
+ok('and covers whether it is shown at all', /shown at all/i.test(order.intro || ''), order.intro);
 ok('and names the site it applies to', /localhost|127\.0\.0\.1/.test(order.intro || ''), order.intro);
 
 console.log(`\n${state.fail ? '✗' : '✓'} button position: ${state.pass} passed, ${state.fail} failed`);
