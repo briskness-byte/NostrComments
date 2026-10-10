@@ -9,7 +9,7 @@
     async function init() {
 
         // Load all persistent storage up front (cross-origin, unlike localStorage)
-        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_btndefault','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker','nostrcomments_clienttag']);
+        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_btndefault','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker','nostrcomments_clienttag','nostrcomments_hidebtn']);
         let hasConsent = _st.nostrcomments_consent === true;
 
         // ---- where relay sockets get opened ---------------------------------------------------
@@ -108,6 +108,13 @@
         let btnCorner = /^(tl|tr|bl|br)$/.test(_btnPosAll[location.origin]) ? _btnPosAll[location.origin] : (btnDefault || 'br');
         const saveBtnCorner = () => { try { _btnPosAll[location.origin] = btnCorner; chrome.storage.local.set({nostrcomments_btnpos: _btnPosAll}); } catch(e) {} };
         const saveBtnDefault = () => { btnDefault = btnCorner; try { chrome.storage.local.set({nostrcomments_btndefault: btnCorner}); } catch(e) {} };
+        // Off by default. The floating button is still built below either way — settings reads and
+        // writes its classList and listeners the same as always — just never attached to the shadow
+        // root, so there is nothing on the page to find or click. The panel itself is unaffected:
+        // the toolbar popup's "Open comments on this page" reaches it through the nc-toggle message
+        // listener near the bottom of this function, the same path that already exists for when a
+        // page deletes the button on its own (see that listener's own comment).
+        const hideBtn = _st.nostrcomments_hidebtn === true;
         if (Array.isArray(_st.nostrcomments_disabled) && _st.nostrcomments_disabled.includes(location.origin)) {
             const _reBtn = document.createElement('button');
             _reBtn.type = 'button';
@@ -497,7 +504,7 @@
         dismiss.setAttribute('aria-label', 'Turn off NostrComments on this site');
         Object.assign(dismiss.style, {position:'absolute',bottom:'-6px',left:'50%',transform:'translateX(-50%)',width:'18px',height:'18px',border:'none',padding:'0',margin:'0',borderRadius:'50%',background:'#50555c',color:'white',fontSize:'13px',fontWeight:'bold',lineHeight:'18px',textAlign:'center',display:'none',cursor:'pointer',fontFamily:'system-ui,sans-serif',boxShadow:'0 1px 3px rgba(0,0,0,.4)'});
         btn.appendChild(dismiss);
-        s.appendChild(btn);
+        if (!hideBtn) s.appendChild(btn);
 
         // Drag-to-reposition, without free placement: a push or swipe nudges the button to whichever
         // of the four corners the settings picker already offers, snapping each axis independently
@@ -891,6 +898,7 @@
         </div>
         <label id="widepub-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="widepub-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Also send what you post to three extra relays, so one relay removing it is not the end of it. They are never read from.</span></label>
         <label id="worker-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="worker-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Open relay connections in the background instead of in the page. Some sites forbid the page from reaching a relay at all, and this gets past that. On by default; it takes effect on the next page load.</span></label>
+        <label id="hidebtn-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="hidebtn-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Hide the floating button on every page. The panel stays reachable from this extension's toolbar icon — click it, then "Open comments on this page". You will not see the little reply-count badges without opening it that way. Off by default; it takes effect on the next page load.</span></label>
         <div id="identity-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
         <strong class="set-h" style="font-size:15px">Your identity</strong>
@@ -2853,6 +2861,18 @@
             chrome.storage.local.set({nostrcomments_worker: workerToggle.checked});
             showMsg(workerToggle.checked ? 'Background connections on — reload the page to use them'
                                          : 'Background connections off — reload the page to go back');
+        };
+
+        // Gesture-trust-gated like every other toggle here, and for the same reason as the per-site
+        // "Disable on this site": a page that could flip this on its own would be removing the one
+        // visible sign that this extension exists on it, silently and on every site at once.
+        const hideBtnToggle = s.getElementById('hidebtn-toggle');
+        hideBtnToggle.checked = hideBtn;
+        hideBtnToggle.onchange = () => {
+            if (!byUserSettled(hideBtnToggle)) { hideBtnToggle.checked = hideBtn; return; }
+            chrome.storage.local.set({nostrcomments_hidebtn: hideBtnToggle.checked});
+            showMsg(hideBtnToggle.checked ? 'Button hidden — reload to apply. Reach the panel from this extension’s toolbar icon instead.'
+                                          : 'Button restored — reload the page to see it again');
         };
 
         const widepubToggle = s.getElementById('widepub-toggle');
