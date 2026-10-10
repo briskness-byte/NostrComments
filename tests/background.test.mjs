@@ -314,5 +314,36 @@ export async function run() {
            /const ncSocket = url => useWorker \? _workerSocket\(url\) : new WebSocket\(url\);/.test(cs));
     }
 
+    // --- the toolbar badge ------------------------------------------------------------------------------------------
+    // onBadgeMessage is the one way a content script reaches chrome.action, which it cannot call
+    // itself. Lifted with api provided, the same way mint/forget/translate were above — a page-
+    // driven browser test cannot reach the background context either, for the same reason it cannot
+    // reach the relay pipe.
+    {
+        const start = src.indexOf('function onBadgeMessage(');
+        let i = src.indexOf('{', start), depth = 0;
+        for (; i < src.length; i++) { if (src[i] === '{') depth++; else if (src[i] === '}' && --depth === 0) { i++; break; } }
+        const declared = src.slice(start, i);
+        ok('onBadgeMessage can be read out of the shipped file', declared.includes('onBadgeMessage'));
+
+        const run = msg => {
+            const calls = [];
+            const api = { action: {
+                setBadgeText: a => calls.push(['text', a]),
+                setBadgeBackgroundColor: a => calls.push(['color', a]),
+            } };
+            try {
+                (0, eval)(`(api => { ${declared} return onBadgeMessage; })`)(api)(msg);
+            } catch (e) { calls.push(['threw', String(e)]); }
+            return calls;
+        };
+
+        ok('a reply sets the count', JSON.stringify(run({ t: 'nc-badge', count: 3 })) === JSON.stringify([['text', { text: '3' }], ['color', { color: '#f59e0b' }]]));
+        ok('past 99 it rolls over to 99+', JSON.stringify(run({ t: 'nc-badge', count: 140 })[0]) === JSON.stringify(['text', { text: '99+' }]));
+        ok('zero clears it, and sets no colour for nothing showing', JSON.stringify(run({ t: 'nc-badge', count: 0 })) === JSON.stringify([['text', { text: '' }]]));
+        ok('a message of some other kind is ignored', JSON.stringify(run({ t: 'nc-toggle' })) === '[]');
+        ok('a missing message is ignored, not thrown on', JSON.stringify(run(null)) === '[]');
+    }
+
     return { name: 'background relay pipe', pass: p, fail: f };
 }

@@ -75,6 +75,18 @@ api.storage.onChanged.addListener((changes, area) => {
     if (!consent) dropEverything();
 });
 
+// The toolbar badge. A content script cannot call chrome.action itself, so it messages here
+// instead — see updateNotifBadge() in content.js. Global, not per tab: the count is about replies
+// to the reader's own comments anywhere, not about whichever tab happens to be in front, and it is
+// the one surface that stays visible even with the floating button turned off in settings.
+function onBadgeMessage(msg) {
+    if (!msg || msg.t !== 'nc-badge') return;
+    const n = Number(msg.count) || 0;
+    api.action.setBadgeText({ text: n > 0 ? (n > 99 ? '99+' : String(n)) : '' });
+    if (n > 0) api.action.setBadgeBackgroundColor({ color: '#f59e0b' });
+}
+api.runtime.onMessage.addListener(onBadgeMessage);
+
 const hkey = (port, sid) => port._ncId + ':' + sid;
 
 // ---------------------------------------------------------------------------------------------

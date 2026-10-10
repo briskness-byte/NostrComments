@@ -3161,6 +3161,12 @@
         function updateNotifBadge() {
             nBadge.textContent = unreadReplies > 9 ? '9+' : String(unreadReplies);
             nBadge.style.display = unreadReplies > 0 ? 'block' : 'none';
+            // The toolbar icon is the one surface no page can hide, and stays visible even with the
+            // floating button turned off in settings. chrome.action is not reachable from a content
+            // script, so background.js sets the number there on this message. Nothing to gate: it
+            // only tells this extension's own background how many the reader has not seen yet, and
+            // a page gains nothing from forging or blocking a number it cannot act on either way.
+            try { chrome.runtime.sendMessage({ t: 'nc-badge', count: unreadReplies }); } catch (e) {}
         }
 
         // Call this whenever the identity changes. The filter pins a pubkey at subscribe time, so a
