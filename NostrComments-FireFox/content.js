@@ -734,6 +734,7 @@
         .share-btn{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#767676}
         .share-btn:hover{color:#0c75bc}
         .share-btn.armed{color:#0c75bc;font-weight:700}
+        .share-btn:disabled{cursor:default;opacity:.75}
         #m.dark-mode .share-btn{color:#a1a1aa}
         #m.dark-mode .share-btn:hover,#m.dark-mode .share-btn.armed{color:#60a5fa}
         .del-btn{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#767676}
@@ -2684,6 +2685,8 @@
         let _newSince = 0;
         const scores = new Map();
         const votes = new Map(); // eventId -> Map(voterPubkey -> {val, at}), one vote per person
+        // Comments already shared to the feed this page view, so a re-render does not offer it again.
+        const sharedToFeed = new Set();
         // The per-voter map is the only source of truth for a score. Counting from it means an
         // optimistic vote and one arriving from a relay can never disagree, and it is what lets us
         // recognise your own vote after a reload — without that the arrows looked untouched, so
@@ -4053,6 +4056,8 @@
                 shareBtn.className = 'share-btn';
                 shareBtn.textContent = '\u{1F4E3} Share';
                 shareBtn.title = 'Post this to your Nostr feed as an ordinary note';
+                const markShared = () => { shareBtn.disabled = true; shareBtn.textContent = '\u{1F4E3} Shared'; shareBtn.title = 'Already posted to your feed'; };
+                if (sharedToFeed.has(ev.id)) markShared();
                 let sArmed = false, sDisarm;
                 shareBtn.onclick = async () => {
                     if (!byUser(shareBtn)) return;
@@ -4065,7 +4070,11 @@
                         return;
                     }
                     clearTimeout(sDisarm);
-                    sArmed = false; shareBtn.classList.remove('armed'); shareBtn.textContent = '\u{1F4E3} Share';
+                    // Busy until the relays answer. A remote signer can take seconds, and a button that
+                    // looked untouched all that time got pressed again: the same note went out twice.
+                    sArmed = false; shareBtn.classList.remove('armed');
+                    shareBtn.disabled = true; shareBtn.textContent = '\u{1F4E3} Sharing\u2026';
+                    const giveBack = () => { shareBtn.disabled = false; shareBtn.textContent = '\u{1F4E3} Share'; };
                     // Most people who see a shared note do not have this extension, and to them the page
                     // address alone leads to a page with no thread on it. The reader opens the thread in
                     // any browser. A link in the text rather than a tag, for the reason given above.
@@ -4079,10 +4088,11 @@
                     };
                     try {
                         const signed = await signAsMe(note);
-                        if (!(await verifyEvent(signed))) return showMsg('Signature check failed — nothing was posted.');
-                        if (publishFailed(await publishToRelays(signed), 'note')) return;
+                        if (!(await verifyEvent(signed))) { giveBack(); return showMsg('Signature check failed — nothing was posted.'); }
+                        if (publishFailed(await publishToRelays(signed), 'note')) return giveBack();
+                        sharedToFeed.add(ev.id); markShared();
                         showMsg('Posted to your feed. It links to this page, and to the thread for people without the extension.');
-                    } catch (e) { showMsg('Could not sign the note'); }
+                    } catch (e) { giveBack(); showMsg('Could not sign the note'); }
                 };
                 actions.appendChild(shareBtn);
 

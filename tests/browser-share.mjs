@@ -114,6 +114,18 @@ ok('it carries no r tag, so it is not a comment on this page',
    !(n.tags || []).some(t => t[0] === 'r'), n.tags);
 ok('nor an I tag', !(n.tags || []).some(t => t[0] === 'I'), n.tags);
 
+console.log('\n=== once shared, it stays shared ===');
+// On 13 Oct 2026 the same note went out twice, four seconds apart: the button reset to "Share" the
+// moment it was confirmed, and with a remote signer taking seconds it looked as if nothing happened.
+const after2 = JSON.parse(await js(`${ROOT} const b = s.getElementById('list').querySelector('.c.own .share-btn'); return JSON.stringify({ disabled: b.disabled, text: b.textContent });`));
+ok('the button says it is done', /shared/i.test(after2.text) && !/share to/i.test(after2.text), after2);
+ok('and cannot be pressed again', after2.disabled === true, after2);
+await nclick("s.getElementById('list').querySelector('.c.own .share-btn')");
+await wait(900);
+await nclick("s.getElementById('list').querySelector('.c.own .share-btn')");
+await wait(2500);
+ok('two more clicks publish nothing more', published.filter(e => e.kind === 1).length === 1, published.map(e => e.kind));
+
 console.log('\n=== and it does not come back as a comment ===');
 await wait(2500);
 const after = await js(`${ROOT} return s.getElementById('list').querySelectorAll('.c').length;`);
