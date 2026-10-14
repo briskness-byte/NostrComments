@@ -153,6 +153,12 @@ code across the Chrome and Firefox builds.
 chromium, drives the panel, and measures WCAG AA contrast against what is actually painted on
 screen. See [tests/README.md](tests/README.md) for what each suite covers.
 
+## Questions and ideas
+
+This page has a comment thread too. Open it with NostrComments installed and leave a comment, or
+[read the thread without installing anything](https://briskness-byte.github.io/thread/?url=https%3A%2F%2Fgithub.com%2Fbriskness-byte%2FNostrComments).
+Bugs go to [Issues](https://github.com/briskness-byte/NostrComments/issues).
+
 ## Contributing
 
 Pull requests welcome. Please run `node tests/run.mjs` before opening one, and keep the three
