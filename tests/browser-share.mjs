@@ -77,22 +77,22 @@ if (!cards) { console.log('\nNothing rendered; aborting.'); await finish(1); }
 console.log('\n=== only your own comment offers it ===');
 const where = JSON.parse(await js(`${ROOT}
   return JSON.stringify([...s.getElementById('list').querySelectorAll('.c')]
-    .map(c => ({ own: c.classList.contains('own'), share: !!c.querySelector('.share-btn') })));`));
+    .map(c => ({ own: c.classList.contains('own'), share: !!c.querySelector('.nc-tofeed') })));`));
 ok('your own comment has a share button', where.some(c => c.own && c.share), where);
 ok('somebody else\'s does not', !where.some(c => !c.own && c.share), where);
 
 console.log('\n=== one click arms, it does not post ===');
 published.length = 0;
-await nclick("s.getElementById('list').querySelector('.share-btn')");
+await nclick("s.getElementById('list').querySelector('.nc-tofeed')");
 await wait(900);
-const armed = await js(`${ROOT} const b = s.getElementById('list').querySelector('.share-btn'); return JSON.stringify({ armed: b.classList.contains('armed'), text: b.textContent });`);
+const armed = await js(`${ROOT} const b = s.getElementById('list').querySelector('.nc-tofeed'); return JSON.stringify({ armed: b.classList.contains('armed'), text: b.textContent });`);
 ok('the button arms itself', JSON.parse(armed).armed === true, armed);
 ok('and asks before doing anything', /feed\?/i.test(JSON.parse(armed).text), armed);
 // The whole point of two steps: a stray click must not broadcast to everyone following you.
 ok('nothing was published yet', published.length === 0, published.map(e => e.kind));
 
 console.log('\n=== the second click posts a note ===');
-await nclick("s.getElementById('list').querySelector('.share-btn')");
+await nclick("s.getElementById('list').querySelector('.nc-tofeed')");
 await wait(2500);
 const notes = published.filter(e => e.kind === 1);
 ok('exactly one note was published', notes.length === 1, published.map(e => e.kind));
@@ -117,12 +117,12 @@ ok('nor an I tag', !(n.tags || []).some(t => t[0] === 'I'), n.tags);
 console.log('\n=== once shared, it stays shared ===');
 // On 13 Oct 2026 the same note went out twice, four seconds apart: the button reset to "Share" the
 // moment it was confirmed, and with a remote signer taking seconds it looked as if nothing happened.
-const after2 = JSON.parse(await js(`${ROOT} const b = s.getElementById('list').querySelector('.c.own .share-btn'); return JSON.stringify({ disabled: b.disabled, text: b.textContent });`));
+const after2 = JSON.parse(await js(`${ROOT} const b = s.getElementById('list').querySelector('.c.own .nc-tofeed'); return JSON.stringify({ disabled: b.disabled, text: b.textContent });`));
 ok('the button says it is done', /shared/i.test(after2.text) && !/share to/i.test(after2.text), after2);
 ok('and cannot be pressed again', after2.disabled === true, after2);
-await nclick("s.getElementById('list').querySelector('.c.own .share-btn')");
+await nclick("s.getElementById('list').querySelector('.c.own .nc-tofeed')");
 await wait(900);
-await nclick("s.getElementById('list').querySelector('.c.own .share-btn')");
+await nclick("s.getElementById('list').querySelector('.c.own .nc-tofeed')");
 await wait(2500);
 ok('two more clicks publish nothing more', published.filter(e => e.kind === 1).length === 1, published.map(e => e.kind));
 

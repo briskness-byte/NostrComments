@@ -367,7 +367,7 @@ const SCENES = [
         const row = document.createElement('div');
         row.className = 'actions';
         row.append(mk('vote-btn', '\u2191 5'), mk('reply-btn', '\u21a9 Reply'), mk('zap-btn', '\u26a1'),
-                   mk('copy-btn', '\u{1F517}'), mk('share-btn', '\u{1F4E3} Share'),
+                   mk('copy-btn', '\u{1F517}'), mk('nc-tofeed', '\u{1F4E3} Share'),
                    mk('mute-btn', '\u{1F6AB} Mute'), mk('del-btn', '\u{1F5D1} Delete'));
         card.appendChild(row);
         list.appendChild(card);
@@ -460,7 +460,7 @@ const SCENES = [
 // Everything the scenes are supposed to bring into view. Missing from a run means a scene stopped
 // working, which is the failure this whole rewrite exists to catch.
 const MUST_SEE = [
-    '.reply-btn', '.zap-btn', '.copy-btn', '.share-btn', '.mute-btn', '.del-btn', '.vote-btn',
+    '.reply-btn', '.zap-btn', '.copy-btn', '.nc-tofeed', '.mute-btn', '.del-btn', '.vote-btn',
     '.nc-notetag', '.tomb', '.nc-hold-host', '.nc-hold-act', '.nc-same', '.nc-empty',
     '.nb-x', '#reply-hint', '#msg', '#site-thread', '#mythreads', '#pagekey',
 ];

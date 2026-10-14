@@ -154,9 +154,9 @@ ok('and carries no client tag', !!reply && !labelled(reply), reply && reply.tags
 // exactly why it is worth a browser assertion of its own.
 console.log('\n=== and so does the shared note, which builds its tags separately ===');
 published.length = 0;
-await nclick("[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('worth sharing')).querySelector('.share-btn')");
+await nclick("[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('worth sharing')).querySelector('.nc-tofeed')");
 await wait(900);
-await nclick("[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('worth sharing')).querySelector('.share-btn')");
+await nclick("[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('worth sharing')).querySelector('.nc-tofeed')");
 await wait(3000);
 const note = published.find(e => e.kind === 1);
 ok('the note is published', !!note, published.map(e => e.kind));

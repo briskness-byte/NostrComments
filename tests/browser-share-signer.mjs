@@ -107,7 +107,7 @@ for (const c of cards) console.log(`  ${c.own ? 'OWN  ' : 'other'} ${JSON.string
 const own = cards.find(c => c.own);
 ok('your comment is recognised as yours', !!own, cards.map(c => c.own));
 ok('it has Delete', !!own && own.buttons.some(b => b.startsWith('del-btn')), own && own.buttons);
-ok('and it has Share', !!own && own.buttons.some(b => b.startsWith('share-btn')), own && own.buttons);
+ok('and it has Share', !!own && own.buttons.some(b => b.startsWith('nc-tofeed')), own && own.buttons);
 
 console.log(`\n${state.fail === 0 ? '✓' : '✗'} share via signer: ${state.pass} passed, ${state.fail} failed`);
 await finish(state.fail ? 1 : 0);

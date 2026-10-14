@@ -731,12 +731,12 @@
         .nc-same:hover{border-color:#0c75bc;color:#0c75bc}
         #m.dark-mode .nc-same{border-color:#3f3f46;color:#a1a1aa}
         #m.dark-mode .nc-same:hover{border-color:#60a5fa;color:#60a5fa}
-        .share-btn{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#767676}
-        .share-btn:hover{color:#0c75bc}
-        .share-btn.armed{color:#0c75bc;font-weight:700}
-        .share-btn:disabled{cursor:default;opacity:.75}
-        #m.dark-mode .share-btn{color:#a1a1aa}
-        #m.dark-mode .share-btn:hover,#m.dark-mode .share-btn.armed{color:#60a5fa}
+        .nc-tofeed{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#767676}
+        .nc-tofeed:hover{color:#0c75bc}
+        .nc-tofeed.armed{color:#0c75bc;font-weight:700}
+        .nc-tofeed:disabled{cursor:default;opacity:.75}
+        #m.dark-mode .nc-tofeed{color:#a1a1aa}
+        #m.dark-mode .nc-tofeed:hover,#m.dark-mode .nc-tofeed.armed{color:#60a5fa}
         .del-btn{font-size:13px;background:none;border:none;cursor:pointer;padding:6px 10px;color:#767676}
         .del-btn:hover{color:#c62828}
         .del-btn.armed{color:#c62828;font-weight:700}
@@ -4053,7 +4053,10 @@
                 // from. The address goes in the text, where a reader can use it and the panel will
                 // not match on it.
                 const shareBtn = document.createElement('button');
-                shareBtn.className = 'share-btn';
+                // Not 'share-btn': content blockers' social-widget filters hide that class, and some reach
+                // into this shadow root. On 14 Oct 2026 a reader had Delete but no Share for exactly that
+                // reason — display:none from another extension's stylesheet. Keep the name unguessable.
+                shareBtn.className = 'nc-tofeed';
                 shareBtn.textContent = '\u{1F4E3} Share';
                 shareBtn.title = 'Post this to your Nostr feed as an ordinary note';
                 const markShared = () => { shareBtn.disabled = true; shareBtn.textContent = '\u{1F4E3} Shared'; shareBtn.title = 'Already posted to your feed'; };
