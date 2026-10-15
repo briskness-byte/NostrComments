@@ -78,6 +78,9 @@ The full policy is in **[PRIVACY.md](PRIVACY.md)**.
   behind the name of the host it would come from until you ask for it
 - **The thread's address** — when it differs from your address bar, because an anchor or a campaign
   parameter was dropped, the panel says which address the conversation is filed under
+- **Quiet mode** — hover the button and click the small −, and it only shows on pages that already
+  have comments, or where somebody replied to you. Off by default, so you can still start a thread
+  on a page nobody has commented on yet
 
 ## Installation
 
