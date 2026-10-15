@@ -93,6 +93,27 @@ export async function run() {
     // no listener and rejects, and a button that silently does nothing reads as a broken build.
     ok('a page where nothing can run is explained', /does not allow extensions to run/.test(srcs.chrome));
 
+    // --- and still answered, through the web reader ----------------------------------------------------
+    // The browser keeps extensions off its own store; the reader is an ordinary web page, so it can
+    // show that page's thread anyway. The block itself is respected: nothing here tries to run there.
+    for (const [name, src] of Object.entries(srcs)) {
+        const start = src.indexOf('function readerLink(');
+        const end = start < 0 ? -1 : src.indexOf('\n}\n', start);
+        ok(`${name} popup has readerLink()`, start >= 0 && end > start);
+        if (start < 0 || end < 0) continue;
+        const readerLink = (0, eval)(`(${src.slice(start, end + 2)})`);
+        const R = 'https://briskness-byte.github.io/thread/?url=';
+        ok(`${name}: a store page gets a reader link`,
+           readerLink('https://addons.mozilla.org/en-US/firefox/') === R + encodeURIComponent('https://addons.mozilla.org/en-US/firefox/'),
+           readerLink('https://addons.mozilla.org/en-US/firefox/'));
+        ok(`${name}: the address is encoded, query and all`,
+           readerLink('https://chromewebstore.google.com/detail/x/abc?hl=en') === R + encodeURIComponent('https://chromewebstore.google.com/detail/x/abc?hl=en'));
+        ok(`${name}: about: pages have no thread`, readerLink('about:addons') === null);
+        ok(`${name}: nor the browser's own pages`, readerLink('chrome://extensions/') === null);
+        ok(`${name}: no address, no link`, readerLink(undefined) === null && readerLink('') === null);
+        ok(`${name}: and it never tries to run on the page`, !/executeScript|scripting/.test(src));
+    }
+
     // --- the wiring the popup depends on -------------------------------------------------------------
     for (const [name, dir] of [['chrome', 'NostrComments-Chrome'], ['firefox', 'NostrComments-FireFox']]) {
         const mf = JSON.parse(fs.readFileSync(new URL(`../${dir}/manifest.json`, import.meta.url), 'utf8'));

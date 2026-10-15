@@ -16,6 +16,8 @@
            font-size: 13px; font-weight: 700; font-family: inherit; margin-bottom: 10px; }
   button:hover { opacity: .92; }
   button[hidden] { display: none; }
+  #reader { display: block; margin-top: 8px; font-size: 12px; color: #1d9bf0; }
+  #reader[hidden] { display: none; }
   @media (prefers-color-scheme: dark) {
     body { background: #16181c; color: #e7e9ea; }
     #hint { color: #8b8b93; }
@@ -28,6 +30,7 @@
 <button id="open" hidden>Open comments on this page</button>
 <button id="grant" hidden>Allow on all sites</button>
 <p id="hint"></p>
+<a id="reader" href="#" hidden>Read this page's comments on the web</a>
 <script src="popup.js"></script>
 </body>
 </html>

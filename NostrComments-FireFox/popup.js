@@ -60,6 +60,19 @@ async function refresh(justGranted) {
     return granted;
 }
 
+// The web reader shows a page's thread with no extension at all, so it still works on the pages a
+// browser keeps every extension off — its own add-on store above all. Respecting that block and
+// still answering "what has been said about this page" is the reader's job, not a workaround.
+// Only http(s): about: and the like have no thread. The reader normalises the address itself,
+// with the same normalizeUrl, so the raw tab URL is what it should be given.
+function readerLink(url) {
+    try {
+        const u = new URL(url);
+        if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+        return 'https://briskness-byte.github.io/thread/?url=' + encodeURIComponent(u.href);
+    } catch (e) { return null; }
+}
+
 // Toggle the panel on whatever tab is in front. tabs.query returns the id without the "tabs"
 // permission, and the message rides on the host permission the extension already has, so this
 // costs no new permission — which is the difference between shipping and another store review.
@@ -68,14 +81,23 @@ async function refresh(justGranted) {
 // the Chrome Web Store. There the message has no listener and rejects, and saying so is better
 // than a button that looks broken.
 document.getElementById('open').onclick = async () => {
+    let tab;
     try {
-        const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+        [tab] = await api.tabs.query({ active: true, currentWindow: true });
         if (!tab) throw new Error('no active tab');
         await api.tabs.sendMessage(tab.id, { t: 'nc-toggle' });
         window.close();
     } catch (e) {
         document.getElementById('hint').textContent =
             'This page does not allow extensions to run, so there is nothing to open here.';
+        // tab.url is only there when the host permission covers the page; without it the link
+        // stays hidden and the sentence above is the whole answer, as before.
+        const link = tab && readerLink(tab.url);
+        const a = document.getElementById('reader');
+        if (link) {
+            a.hidden = false;
+            a.onclick = async e => { e.preventDefault(); try { await api.tabs.create({ url: link }); } catch (err) {} window.close(); };
+        }
     }
 };
 
