@@ -567,7 +567,9 @@
             btn.addEventListener('transitionend', () => { btn.style.transition = ''; btn.style.transform = ''; }, { once: true });
         }
         btn.addEventListener('pointerdown', e => {
-            if (e.target === dismiss || (e.button !== undefined && e.button > 0)) return;
+            // The small controls on the button are clicks, not drags: capturing the pointer here would
+            // send their pointerup — and so the click — to btn, which opens the panel instead.
+            if (e.target === dismiss || e.target === quiet || (e.button !== undefined && e.button > 0)) return;
             _justNudged = false;
             _dragFrom = { x: e.clientX, y: e.clientY };
             // Keeps pointermove/up targeting btn even once it has visually slid out from under the

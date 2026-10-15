@@ -82,7 +82,24 @@ ok('and still there after a reload — nothing was saved', await settle(true) ==
 
 console.log('\n=== a real click on − hides it here, without opening the panel ===');
 await js(`${ROOT} s.getElementById('nc-btn').dispatchEvent(new MouseEvent('mouseenter')); return 1;`);
-await nclick("s.getElementById('nc-quiet')");
+// Diagnostics, printed with NC_DEBUG=1. They found the first bug here: − was on top at its own
+// middle, yet the click went to the button — pointerdown on −, pointerup on btn, because the drag
+// code captured the pointer for everything but ×. What is on top at each control's middle:
+const _geo = (await js(`${ROOT}
+  const at = id => { const el = s.getElementById(id), r = el.getBoundingClientRect();
+    const x = r.left + r.width / 2, y = r.top + r.height / 2, top = s.elementFromPoint(x, y);
+    return id + ' ' + [r.left, r.top, r.width, r.height].map(Math.round).join(',') + ' top=' + (top ? (top.id || top.tagName) : 'none'); };
+  const b = s.getElementById('nc-btn').getBoundingClientRect();
+  return ['btn ' + [b.left, b.top, b.width, b.height].map(Math.round).join(','), at('nc-dismiss'), at('nc-quiet')].join(' | ');`));
+if (process.env.NC_DEBUG) console.log('  geometry:', _geo);
+// And every event the click produces, recorded from the page's side (the shadow root is open).
+await js(`${ROOT} window.__ncLog = [];
+  for (const t of ['pointerdown','pointerup','mousedown','mouseup','click','keydown','keyup'])
+    s.addEventListener(t, e => window.__ncLog.push(t + '@' + (e.target.id || e.target.tagName) + (e.isTrusted ? '' : '(untrusted)')), true);
+  return 1;`);
+const clicked = await nclick("s.getElementById('nc-quiet')");
+await wait(600);
+if (process.env.NC_DEBUG) console.log('  nclick returned:', clicked, '| events:', await js(`return (window.__ncLog || []).join(' ');`));
 ok('the button is gone from the empty page', await settle(false, 4000) === false);
 const modal = await js(`${ROOT} return getComputedStyle(s.getElementById('m')).display;`);
 ok('the panel did not open', modal === 'none', modal);
