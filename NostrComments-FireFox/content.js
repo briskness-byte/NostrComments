@@ -9,7 +9,7 @@
     async function init() {
 
         // Load all persistent storage up front (cross-origin, unlike localStorage)
-        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_btndefault','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker','nostrcomments_clienttag','nostrcomments_hidebtn']);
+        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_btndefault','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker','nostrcomments_clienttag','nostrcomments_hidebtn','nostrcomments_quietbtn']);
         let hasConsent = _st.nostrcomments_consent === true;
 
         // ---- where relay sockets get opened ---------------------------------------------------
@@ -115,6 +115,12 @@
         // listener near the bottom of this function, the same path that already exists for when a
         // page deletes the button on its own (see that listener's own comment).
         const hideBtn = _st.nostrcomments_hidebtn === true;
+        // Quiet mode: the button only appears where there is something to see — comments on this
+        // page, or a reply to you. Off by default on purpose: every thread starts with somebody
+        // seeing the button on a page without comments, and quiet mode takes that invitation away.
+        // It is for readers who would otherwise remove the extension over the button (one did, Oct
+        // 2026). Unlike hideBtn it applies at once, because the button just comes and goes below.
+        let quietBtn = _st.nostrcomments_quietbtn === true;
         if (Array.isArray(_st.nostrcomments_disabled) && _st.nostrcomments_disabled.includes(location.origin)) {
             const _reBtn = document.createElement('button');
             _reBtn.type = 'button';
@@ -479,8 +485,8 @@
         btn.classList.add('nc-' + btnCorner);
         btn.type = 'button';
         btn.setAttribute('aria-label', 'Open NostrComments');
-        btn.onmouseenter = () => { btn.classList.add('nc-hover'); dismiss.style.display = 'block'; };
-        btn.onmouseleave = () => { btn.classList.remove('nc-hover'); dismiss.style.display = 'none'; };
+        btn.onmouseenter = () => { btn.classList.add('nc-hover'); dismiss.style.display = 'block'; quiet.style.display = 'block'; };
+        btn.onmouseleave = () => { btn.classList.remove('nc-hover'); dismiss.style.display = 'none'; quiet.style.display = 'none'; };
         const badge = document.createElement('span');
         badge.id = 'nc-badge';
         // Inline, because inline beats anything the page can throw at it — that is the whole point
@@ -502,9 +508,28 @@
         dismiss.textContent = '×';
         dismiss.title = 'Turn off on this site';
         dismiss.setAttribute('aria-label', 'Turn off NostrComments on this site');
-        Object.assign(dismiss.style, {position:'absolute',bottom:'-6px',left:'50%',transform:'translateX(-50%)',width:'18px',height:'18px',border:'none',padding:'0',margin:'0',borderRadius:'50%',background:'#50555c',color:'white',fontSize:'13px',fontWeight:'bold',lineHeight:'18px',textAlign:'center',display:'none',cursor:'pointer',fontFamily:'system-ui,sans-serif',boxShadow:'0 1px 3px rgba(0,0,0,.4)'});
+        Object.assign(dismiss.style, {position:'absolute',bottom:'-6px',left:'calc(50% - 11px)',transform:'translateX(-50%)',width:'18px',height:'18px',border:'none',padding:'0',margin:'0',borderRadius:'50%',background:'#50555c',color:'white',fontSize:'13px',fontWeight:'bold',lineHeight:'18px',textAlign:'center',display:'none',cursor:'pointer',fontFamily:'system-ui,sans-serif',boxShadow:'0 1px 3px rgba(0,0,0,.4)'});
         btn.appendChild(dismiss);
-        if (!hideBtn) s.appendChild(btn);
+        // Next to ×, for the moment the button is in the way: somebody annoyed by it looks here, not
+        // in Settings. Same inline styling and the same reasons as dismiss above.
+        const quiet = document.createElement('button');
+        quiet.id = 'nc-quiet';
+        quiet.type = 'button';
+        quiet.textContent = '\u2212';
+        quiet.title = 'Only show this button where there are comments';
+        quiet.setAttribute('aria-label', 'Only show the NostrComments button on pages that have comments');
+        Object.assign(quiet.style, {position:'absolute',bottom:'-6px',left:'calc(50% + 11px)',transform:'translateX(-50%)',width:'18px',height:'18px',border:'none',padding:'0',margin:'0',borderRadius:'50%',background:'#50555c',color:'white',fontSize:'13px',fontWeight:'bold',lineHeight:'18px',textAlign:'center',display:'none',cursor:'pointer',fontFamily:'system-ui,sans-serif',boxShadow:'0 1px 3px rgba(0,0,0,.4)'});
+        btn.appendChild(quiet);
+        // Whether the button belongs on the page right now. Called at start, whenever either badge
+        // changes, and when quiet mode is switched. Hidden-everywhere wins over everything.
+        const placeBtn = () => {
+            if (hideBtn) return;
+            const busy = badge.style.display === 'block' || nBadge.style.display === 'block';
+            const want = !quietBtn || busy;
+            if (want && !btn.isConnected) s.appendChild(btn);
+            else if (!want && btn.isConnected) btn.remove();
+        };
+        placeBtn();
 
         // Drag-to-reposition, without free placement: a push or swipe nudges the button to whichever
         // of the four corners the settings picker already offers, snapping each axis independently
@@ -905,6 +930,7 @@
         <hr style="margin:14px 0 12px;border:none;border-top:1px solid #eee">
         <strong class="set-h" style="font-size:15px">The floating button</strong>
         <label id="hidebtn-label" style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="hidebtn-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Hide it on every page. The panel stays reachable from this extension's toolbar icon — click it, then "Open comments on this page". You will not see the little reply-count badges without opening it that way. Off by default; it takes effect on the next page load.</span></label>
+        <label id="quietbtn-label" style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="quietbtn-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Only show it on pages that already have comments, or where somebody replied to you. Everywhere else, open the panel from this extension's toolbar icon. Off by default, so you can still start a thread on a page nobody has commented on yet. Also reachable from the small − on the button.</span></label>
         <p class="set-p" style="font-size:13px;margin:12px 0 10px">Where it sits on <span id="site-origin"></span>, when it is shown at all.</p>
         <div id="btnpos-row" style="display:flex;gap:8px">
         <button class="btnpos" data-c="tl" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↖ Top left</button>
@@ -1856,6 +1882,16 @@
             modal.style.display = 'none';
             btn.style.display = 'none';
             host.remove();
+        };
+        // Same containment issue as dismiss: stop the click before it reaches btn and opens the panel.
+        quiet.onclick = async e => {
+            e.stopPropagation();
+            if (!byUser(quiet)) return;
+            quietBtn = true;
+            await chrome.storage.local.set({nostrcomments_quietbtn: true});
+            const t = s.getElementById('quietbtn-toggle'); if (t) t.checked = true;
+            quiet.style.display = 'none'; dismiss.style.display = 'none'; btn.classList.remove('nc-hover');
+            placeBtn();
         };
         s.getElementById('c').onclick = closeModal;
 
@@ -2884,6 +2920,18 @@
                                           : 'Button restored — reload the page to see it again');
         };
 
+        // Same gate as the toggle above: a page switching the button off is a page hiding the extension.
+        const quietBtnToggle = s.getElementById('quietbtn-toggle');
+        quietBtnToggle.checked = quietBtn;
+        quietBtnToggle.onchange = () => {
+            if (!byUserSettled(quietBtnToggle)) { quietBtnToggle.checked = quietBtn; return; }
+            quietBtn = quietBtnToggle.checked;
+            chrome.storage.local.set({nostrcomments_quietbtn: quietBtn});
+            placeBtn();
+            showMsg(quietBtn ? 'Quiet mode on — the button now only shows on pages with comments.'
+                             : 'Quiet mode off — the button shows on every page again.');
+        };
+
         const widepubToggle = s.getElementById('widepub-toggle');
         widepubToggle.checked = publishWide;
         widepubToggle.onchange = () => {
@@ -3176,6 +3224,7 @@
         function updateNotifBadge() {
             nBadge.textContent = unreadReplies > 9 ? '9+' : String(unreadReplies);
             nBadge.style.display = unreadReplies > 0 ? 'block' : 'none';
+            placeBtn();
             // The toolbar icon is the one surface no page can hide, and stays visible even with the
             // floating button turned off in settings. chrome.action is not reachable from a content
             // script, so background.js sets the number there on this message. Nothing to gate: it
@@ -4348,6 +4397,7 @@
             const count = comments.filter(visible).length;
             badge.textContent = count > 99 ? '99+' : String(count);
             badge.style.display = count > 0 ? 'block' : 'none';
+            placeBtn();
         }
 
         let renderTimer = null;
