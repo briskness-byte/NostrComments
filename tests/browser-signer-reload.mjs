@@ -31,9 +31,13 @@ const { js, wait, goto, finish, nclick } = await startBrowser({
     onClose: () => { site.close(); relay.close(); },
 });
 
-// An honest signer that counts how often it is asked for the key.
-const installSigner = () => js(`window.__gpk = 0; window.nostr = {
-    getPublicKey: async () => { window.__gpk++; return ${JSON.stringify(MY_PUB)}; },
+// An honest signer that counts how often it is asked for the key, and remembers when it was first
+// asked — in ms since this page started loading (performance.now). That moment *is* the connect:
+// the panel asks for the key exactly once, when it connects. It is also visible from the page,
+// unlike "Connected as …", which the panel clears whenever it was not opened by a real click.
+const installSigner = () => js(`window.__gpk = 0; window.__gpkAt = null; window.__injectedAt = Math.round(performance.now());
+  window.nostr = {
+    getPublicKey: async () => { window.__gpk++; if (window.__gpkAt === null) window.__gpkAt = Math.round(performance.now()); return ${JSON.stringify(MY_PUB)}; },
     signEvent: async () => { throw new Error('not used in this suite'); },
   }; return 1;`);
 const status = () => js(`${ROOT} return s.getElementById('status').textContent;`);
@@ -60,22 +64,27 @@ ok('the signer is chosen and connected', (st || '').includes(SHOWN), { status: s
 
 console.log('\n=== reload, with the signer arriving late ===');
 await goto(site.url);
-const t0 = Date.now();
 await wait(800);
 await installSigner();                            // the signer shows up after the page did
-let connectedAt = null;
-for (let t = 0; t < 12000; t += 250) {
-    st = await status();
-    if ((st || '').includes(SHOWN)) { connectedAt = Date.now() - t0; break; }
+let t = { gpkAt: null };
+for (let i = 0; i < 48 && t.gpkAt === null; i++) {
     await wait(250);
+    t = JSON.parse(await js(`return JSON.stringify({ gpkAt: window.__gpkAt, injectedAt: window.__injectedAt, asked: window.__gpk });`));
 }
-console.log(`  connected after ${connectedAt === null ? 'never (12 s)' : connectedAt + ' ms'}`);
-ok('it connects on its own, without a click', connectedAt !== null, st);
-// Before the fix the first look came at 5 s, so anything under 4 s means the early looks did it.
-ok('and soon: within 4 seconds of the reload', connectedAt !== null && connectedAt < 4000, connectedAt);
-ok('as the signer\'s identity, not the stored key', (st || '').includes(SHOWN), st);
+console.log(`  signer present from ${t.injectedAt} ms; panel connected at ${t.gpkAt === null ? 'never (12 s)' : t.gpkAt + ' ms'} (since the page started loading)`);
+ok('it connects on its own, without a click', t.gpkAt !== null, t);
+// Before the fix the first look came 5 s after the content script started, so a connect under 4 s
+// from the start of loading means the early looks did it.
+ok('and soon: within 4 seconds of the reload', t.gpkAt !== null && t.gpkAt < 4000, t.gpkAt);
+await wait(500);
 const asked = await js(`return window.__gpk;`);
 ok('the signer was asked for the public key once', asked === 1, asked);
+
+// Identity: open the panel with a real click, the only way it draws who you are.
+await nclick("s.getElementById('nc-btn')");
+await wait(1200);
+st = await status();
+ok('it is connected as the signer\'s identity, not the stored key', (st || '').includes(SHOWN), { status: st, expected: SHOWN });
 
 console.log(`\n${state.fail ? '✗' : '✓'} signer reload: ${state.pass} passed, ${state.fail} failed`);
 await finish(state.fail ? 1 : 0);
