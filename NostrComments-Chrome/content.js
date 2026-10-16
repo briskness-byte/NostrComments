@@ -4764,18 +4764,26 @@
             //
             // Keep looking for a while instead, then stop: a page with no signer at all should not
             // poll forever.
-            let _signerTries = 0;
-            const connectTimer = setInterval(async () => {
-                if (myPub) { clearInterval(connectTimer); return; }
+            //
+            // Quickly at first. The first look used to come five seconds after load, so for those five
+            // seconds a reader who had chosen their signer saw "Not connected" and a Connect button —
+            // every page, every reload (reported 14 Oct 2026 with Attest, which is ready well within a
+            // second). The early looks only ask whether a signer is there; getPublicKey is still
+            // called once, by connect(), so a signer sees no extra requests. Same ~30 s budget.
+            const _signerAt = [300, 1000, 2000, 4000, 9000, 14000, 19000, 24000, 30000];
+            let _signerTry = 0;
+            const _lookForSigner = async () => {
+                if (myPub) return;
                 if (!localWallet) {
                     const hasNip07 = await signerPresent();
                     if (!hasNip07) {
-                        if (++_signerTries >= 6) clearInterval(connectTimer);   // ~30s
+                        if (++_signerTry < _signerAt.length) setTimeout(_lookForSigner, _signerAt[_signerTry] - _signerAt[_signerTry - 1]);
                         return;
                     }
                 }
                 connect();
-            }, 5000);
+            };
+            setTimeout(_lookForSigner, _signerAt[0]);
 
             loadPage();
             watchNavigation();
