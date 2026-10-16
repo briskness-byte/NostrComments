@@ -3,7 +3,7 @@
 Comment freely on any website — without censorship.
 
 NostrComments adds a comment thread to every webpage, powered by the [Nostr](https://nostr.com)
-protocol. Comments live on public Nostr relays — no company owns them, no platform can delete
+protocol. Comments live on public Nostr relays — no company owns them, no single platform can delete
 them, and no moderator can decide the conversation is over.
 
 That matters most where it is least welcome: on a news site that closed its comments, on a
