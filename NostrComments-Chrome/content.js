@@ -1100,7 +1100,13 @@
         </div>
         </div></div>
         </body></html>`, 'text/html');
-        s.appendChild(document.adoptNode(_tpl.getElementById('m')));
+        // Read every style="" while the template is still an inert document with no page policy:
+        // after adoption into a page that forbids inline styles, Firefox drops the attributes
+        // themselves, so there is nothing left to read back (tests/browser-csp-style.mjs).
+        const _tplM = _tpl.getElementById('m');
+        const _tplStyles = [_tplM, ..._tplM.querySelectorAll('[style]')]
+            .map(el => [el, el.getAttribute('style')]).filter(([, css]) => css);
+        s.appendChild(document.adoptNode(_tplM));
         // A page whose Content-Security-Policy forbids inline styles (style-src without
         // 'unsafe-inline') makes Firefox drop every style="" in the template above — about a hundred,
         // among them the display:none that hides the private-key box. Found 17 Oct 2026 from a
@@ -1132,10 +1138,7 @@
                 }
                 return out;
             };
-            const _m = s.getElementById('m');
-            for (const el of [_m, ..._m.querySelectorAll('[style]')]) {
-                const css = el.getAttribute('style');
-                if (!css) continue;
+            for (const [el, css] of _tplStyles) {
                 for (const [name, raw] of _decls(css)) {
                     const important = /!\s*important\s*$/i.test(raw);
                     const value = raw.replace(/!\s*important\s*$/i, '').trim();
