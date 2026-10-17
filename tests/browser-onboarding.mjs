@@ -91,7 +91,7 @@ ok('two signers are offered', wallets.links.length === 2, wallets.links.map(l =>
 ok(`both link to ${store}`, wallets.links.every(l => l.href.includes(store)), wallets.links.map(l => l.href));
 ok('neither links to the other browser\'s store', !wallets.links.some(l => l.href.includes(wrongStore)), wallets.links.map(l => l.href));
 ok('nobody is sent to a source repository', !wallets.links.some(l => /github\.com/.test(l.href)), wallets.links.map(l => l.href));
-// Firefox has no nos2x; it offers nos2x-fox (Attest from 23.2.1 until 23.10.4, while nos2x-fox had its PIN flaw); this
+// Firefox has no nos2x; it offers nos2x-fox (Attest from 23.2.1 until October 2026, while nos2x-fox had its PIN flaw); this
 // check kept expecting nos2x-fox and failed on Firefox from then on, unnoticed, because it was only run
 // on Chromium. parity.test.mjs pins the same wording statically.
 ok('the label matches what they will land on',

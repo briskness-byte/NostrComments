@@ -132,7 +132,7 @@ await js(`${ROOT} s.getElementById('m').style.display='grid';
   return 1;`);
 await wait(400);
 // The button names the signer this build recommends: "Alby / nos2x" on Chrome, "Alby / nos2x-fox" on Firefox
-// (Attest from 23.2.1 until 23.10.4; parity.test.mjs pins which). Matching only the Chrome wording made every check after
+// (Attest from 23.2.1 until October 2026; parity.test.mjs pins which). Matching only the Chrome wording made every check after
 // this one fail on Firefox, for a button that worked.
 ok('the signer can be chosen', await press(SIGNER_BUTTON) === true);
 await wait(1500);
