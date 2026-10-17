@@ -113,16 +113,16 @@ ok('it offers to copy the current key first', dlg.buttons.some(b=>/Copy the curr
 ok('it offers Cancel', dlg.buttons.some(b=>/^Cancel$/i.test(b)), dlg.buttons);
 
 // The copy button must not close the dialog — copying is a step before deciding.
+// Real clicks on the dialog's buttons: it ignores scripted ones since the audit of 17 Oct 2026.
+await nclick("s.getElementById('ask-extra')");
+await new Promise(r=>setTimeout(r,400));
 const afterCopy = JSON.parse(await js(`${ROOT}
   const ov=[...s.getElementById('p').children].find(c=>c.style.zIndex==='30');
-  [...ov.querySelectorAll('button')].find(b=>/Copy the current key/i.test(b.textContent)).click();
   return JSON.stringify({ stillOpen: getComputedStyle(ov).display!=='none' });`));
 ok('copying does not dismiss the dialog', afterCopy.stillOpen, afterCopy);
 
 // Cancel must leave the stored identity untouched.
-await js(`${ROOT}
-  const ov=[...s.getElementById('p').children].find(c=>c.style.zIndex==='30');
-  [...ov.querySelectorAll('button')].find(b=>/^Cancel$/i.test(b.textContent)).click(); return 1;`);
+await nclick("s.getElementById('ask-no')");
 await new Promise(r=>setTimeout(r,500));
 st = await js(`${ROOT} return s.getElementById('status').textContent;`);
 const msg = await js(`${ROOT} return s.getElementById('msg').textContent;`);
@@ -147,9 +147,7 @@ await js(`${ROOT} if (s.getElementById('settings').style.display !== 'block') s.
 await new Promise(r=>setTimeout(r,400));
 await nclick("s.getElementById('privkey-delete')");
 await new Promise(r=>setTimeout(r,600));
-await js(`${ROOT}
-  const ov=[...s.getElementById('p').children].find(c=>c.style.zIndex==='30');
-  [...ov.querySelectorAll('button')].find(b=>/^Delete it$/i.test(b.textContent)).click(); return 1;`);
+await nclick("s.getElementById('ask-yes')");
 await new Promise(r=>setTimeout(r,900));
 st = await js(`${ROOT} return s.getElementById('status').textContent;`);
 ok('deleting the key disconnects', /Not connected/.test(st), st);
