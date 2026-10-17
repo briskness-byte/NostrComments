@@ -1109,11 +1109,38 @@
         // Setting the same declarations through CSSOM is not subject to the page's policy, so the
         // panel looks and behaves as designed on every site. privkeyBoxOpen() below no longer reads
         // the style at all, so the key stays out of the DOM even if this ever fails.
+        //
+        // One declaration at a time, with setProperty. Firefox ignores a whole cssText assigned from a
+        // content script on such a page (measured by tests/browser-csp-style.mjs), while single
+        // properties go through — the same path the reveal button's style.display always used.
         {
+            // Split "a:b;c:d" on the semicolons and colons that are not inside quotes or brackets.
+            const _decls = css => {
+                const out = [];
+                let depth = 0, quote = '', start = 0;
+                for (let i = 0; i <= css.length; i++) {
+                    const c = css[i];
+                    if (quote) { if (c === quote) quote = ''; continue; }
+                    if (c === '"' || c === "'") { quote = c; continue; }
+                    if (c === '(') depth++;
+                    else if (c === ')') depth = Math.max(0, depth - 1);
+                    else if ((c === ';' || c === undefined) && depth === 0) {
+                        const part = css.slice(start, i); start = i + 1;
+                        const colon = part.indexOf(':');
+                        if (colon > 0) out.push([part.slice(0, colon).trim(), part.slice(colon + 1).trim()]);
+                    }
+                }
+                return out;
+            };
             const _m = s.getElementById('m');
             for (const el of [_m, ..._m.querySelectorAll('[style]')]) {
                 const css = el.getAttribute('style');
-                if (css) { try { el.style.cssText = css; } catch (e) {} }
+                if (!css) continue;
+                for (const [name, raw] of _decls(css)) {
+                    const important = /!\s*important\s*$/i.test(raw);
+                    const value = raw.replace(/!\s*important\s*$/i, '').trim();
+                    try { el.style.setProperty(name, value, important ? 'important' : ''); } catch (e) {}
+                }
             }
         }
 
