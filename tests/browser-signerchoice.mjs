@@ -100,7 +100,7 @@ await js(`${ROOT} s.getElementById('m').style.display='grid'; return 1;`); await
 const identity = () => js(`${ROOT} return JSON.stringify({
   status: s.getElementById('status').textContent,
   npub: s.getElementById('identity-npub').textContent });`);
-const SIGNER_BUTTON = 'alby / (nos2x|attest)';
+const SIGNER_BUTTON = 'alby / nos2x(-fox)?';
 // These are guarded controls (choosing which key signs), so a real gesture is required: focus the
 // button and press Enter, which the browser turns into a trusted click.
 const press = label => nclick(`[...s.querySelectorAll('button')].find(x => new RegExp(${JSON.stringify(label)}, 'i').test(x.textContent))`);
@@ -131,8 +131,8 @@ await js(`${ROOT} s.getElementById('m').style.display='grid';
   if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click();
   return 1;`);
 await wait(400);
-// The button names the signer this build recommends: "Alby / nos2x" on Chrome, "Alby / Attest" on Firefox
-// since 23.2.1 (parity.test.mjs pins which). Matching only the Chrome wording made every check after
+// The button names the signer this build recommends: "Alby / nos2x" on Chrome, "Alby / nos2x-fox" on Firefox
+// (Attest from 23.2.1 until 23.10.4; parity.test.mjs pins which). Matching only the Chrome wording made every check after
 // this one fail on Firefox, for a button that worked.
 ok('the signer can be chosen', await press(SIGNER_BUTTON) === true);
 await wait(1500);

@@ -77,28 +77,23 @@ export async function run() {
            has('chrome', 'chromewebstore.google.com/detail/nos2x/') && has('chrome', 'chromewebstore.google.com/detail/alby'));
         ok('chrome does not send them to the Firefox store', !has('chrome', 'addons.mozilla.org'));
         ok('firefox sends people to addons.mozilla.org',
-           has('firefox', 'addons.mozilla.org/firefox/addon/attest/') && has('firefox', 'addons.mozilla.org/firefox/addon/alby/'));
+           has('firefox', 'addons.mozilla.org/firefox/addon/nos2x-fox/') && has('firefox', 'addons.mozilla.org/firefox/addon/alby/'));
         ok('firefox does not send them to the Chrome store', !has('firefox', 'chromewebstore.google.com'));
-        // Firefox has no nos2x. It used to offer nos2x-fox, but since that project's issue #68 a web
-        // page can read the PIN protecting the key and there is no fixed release upstream, so it is
-        // no longer recommended at all — Attest, a fork with the hole closed, replaces it. The label
-        // still has to name the thing the user will actually land on.
-        ok('firefox labels it Attest, the extension that exists there', has('firefox', "'Attest'"));
-        ok('firefox no longer recommends nos2x-fox', !has('firefox', 'addon/nos2x-fox'));
-        // Attest is by the same developer, and the panel has to say so next to the link.
-        ok('firefox says whose Attest is', has('firefox', 'Attest is by the same developer as this extension'));
-        // Every place that names a signer has to name one that exists in this browser. nos2x is
-        // Chrome-only — the Firefox port is nos2x-fox, which is the thing with the PIN hole — so a
-        // Firefox panel saying "nos2x" sends people either nowhere or somewhere broken. Three
-        // strings, and they drifted apart once already: the button, the connect failure, and the
-        // refusal when nip07 is chosen with no signer present.
+        // Firefox has no nos2x; its port is nos2x-fox. From August to October 2026 the Firefox build
+        // recommended Attest instead, because nos2x-fox issue #68 let a page read the PIN protecting
+        // the key and no fixed release existed. The fix shipped in nos2x-fox 1.21.0 (21 Sep 2026), so
+        // the better-known signer is back. The label has to name the thing the user will land on.
+        ok('firefox labels it nos2x-fox, the extension that exists there', has('firefox', "'nos2x-fox'"));
+        ok('firefox no longer recommends Attest', !has('firefox', 'addon/attest/'));
+        // Every place that names a signer has to name one that exists in this browser: the button,
+        // the connect failure, and the refusal when nip07 is chosen with no signer present.
         ok('chrome names nos2x on the signer button', has('chrome', '>Alby / nos2x</button>'));
-        ok('firefox names Attest there instead',
-           has('firefox', '>Alby / Attest</button>') && !has('firefox', '>Alby / nos2x</button>'));
+        ok('firefox names nos2x-fox there instead',
+           has('firefox', '>Alby / nos2x-fox</button>') && !has('firefox', '>Alby / nos2x</button>'));
         ok('chrome names nos2x when no signer answers',
            has('chrome', 'Install Alby/nos2x') && has('chrome', 'install Alby or nos2x first'));
-        ok('firefox names Attest there too',
-           has('firefox', 'Install Alby/Attest') && has('firefox', 'install Alby or Attest first'));
+        ok('firefox names nos2x-fox there too',
+           has('firefox', 'Install Alby/nos2x-fox') && has('firefox', 'install Alby or nos2x-fox first'));
         // Leaving to install one and coming back to a panel that still says nothing reads as
         // failure. Both say the same thing about it.
         for (const k of Object.keys(srcs))

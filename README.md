@@ -127,7 +127,7 @@ what gets sent where. After you accept it, the onboarding screen offers two opti
    at rest.
 2. **Connect a wallet** — use [Alby](https://getalby.com) for signing via the NIP-07 browser
    extension standard, or a dedicated signer: [nos2x](https://github.com/fiatjaf/nos2x) on Chrome,
-   [Attest](https://addons.mozilla.org/firefox/addon/attest/) on Firefox.
+   [nos2x-fox](https://addons.mozilla.org/firefox/addon/nos2x-fox/) on Firefox.
 
 ## Default relays
 

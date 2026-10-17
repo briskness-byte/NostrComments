@@ -1014,7 +1014,7 @@
         <p class="set-p" style="font-size:13px;margin:6px 0 10px">Which key signs your comments. Switch to your signer to use whichever account is selected there.</p>
         <div style="display:flex;gap:8px">
         <button id="signer-local" style="flex:1;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Key stored here</button>
-        <button id="signer-nip07" style="flex:1;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Alby / Attest</button>
+        <button id="signer-nip07" style="flex:1;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Alby / nos2x-fox</button>
         </div>
         <p id="signer-note" class="set-p" style="font-size:12px;margin:8px 0 0"></p>
         </div>
@@ -1551,15 +1551,12 @@
 
             const wallets = document.createElement('div');
             wallets.className = 'ob-wallets';
-            // Attest replaces nos2x-fox here rather than joining it. Since nos2x-fox issue #68 there
-            // is a publicly described flaw in it that lets a web page read the PIN protecting the
-            // private key, and no fixed release upstream — so sending a new user there is sending
-            // them somewhere known to be broken. Attest is a fork of it with that hole closed.
-            //
-            // It is by the same developer as this extension, which is said out loud below rather
-            // than left for somebody to discover. A recommendation that hides whose it is reads as
-            // an advertisement the moment anyone checks.
-            [['Alby', 'https://addons.mozilla.org/firefox/addon/alby/'], ['Attest', 'https://addons.mozilla.org/firefox/addon/attest/']].forEach(([label, href]) => {
+            // nos2x-fox again, the Firefox counterpart of the nos2x the Chrome build offers. From
+            // August to October 2026 this pointed at Attest instead, because nos2x-fox issue #68 let a
+            // web page read the PIN protecting the key and no fixed release existed. That fix was
+            // merged upstream and shipped in nos2x-fox 1.21.0 on 21 Sep 2026, so the reason is gone,
+            // and the better-known signer is the kinder recommendation for somebody new.
+            [['Alby', 'https://addons.mozilla.org/firefox/addon/alby/'], ['nos2x-fox', 'https://addons.mozilla.org/firefox/addon/nos2x-fox/']].forEach(([label, href]) => {
                 const a = document.createElement('a');
                 a.className = 'ob-wallet'; a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer';
                 a.textContent = label;
@@ -1571,7 +1568,7 @@
             // is not something to rely on when one sentence removes the doubt.
             const walletHint = document.createElement('p');
             walletHint.className = 'ob-hint';
-            walletHint.textContent = 'Install it, then reload this page. Attest is by the same developer as this extension; Alby is not.';
+            walletHint.textContent = 'Install it, then reload this page.';
 
             // Selecting a signer that then stops answering used to be a dead end: the stored key
             // is deliberately not loaded, so nothing connects, the block stays up, and the only
@@ -3424,7 +3421,7 @@
             if (!hasConsent || connecting) return;
             connecting = true;
             const wallet = getWallet();
-            if (!wallet) { connecting = false; return status.textContent = "Install Alby/Attest"; }
+            if (!wallet) { connecting = false; return status.textContent = "Install Alby/nos2x-fox"; }
             try {
                 myPub = await wallet.getPublicKey();
                 fetchProfiles([myPub]); paintIdentity();
@@ -3590,7 +3587,7 @@
             if (pref === 'nip07') {
                 let present = false;
                 try { present = await signerPresent(); } catch(e) {}
-                if (!present) return showMsg('No Nostr signer found — install Alby or Attest first');
+                if (!present) return showMsg('No Nostr signer found — install Alby or nos2x-fox first');
             } else if (!localWallet && !encPriv) {
                 // `localWallet` is whether the key is *loaded*, not whether it exists. Choosing the
                 // signer and reloading leaves it deliberately unloaded, and this then told you that
