@@ -204,7 +204,11 @@ ok('closing the whole panel clears them too', await leaks(MUTED_WORD) === false)
 // Put the panel back the way this section found it: the checks below carry on from an open panel
 // with Settings showing, and this block reloaded the page to prove the npub is absent from a fresh
 // one.
-await js(`${ROOT} s.getElementById('m').style.display='grid'; s.getElementById('gear-btn').click(); return 1;`);
+// Opened with a real click: the password button is only on screen in a panel the reader opened,
+// and since the audit of 17 Oct 2026 it answers only a real click, which needs it to be visible.
+await nclick("s.getElementById('nc-btn')");
+await wait(900);
+await js(`${ROOT} if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click(); return 1;`);
 await wait(900);
 
 console.log('\n=== the typed password does not outlive its overlay ===');
