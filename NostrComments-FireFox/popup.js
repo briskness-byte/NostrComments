@@ -101,6 +101,13 @@ document.getElementById('open').onclick = async () => {
     }
 };
 
+// The pages where the panel was opened, on an extension page no web page can read. Opening a tab
+// of the extension's own needs no permission.
+document.getElementById('history').onclick = async () => {
+    try { await api.tabs.create({ url: api.runtime.getURL('history.html') }); } catch (e) {}
+    window.close();
+};
+
 document.getElementById('grant').onclick = async () => {
     let asked = false;
     try { asked = await api.permissions.request(HOSTS) === true; } catch (e) {}

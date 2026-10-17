@@ -16,8 +16,9 @@ import { run as background } from './background.test.mjs';
 import { run as curve } from './secp-differential.test.mjs';
 import { run as niplink } from './niplink.test.mjs';
 import { run as signerfail } from './signerfail.test.mjs';
+import { run as history } from './history.test.mjs';
 
-const suites = [await secp(), await encrypt(), await normalize(), await zap(), await bech32(), await deletion(), await keyimport(), await popup(), await relaymigration(), await nip05host(), await parity(), await ports(), await background(), await curve(), await niplink(), await signerfail()];
+const suites = [await secp(), await encrypt(), await normalize(), await zap(), await bech32(), await deletion(), await keyimport(), await popup(), await relaymigration(), await nip05host(), await parity(), await ports(), await background(), await curve(), await niplink(), await signerfail(), await history()];
 
 let totalFail = 0;
 console.log('');

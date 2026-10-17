@@ -38,7 +38,9 @@ and is never sent to the developer:
   each, so comments posted since your last visit can be marked "new". This is
   capped at the 300 most recent pages, older entries are discarded, and it stays
   in your browser's extension storage — it is never transmitted to anyone,
-  including the developer. Clearing the extension's storage removes it.
+  including the developer. You can see it, search it and clear it on the
+  "Your history" page (the extension's toolbar button → Your history); clearing
+  the extension's storage removes it too.
 
 ## Data sent to Nostr relays (third parties)
 

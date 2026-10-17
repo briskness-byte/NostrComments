@@ -2336,6 +2336,14 @@
         // somebody is reading. That is why the message above still says to reload.
         chrome.storage.onChanged.addListener((changes, area) => {
             if (area !== 'local') return;
+            // The pages seen, as the history page or another tab left them. Every tab keeps its own
+            // copy and writes all of it back whenever a panel opens, so without this "Clear history"
+            // was undone by the next panel in any tab already open — and tabs overwrote each other's
+            // entries. A try, because a change can in principle arrive before the map is declared.
+            const seenChange = changes.nostrcomments_lastseen;
+            if (seenChange) {
+                try { _lastSeenMap = (seenChange.newValue && typeof seenChange.newValue === 'object') ? { ...seenChange.newValue } : {}; } catch (e) {}
+            }
             const rel = changes.nostrcomments_relays;
             if (rel && Array.isArray(rel.newValue)) {
                 RELAYS = dedupeRelays(rel.newValue.map(normRelay));
