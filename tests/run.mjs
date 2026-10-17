@@ -18,8 +18,9 @@ import { run as niplink } from './niplink.test.mjs';
 import { run as signerfail } from './signerfail.test.mjs';
 import { run as history } from './history.test.mjs';
 import { run as thirdparty } from './thirdparty.test.mjs';
+import { run as speaksfor } from './speaksfor.test.mjs';
 
-const suites = [await secp(), await encrypt(), await normalize(), await zap(), await bech32(), await deletion(), await keyimport(), await popup(), await relaymigration(), await nip05host(), await parity(), await ports(), await background(), await curve(), await niplink(), await signerfail(), await history(), await thirdparty()];
+const suites = [await secp(), await encrypt(), await normalize(), await zap(), await bech32(), await deletion(), await keyimport(), await popup(), await relaymigration(), await nip05host(), await parity(), await ports(), await background(), await curve(), await niplink(), await signerfail(), await history(), await thirdparty(), await speaksfor()];
 
 let totalFail = 0;
 console.log('');

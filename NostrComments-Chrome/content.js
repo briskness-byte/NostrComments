@@ -870,6 +870,7 @@
         .nc-plink{display:flex;align-items:center;gap:8px;text-decoration:none}
         .nc-name{font-weight:600;color:#0c75bc}
         .nc-nip05{color:#2e7d32;font-weight:700;font-size:13px;cursor:help}
+        .nc-site{font-size:11px;font-weight:600;color:#0a68a6;background:#e8f4fd;border:1px solid #b9dcf5;border-radius:999px;padding:1px 8px;margin-left:6px;cursor:help;white-space:nowrap}
         .nc-body{margin:12px 0;font-size:17px;line-height:1.6}
         .nc-actions{margin-top:12px}
         .nc-img{max-width:100%;border-radius:10px;margin:8px 0;display:block;cursor:pointer}
@@ -900,6 +901,7 @@
         #m.dark-mode #status.err{color:#f87171}
         #m.dark-mode .nc-name{color:#93c5fd}
         #m.dark-mode .nc-nip05{color:#4ade80}
+        #m.dark-mode .nc-site{color:#93c5fd;background:#172554;border-color:#1e3a8a}
         `;
         try {
             const _ss = new CSSStyleSheet();
@@ -2959,6 +2961,26 @@
             return box;
         }
 
+        // Whether a commenter speaks for the site the thread is about: their NIP-05 has been checked,
+        // and it is the root identifier "_@domain" for exactly this page's host. Asked for in GitHub
+        // issue #1 (Oct 2026). The domain's own nostr.json naming this key proves control of the
+        // domain — not authorship: on medium.com or github.io the domain belongs to the platform. So
+        // the label says "speaks for example.com", never "author" or "page owner".
+        //
+        // Exact host only, with a leading "www." ignored on both sides. A subdomain does not count
+        // for its parent: blog.example.com may belong to somebody else. No request of its own — it
+        // reads the result verifyNip05() already has, which contacts the claimed domain, and that
+        // domain is the very site the reader is on.
+        function speaksFor(nip05, verified, pageAddress) {
+            if (verified !== true) return null;
+            const m = /^_@([^@\s/]+)$/.exec(String(nip05 || '').trim().toLowerCase());
+            if (!m) return null;
+            let host;
+            try { host = new URL(pageAddress).hostname.toLowerCase(); } catch (e) { return null; }
+            const bare = h => h.replace(/^www\./, '');
+            return bare(m[1]) === bare(host) ? bare(host) : null;
+        }
+
         async function verifyNip05(pubkey) {
             if (!nip05Check || nip05ok.has(pubkey)) return;
             const m = /^([^@\s]+)@([^@\s/]+)$/.exec(nip05s.get(pubkey) || '');
@@ -4123,6 +4145,14 @@
                 tick.textContent = '✓';
                 tick.title = `${nip05s.get(ev.pubkey)} — checked against that domain`;
                 header.appendChild(tick);
+                const site = speaksFor(nip05s.get(ev.pubkey), true, pageUrl);
+                if (site) {
+                    const badge = document.createElement('span');
+                    badge.className = 'nc-site';
+                    badge.textContent = `speaks for ${site}`;
+                    badge.title = `${site} names this key as its own (_@${site}, checked against the site). That proves control of the domain, not who wrote the page.`;
+                    header.appendChild(badge);
+                }
             }
             const meta = document.createElement('small');
             meta.className = 'ts';
