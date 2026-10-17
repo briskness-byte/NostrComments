@@ -1666,6 +1666,16 @@
             if (_msgTimer) { clearTimeout(_msgTimer); _msgTimer = null; }
             if (!sticky) _msgTimer = setTimeout(() => { msg.style.display = 'none'; _msgTimer = null; }, 4000);
         }
+        // Text that a third party wrote, made fit to quote in the panel: control and bidi-override
+        // characters out (they can make text read differently from what it is), then cut short.
+        // Used where a Lightning provider or a relay explains itself. Their words are always quoted
+        // and attributed, never spoken in the panel's own voice (audit of 17 Oct 2026): a Lightning
+        // provider is chosen by whoever is being zapped, so it could otherwise put "paste your nsec
+        // here" in this panel.
+        function quoteThirdParty(text, max = 120) {
+            const t = String(text || '').replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim();
+            return t.length > max ? t.slice(0, max - 1) + '…' : t;
+        }
         function clearMsg() {
             if (_msgTimer) { clearTimeout(_msgTimer); _msgTimer = null; }
             msg.style.display = 'none';
@@ -3803,7 +3813,7 @@
             let lnurlData;
             try { lnurlData = await fetch(endpoint).then(r => r.json()); } catch(e) { return showMsg('Could not reach Lightning address'); }
             if (!lnurlData || typeof lnurlData !== 'object') return showMsg('Lightning provider gave an unusable answer');
-            if (lnurlData.status === 'ERROR') return showMsg(lnurlData.reason || 'Lightning error');
+            if (lnurlData.status === 'ERROR') return showMsg(lnurlData.reason ? `The recipient's Lightning provider refused: “${quoteThirdParty(lnurlData.reason)}”` : 'The recipient\'s Lightning provider refused the request.');
             if (amount < lnurlData.minSendable || amount > lnurlData.maxSendable) return showMsg(`${amount / 1000} sats out of range${target ? ' for ' + target : ''}`);
             let nostrJson = '';
             if (pubkey && myPub && getWallet() && lnurlData.allowsNostr && lnurlData.nostrPubkey) {
@@ -3840,7 +3850,7 @@
             let invoiceData;
             try { invoiceData = await fetch(payUrl.href).then(r => r.json()); } catch(e) { return showMsg('Could not get invoice'); }
             if (!invoiceData || typeof invoiceData !== 'object') return showMsg('Could not get invoice');
-            if (invoiceData.status === 'ERROR') return showMsg(invoiceData.reason || 'Invoice error');
+            if (invoiceData.status === 'ERROR') return showMsg(invoiceData.reason ? `The recipient's Lightning provider would not make an invoice: “${quoteThirdParty(invoiceData.reason)}”` : 'The recipient\'s Lightning provider would not make an invoice.');
             const pr = invoiceData.pr;
             // LNURL-pay leaves this check to the payer, on purpose: the provider builds the invoice, so
             // the provider can ask for more than was requested and nothing else will say so.
@@ -4659,9 +4669,9 @@
             const r = String(reason || '');
             const pow = /^pow:/i.test(r) && r.match(/\d+/);
             if (pow) return `it wants proof-of-work at difficulty ${pow[0]}, which is more computing than a browser tab can reasonably do — try another relay, or drop this one in Settings`;
-            if (/^restricted:/i.test(r)) return `it only accepts posts from its own members (${r.replace(/^restricted:\s*/i, '') || 'no detail given'})`;
+            if (/^restricted:/i.test(r)) return `it only accepts posts from its own members (${quoteThirdParty(r.replace(/^restricted:\s*/i, '')) || 'no detail given'})`;
             if (/^auth-required:/i.test(r)) return 'it wants you to identify yourself first, and there is no identity connected';
-            return r;
+            return `it said “${quoteThirdParty(r)}”`;
         }
 
 // A comment that reached exactly one relay is published, so nothing here is an error — but
