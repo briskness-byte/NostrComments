@@ -1101,6 +1101,21 @@
         </div></div>
         </body></html>`, 'text/html');
         s.appendChild(document.adoptNode(_tpl.getElementById('m')));
+        // A page whose Content-Security-Policy forbids inline styles (style-src without
+        // 'unsafe-inline') makes Firefox drop every style="" in the template above — about a hundred,
+        // among them the display:none that hides the private-key box. Found 17 Oct 2026 from a
+        // console log on a strict-CSP page: the box then counted as open, and the stored key was
+        // written into its field, where the page could read it through the open shadow root.
+        // Setting the same declarations through CSSOM is not subject to the page's policy, so the
+        // panel looks and behaves as designed on every site. privkeyBoxOpen() below no longer reads
+        // the style at all, so the key stays out of the DOM even if this ever fails.
+        {
+            const _m = s.getElementById('m');
+            for (const el of [_m, ..._m.querySelectorAll('[style]')]) {
+                const css = el.getAttribute('style');
+                if (css) { try { el.style.cssText = css; } catch (e) {} }
+            }
+        }
 
         const modal = s.getElementById('m');
         const list = s.getElementById('list');
@@ -1131,7 +1146,11 @@
         // that field from the moment Settings was opened until the page was left. Nothing in the
         // DOM is private; the fix is to keep the secret out of it rather than to hope nobody looks.
         let _privHex = '';
-        const privkeyBoxOpen = () => { const b = s.getElementById('privkey-box'); return !!b && b.style.display !== 'none'; };
+        // Only a real click on "Show private key" (or the backup offer) sets this. It used to be read
+        // from the box's style, which a page's CSP can strip — and then the box counted as open and
+        // the key went into the field on load. A style is the page's to influence; this is not.
+        let _privBoxShown = false;
+        const privkeyBoxOpen = () => _privBoxShown;
         // Shown as nsec, because that is the form every other Nostr app asks for and the form the
         // warning above the field talks about. The hex stays the single source of truth in
         // _privHex, and both copy buttons read from it rather than from the field, so what is
@@ -1140,6 +1159,7 @@
         const setPrivHex = v => { _privHex = v || ''; if (privkeyBoxOpen()) privkeyDisplay.value = privDisplayText(); };
         const hidePrivkey = () => {
             const box = s.getElementById('privkey-box'), btn = s.getElementById('privkey-reveal');
+            _privBoxShown = false;
             if (box) box.style.display = 'none';
             if (btn) btn.textContent = 'Show private key';
             privkeyDisplay.value = '';           // leave nothing behind for the page to find
@@ -1227,10 +1247,11 @@
             const box = s.getElementById('privkey-box');
             revealBtn.onclick = () => {
                 if (!byUser(revealBtn)) return;
-                if (box.style.display !== 'none') return hidePrivkey();
+                if (_privBoxShown) return hidePrivkey();
                 if (!_privHex) return showMsg(encPriv ? 'Unlock your key first' : 'No key stored here');
                 privkeyDisplay.value = privDisplayText();
                 box.style.display = 'block';
+                _privBoxShown = true;
                 revealBtn.textContent = 'Hide private key';
             };
         }
@@ -4691,9 +4712,10 @@
             await openSettings();
             keypairSection.style.display = 'block';
             const box = s.getElementById('privkey-box'), btn = s.getElementById('privkey-reveal');
-            if (box && box.style.display === 'none' && _privHex) {
+            if (box && !_privBoxShown && _privHex) {
                 privkeyDisplay.value = privDisplayText();
                 box.style.display = 'block';
+                _privBoxShown = true;
                 if (btn) btn.textContent = 'Hide private key';
             }
         }
