@@ -38,8 +38,12 @@ export async function run() {
         return { json: async () => ({ pr: 'lnbc' + (Number(new URL(url).searchParams.get('amount')) / 100) + 'n1invoice' }) };
     };
 
-    const lnurlPay = new Function('showMsg', 'RELAYS', 'myPub', 'getWallet', 'signAsMe', 'window', 'navigator', 'fetch',
-        src.slice(start, end) + '; return lnurlPay;')(showMsg, RELAYS, myPub, getWallet, signAsMe, window, navigator, fetch);
+    // The real quoting helper, taken from the same file: a provider's error text goes through it.
+    const qa = src.indexOf('        function quoteThirdParty('), qb = src.indexOf('        function clearMsg', qa);
+    const quoteThirdParty = new Function(src.slice(qa, qb) + '; return quoteThirdParty;')();
+
+    const lnurlPay = new Function('showMsg', 'RELAYS', 'myPub', 'getWallet', 'signAsMe', 'window', 'navigator', 'fetch', 'quoteThirdParty',
+        src.slice(start, end) + '; return lnurlPay;')(showMsg, RELAYS, myPub, getWallet, signAsMe, window, navigator, fetch, quoteThirdParty);
 
     const reset = () => { msgs = []; fetches = []; paid = null; };
     const zapReq = () => JSON.parse(decodeURIComponent(fetches[1].split('&nostr=')[1]));
@@ -131,7 +135,8 @@ export async function run() {
     reset();
     LNURL = { status: 'ERROR', reason: 'wallet offline' };
     r = await lnurlPay({ lud16: 'dev@example.com', amount: 21000, successMsg: 'x' });
-    ok('provider error surfaced verbatim', msgs[0] === 'wallet offline', msgs);
+    // Quoted and attributed, not spoken in the panel's voice: the provider is the recipient's choice (audit of 17 Oct 2026).
+    ok('provider error is quoted and attributed', msgs[0] === "The recipient's Lightning provider refused: “wallet offline”", msgs);
     ok('provider error returns falsy', !r, r);
     ok('provider error stops before the invoice call', fetches.length === 1, fetches);
 
