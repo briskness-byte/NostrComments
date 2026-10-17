@@ -1616,10 +1616,28 @@
         }
 
         // "Failed to sign" is true but useless when the reason is that nothing ever came back.
-        const _isSignerTimeout = e => /NIP-07 timeout/i.test((e && e.message) || '');
+        // Which way signing failed, when the signer says so. Attest rejects remote-signer failures
+        // with fixed "attest: …" messages (its README calls them stable). The text reaches us
+        // through the page's own world, the same unauthenticatable channel as every NIP-07 answer,
+        // so a page can forge any error it likes. Hence: match only the known beginnings, and say
+        // it in this panel's own words. The signer's text itself is never shown — a page could
+        // otherwise put "approve your login at <its own site>" in our panel.
+        const _signerFailure = e => {
+            const m = String((e && e.message) || '');
+            if (/NIP-07 timeout/i.test(m) || m.startsWith('attest: the remote signer did not answer in time')) return 'timeout';
+            if (m.startsWith('attest: the remote signer refused')) return 'refused';
+            if (m.startsWith('attest: approve the login in your remote signer')) return 'login';
+            if (m.startsWith('attest: too many requests are waiting')) return 'busy';
+            return null;
+        };
+        const _isSignerTimeout = e => _signerFailure(e) === 'timeout';
         function showSignFailure(e, what) {
-            showMsg(_isSignerTimeout(e)
+            const k = _signerFailure(e);
+            showMsg(k === 'timeout'
                 ? `Your signer never answered, so nothing was signed and no ${what} was sent. Approve the request in your signer, or switch to the key stored here under ⚙ Settings.`
+                : k === 'refused' ? `Your signer refused the request, so nothing was signed and no ${what} was sent.`
+                : k === 'login' ? `Your remote signer wants you to log in first. Approve the login there, then try again — no ${what} was sent.`
+                : k === 'busy' ? `Your signer is busy with other requests. Try again in a moment — no ${what} was sent.`
                 : 'Failed to sign — try again.', true);
         }
 
@@ -3639,7 +3657,7 @@
                     paintIdentity(); paintSetName(); render();
                     showMsg('Name published — it shows on your comments from now on.');
                 } catch(e) {
-                    showMsg(/timeout/i.test((e && e.message) || '')
+                    showMsg(_isSignerTimeout(e)
                         ? 'Your signer did not answer — approve the request there, then try again. Nothing was published.'
                         : 'Could not publish the name — try again.');
                 } finally { nameBtn.disabled = false; }
@@ -4136,7 +4154,7 @@
                         if (publishFailed(await publishToRelays(signed), 'note')) return giveBack();
                         sharedToFeed.add(ev.id); markShared();
                         showMsg('Posted to your feed. It links to this page, and to the thread for people without the extension.');
-                    } catch (e) { giveBack(); showMsg('Could not sign the note'); }
+                    } catch (e) { giveBack(); showSignFailure(e, 'note'); }
                 };
                 actions.appendChild(shareBtn);
 
@@ -4207,7 +4225,7 @@
                 noteDeletionRequest(signed);
                 showMsg('Deletion requested. Relays that honour it will drop the comment; copies may remain elsewhere.');
                 return true;
-            } catch(e) { showMsg('Could not sign the deletion request'); }
+            } catch(e) { showSignFailure(e, 'deletion request'); }
             return false;
         }
 
