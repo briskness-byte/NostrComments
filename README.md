@@ -20,8 +20,12 @@ article that has no comment section, the same thread appearing in a second brows
 key, and then a paywalled paper, a company announcement, a government page and a post on X.
 
 **[Read a thread without installing anything](https://briskness-byte.github.io/thread/)**
-— a static page that queries the same relays from your own browser. Give it any address to see what
-has been said about it.
+— a static page that queries the same relays from your own browser, and checks every comment's
+signature. Give it any address to see what has been said about it.
+
+**[Run a site? Show its thread under your articles](https://briskness-byte.github.io/embed/)** — a
+snippet you paste once, read-only, that loads nothing until a visitor clicks. Your readers see the
+comments without installing anything. You cannot moderate it, and the page says so up front.
 
 ## Privacy
 
