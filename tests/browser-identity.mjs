@@ -134,9 +134,8 @@ ok('cancelling says nothing changed', /cancelled/i.test(msg), msg);
 await js(`${ROOT} s.getElementById('privkey-import').value=${JSON.stringify(toBech32('nsec',B))}; return 1;`);
 await nclick("s.getElementById('privkey-import-btn')");
 await new Promise(r=>setTimeout(r,600));
-await js(`${ROOT}
-  const ov=[...s.getElementById('p').children].find(c=>c.style.zIndex==='30');
-  [...ov.querySelectorAll('button')].find(b=>/^Replace it$/i.test(b.textContent)).click(); return 1;`);
+// The confirm dialog answers only a real click since the audit of 17 Oct 2026.
+await nclick("s.getElementById('ask-yes')");
 await new Promise(r=>setTimeout(r,1200));
 st = await js(`${ROOT} return s.getElementById('status').textContent;`);
 ok('confirming replaces it with identity B', st.includes(shown(NPUB_B)), st);

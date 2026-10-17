@@ -138,10 +138,8 @@ await js(`${ROOT}
 await nclick("s.getElementById('privkey-import-btn')");
 await wait(1000);
 // Importing over a stored key asks first; this is the same dialog browser-identity.mjs covers.
-await js(`${ROOT}
-  const ov=[...s.getElementById('p').children].find(c=>c.style.zIndex==='30');
-  if (ov) [...ov.querySelectorAll('button')].find(b=>/^Replace it$/i.test(b.textContent))?.click();
-  return 1;`);
+// A real click: the dialog ignores a scripted one since the audit of 17 Oct 2026.
+if (await js(`${ROOT} const y = s.getElementById('ask-yes'); return !!y && getComputedStyle(y.parentElement).display !== 'none';`)) await nclick("s.getElementById('ask-yes')");
 await wait(2500);
 const identity = await js(`${ROOT} return s.getElementById('status').textContent;`);
 ok('the panel reports the new identity', /Connected as/.test(identity), identity);

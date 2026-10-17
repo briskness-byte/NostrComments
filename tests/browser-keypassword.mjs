@@ -75,9 +75,8 @@ ok('declining is offered as a plain choice, not a dark pattern',
    /Not now/.test(d.text) && !/are you sure|risk losing/i.test(d.text), d.text.slice(-120));
 
 console.log('\n=== saying no ===');
-await js(`${ROOT}
-  const o = [...s.getElementById('p').children].find(c => c.style.zIndex === '28');
-  [...o.querySelectorAll('button')].find(b => /Not now/i.test(b.textContent)).click(); return 1;`);
+// A real click: the password dialog ignores a scripted one since the audit of 17 Oct 2026.
+await nclick("s.getElementById('pw-no')");
 await wait(1200);
 ok('the dialog closes', JSON.parse(await dialog()).shown === false, await dialog());
 await js(`${ROOT} s.getElementById('m').style.display='grid'; return 1;`); await wait(600);

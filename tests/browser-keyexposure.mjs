@@ -211,10 +211,8 @@ console.log('\n=== the typed password does not outlive its overlay ===');
 
 // Set a password through Settings. The overlay's fields held it from submit until the next time
 // the overlay happened to be opened, which on most pages is never.
-await js(`${ROOT}
-  const b = [...s.querySelectorAll('button')].find(x => /set a password/i.test(x.textContent));
-  if (b) b.click();
-  return 1;`);
+// Real clicks: the password button and dialog ignore scripted ones since the audit of 17 Oct 2026.
+await nclick("s.getElementById('pw-btn')");
 await wait(600);
 const pwShown = await js(`${ROOT}
   const o = [...s.getElementById('p').children].find(c => c.style.zIndex === '28' && getComputedStyle(c).display !== 'none');
@@ -226,8 +224,8 @@ if (pwShown) {
       const o = [...s.getElementById('p').children].find(c => c.style.zIndex === '28' && getComputedStyle(c).display !== 'none');
       const ins = [...o.querySelectorAll('input')];
       ins[0].value = ${JSON.stringify(PASSWORD)}; ins[1].value = ${JSON.stringify(PASSWORD)};
-      [...o.querySelectorAll('button')].find(b => /set a password/i.test(b.textContent)).click();
       return 1;`);
+    await nclick("s.getElementById('pw-ok')");
     await wait(2500);
 
     const encrypted = await js(`${ROOT}

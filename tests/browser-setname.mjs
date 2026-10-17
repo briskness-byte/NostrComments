@@ -82,10 +82,8 @@ const setup = async (nsec, relayUrl = `wss://127.0.0.1:${RELAY_PORT}`) => {
       return 1;`);
     await wait(600);
     // Importing over a key already stored here asks first, and that dialog blocks the import.
-    await js(`${ROOT}
-      const ov = [...s.getElementById('p').children].find(c => c.style.zIndex === '30' && getComputedStyle(c).display !== 'none');
-      if (ov) [...ov.querySelectorAll('button')].find(b => /^Replace it$/i.test(b.textContent))?.click();
-      return 1;`);
+    // A real click: the dialog ignores a scripted one since the audit of 17 Oct 2026.
+    if (await js(`${ROOT} const y = s.getElementById('ask-yes'); return !!y && getComputedStyle(y.parentElement).display !== 'none';`)) await nclick("s.getElementById('ask-yes')");
     await wait(1500);
 };
 const row = () => js(`${ROOT} return JSON.stringify({

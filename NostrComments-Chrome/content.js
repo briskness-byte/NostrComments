@@ -1432,11 +1432,16 @@
         // Optional password protection: encrypt the local key at rest (PBKDF2 -> AES-GCM).
         const pwBtn = document.createElement('button');
         pwBtn.type = 'button';
+        pwBtn.id = 'pw-btn';
         pwBtn.className = 'set-btn blue';
         Object.assign(pwBtn.style, {width:'100%',marginTop:'8px',padding:'9px 14px',background:'none',borderRadius:'8px',cursor:'pointer',fontSize:'13px'});
         function refreshPwBtn() { pwBtn.textContent = encPriv ? '🔓 Remove password' : '🔒 Set a password'; }
         refreshPwBtn();
         pwBtn.onclick = async () => {
+            // A page clicking this could remove the password from an unlocked key, or start setting one
+            // it then fills in itself — locking the reader out of their own key. Found in the audit of
+            // 17 Oct 2026; every other control that touches the key already took a real gesture.
+            if (!byUser(pwBtn)) return;
             if (encPriv) {
                 if (!localWallet) { const w = await unlockLocalWallet(); if (!w) return; }
                 const priv = _privHex;
@@ -1748,6 +1753,10 @@
             }
             Object.assign(_pwErr.style, {color:'#c62828',fontSize:'13px',minHeight:'18px',margin:'0 0 8px',textAlign:'center'});
             _pwOk.type = 'button';
+            _pwOk.id = 'pw-ok';
+            _pwNo.id = 'pw-no';
+            _pw1.id = 'pw-1';
+            _pw2.id = 'pw-2';
             Object.assign(_pwOk.style, {display:'block',width:'100%',padding:'13px',background:'linear-gradient(135deg,#0c75bc,#0a68ad)',color:'white',border:'none',borderRadius:'10px',cursor:'pointer',fontSize:'15px',fontWeight:'700',marginBottom:'8px'});
             _pwNo.type = 'button';
             Object.assign(_pwNo.style, {display:'block',width:'100%',padding:'10px',background:'none',border:'none',color:'#888',cursor:'pointer',fontSize:'14px'});
@@ -1755,13 +1764,19 @@
             // above them: it is a reassurance, not part of the question.
             Object.assign(_pwNote.style, {fontSize:'12px',color:'#8a8a8a',textAlign:'center',margin:'4px 0 0',lineHeight:'1.5'});
             const settle = v => { pwOverlay.style.display = 'none'; _pw1.value = ''; _pw2.value = ''; const r = _pwResolve; _pwResolve = null; if (r) r(v); };
-            _pwOk.onclick = () => {
+            // Both answers take a real gesture. This dialog also opens by itself (the offer to
+            // protect a new key), and a page could otherwise type a password of its own into both
+            // fields and confirm it: the key would be encrypted with a password the reader never knew.
+            const pwSubmit = () => {
                 if (!_pw1.value) { _pwErr.textContent = 'Enter a password, or choose not to set one.'; return; }
                 if (_pw1.value !== _pw2.value) { _pwErr.textContent = 'The two do not match.'; return; }
                 settle(_pw1.value);
             };
-            _pwNo.onclick = () => settle(null);
-            _pw2.onkeydown = e => { if (e.key === 'Enter') _pwOk.click(); };
+            _pwOk.onclick = () => { if (byUser(_pwOk)) pwSubmit(); };
+            _pwNo.onclick = () => { if (byUser(_pwNo)) settle(null); };
+            // Enter is a key press, not a click, so it is checked as one: a page can dispatch a
+            // keydown, but not a trusted one.
+            _pw2.onkeydown = e => { if (e.key === 'Enter' && e.isTrusted) pwSubmit(); };
             pwOverlay.append(_pwTitle, _pwText, _pw1, _pw2, _pwErr, _pwOk, _pwNo, _pwNote);
         }
         s.getElementById('p').appendChild(pwOverlay);
@@ -1897,17 +1912,24 @@
                     ex.type = 'button'; ex.textContent = extraLabel;
                     Object.assign(ex.style, {display:'block',width:'100%',padding:'12px',background:'none',border:'1px solid #1d9bf0',color:'#1d9bf0',borderRadius:'10px',cursor:'pointer',fontSize:'14px',fontWeight:'600',marginBottom:'10px'});
                     // Deliberately does not close the dialog: copying is a step before deciding.
-                    ex.onclick = async () => { try { await onExtra(); ex.textContent = '✓ Copied — now decide below'; ex.disabled = true; ex.style.opacity = '.7'; } catch(e) { ex.textContent = 'Copy failed'; } };
+                    ex.id = 'ask-extra';
+                    ex.onclick = async () => { if (!byUser(ex)) return; try { await onExtra(); ex.textContent = '✓ Copied — now decide below'; ex.disabled = true; ex.style.opacity = '.7'; } catch(e) { ex.textContent = 'Copy failed'; } };
                     askOverlay.appendChild(ex);
                 }
                 const yes = document.createElement('button');
                 yes.type = 'button'; yes.textContent = confirmLabel;
                 Object.assign(yes.style, {display:'block',width:'100%',padding:'13px',background: danger ? '#c62828' : 'linear-gradient(135deg,#0c75bc,#0a68ad)',color:'white',border:'none',borderRadius:'10px',cursor:'pointer',fontSize:'15px',fontWeight:'700',marginBottom:'8px'});
-                yes.onclick = () => done(true);
+                // Every answer takes a real gesture. These dialogs confirm replacing, regenerating or
+                // deleting the stored key, and "Show my key" in the backup offer, which opens by itself
+                // after a first comment. A page that clicked "yes" itself could destroy an identity the
+                // reader was only reading about, or put the key on screen (audit of 17 Oct 2026).
+                yes.id = 'ask-yes';
+                yes.onclick = () => { if (byUser(yes)) done(true); };
                 const no = document.createElement('button');
                 no.type = 'button'; no.textContent = declineLabel;
                 Object.assign(no.style, {display:'block',width:'100%',padding:'10px',background:'none',border:'none',color:'#888',cursor:'pointer',fontSize:'14px'});
-                no.onclick = () => done(false);
+                no.id = 'ask-no';
+                no.onclick = () => { if (byUser(no)) done(false); };
                 askOverlay.append(yes, no);
                 askOverlay.style.display = 'flex';
                 setTimeout(() => no.focus(), 0);
