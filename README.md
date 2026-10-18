@@ -85,6 +85,9 @@ The full policy is in **[PRIVACY.md](PRIVACY.md)**.
 - **Quiet mode** — hover the button and click the small −, and it only shows on pages that already
   have comments, or where somebody replied to you. Off by default, so you can still start a thread
   on a page nobody has commented on yet
+- **The site speaks for itself** — with verified names on, a commenter whose checked NIP-05 is
+  `_@example.com` is labelled "speaks for example.com" on that site's pages. It proves control of
+  the domain, not authorship
 - **Your history** — the toolbar button opens a page with the last 300 pages where you opened the panel,
   newest first, with a search and a Clear button. It stays on your device and makes no requests
 
