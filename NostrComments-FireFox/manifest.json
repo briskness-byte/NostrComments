@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "NostrComments",
   "version": "23.10.4",
-  "description": "Comment freely on every website \u2014 without censorship",
+  "description": "Comment on any web page. The thread lives on Nostr relays, so the site can't remove it.",
   "icons": {
     "48": "icon48.png",
     "128": "icon128.png"
