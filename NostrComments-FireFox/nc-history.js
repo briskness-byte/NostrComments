@@ -1,3 +1,7 @@
+// nc-history.js, not history.js: Sanesecurity's Foxhole ClamAV rules (used by some mail filters)
+// flag a zip containing a file named history.js, so every package was reported as infected. Measured
+// 18 Oct 2026: the same file under this name, and the unpacked files, are clean.
+//
 // Your history: the pages where you opened the panel, from the list the extension already keeps
 // for the "new" markers (nostrcomments_lastseen, capped at 300 by content.js).
 //
