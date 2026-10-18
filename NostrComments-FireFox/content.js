@@ -4031,9 +4031,19 @@
                     if (m[1] != null) { const el = document.createElement('strong'); el.textContent = m[1]; frag.appendChild(el); }
                     else if (m[2] != null) { const el = document.createElement('em'); el.textContent = m[2]; frag.appendChild(el); }
                     else if (m[3] != null) { const el = document.createElement('code'); el.textContent = m[3]; frag.appendChild(el); }
-                    else if (m[4] != null) { const a = document.createElement('a'); a.href = m[5]; a.textContent = m[4]; a.target = '_blank'; a.rel = 'noopener noreferrer'; frag.appendChild(a); }
+                    else if (m[4] != null) {
+                        // The pattern already admits only http(s) here; safeLink() says so explicitly
+                        // and also refuses user@host addresses, which make a link read as another site.
+                        // Refused, it stays visible as the text that was written, just not clickable.
+                        const href = safeLink(m[5]);
+                        if (href) { const a = document.createElement('a'); a.href = href; a.textContent = m[4]; a.target = '_blank'; a.rel = 'noopener noreferrer'; frag.appendChild(a); }
+                        else frag.appendChild(document.createTextNode(m[0]));
+                    }
                     else if (m[6] != null) {
                         const url = m[6];
+                        // Every link and window.open below uses href, never the raw text (see m[4]).
+                        const href = safeLink(url);
+                        if (!href) { frag.appendChild(document.createTextNode(url)); last = m.index + m[0].length; continue; }
                         // One that does not pass is still shown, as a link. Refusing to render it as
                         // a picture is the point; hiding that it was written is not.
                         const media = safeMediaUrl(url);
@@ -4058,8 +4068,8 @@
                             img.className = 'nc-img';
                             // noopener: without it the page that opens has window.opener, and a server that
                             // answers with HTML for a .png can send the tab somebody was reading elsewhere.
-                            img.onclick = () => window.open(url, '_blank', 'noopener,noreferrer');
-                            img.onerror = () => { const a = document.createElement('a'); a.href = url; a.textContent = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; img.replaceWith(a); };
+                            img.onclick = () => window.open(href, '_blank', 'noopener,noreferrer');
+                            img.onerror = () => { const a = document.createElement('a'); a.href = href; a.textContent = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; img.replaceWith(a); };
                             return img;
                             };
                             // Nothing is requested until the element exists, so building it lazily
@@ -4074,7 +4084,7 @@
                             };
                             frag.appendChild(autoImages ? buildVid() : pictureHolder(media, box => box.replaceWith(buildVid())));
                         } else {
-                            const a = document.createElement('a'); a.href = url; a.textContent = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; frag.appendChild(a);
+                            const a = document.createElement('a'); a.href = href; a.textContent = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; frag.appendChild(a);
                         }
                     }
                     last = m.index + m[0].length;
@@ -5026,17 +5036,17 @@
                             });
                             return;
                         }
-                        showMsg(`A relay closed the subscription: ${info || 'no reason given'}`);
+                        showMsg(info ? `A relay closed the subscription: “${quoteThirdParty(info)}”` : 'A relay closed the subscription, giving no reason.');
                         return;
                     }
                     if (type === 'OK') {
                         const [, id, ok, info] = parsed;
                         if (authId && id === authId) {
                             if (ok) openSub();                          // ask again, now identified
-                            else showMsg(`A relay refused the identification: ${info || 'no reason given'}`);
+                            else showMsg(info ? `A relay refused the identification: “${quoteThirdParty(info)}”` : 'A relay refused the identification, giving no reason.');
                             return;
                         }
-                        if (!ok && !/^(restricted|pow):/i.test(info||'')) showMsg(`Relay rejected: ${info || 'unknown reason'}`);
+                        if (!ok && !/^(restricted|pow):/i.test(info||'')) showMsg(info ? `A relay rejected it: “${quoteThirdParty(info)}”` : 'A relay rejected it, giving no reason.');
                         return;
                     }
                     if (type === 'EOSE') {
