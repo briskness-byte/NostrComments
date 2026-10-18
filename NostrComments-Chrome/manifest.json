@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "NostrComments",
   "version": "23.10.4",
-  "description": "Comment on any web page. The thread lives on Nostr relays, so the site can't remove it.",
+  "description": "The comment section no website can close. A thread on every page, kept on Nostr relays.",
   "license": "MIT",
   "icons": {
     "48": "icon48.png",
