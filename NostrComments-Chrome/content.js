@@ -3,13 +3,34 @@
     'use strict';
 
     let _bridgeInjected = false;
+
+    // The switch in the toolbar popup that turns NostrComments off on every page at once
+    // (nostrcomments_off). Off means nothing on the page, no relay connections, and no request to
+    // the signer. It applies to open tabs too: a running page is told through stop() and resume(),
+    // and a page that started while it was off starts properly when it is switched back on.
+    let _off = false;
+    let _running = null;      // { stop, resume } once init() has drawn something on this page
+    let _starting = false;
+    chrome.storage.onChanged.addListener((ch, area) => {
+        if (area !== 'local' || !ch.nostrcomments_off) return;
+        const off = ch.nostrcomments_off.newValue === true;
+        if (off === _off) return;
+        _off = off;
+        if (_running) { off ? _running.stop() : _running.resume(); }
+        else if (!off && !_starting && document.body) init().catch(e => console.error('[NostrComments]', e));
+    });
+
     if (!document.body) { document.addEventListener('DOMContentLoaded', init); return; }
     init().catch(e => console.error('[NostrComments]', e));
 
     async function init() {
+        _starting = true;
 
         // Load all persistent storage up front (cross-origin, unlike localStorage)
-        const _st = await chrome.storage.local.get(['nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_btndefault','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker','nostrcomments_clienttag','nostrcomments_hidebtn','nostrcomments_quietbtn']);
+        const _st = await chrome.storage.local.get(['nostrcomments_off','nostrcomments_signer_pub','nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_btndefault','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker','nostrcomments_clienttag','nostrcomments_hidebtn','nostrcomments_quietbtn']);
+        _starting = false;
+        _off = _st.nostrcomments_off === true;
+        if (_off) return;   // switched off everywhere: draw nothing, connect nothing, ask nothing
         let hasConsent = _st.nostrcomments_consent === true;
 
         // ---- where relay sockets get opened ---------------------------------------------------
@@ -153,6 +174,7 @@
             _rs.addEventListener('click', e => { _rg = e.isTrusted === true ? e.target : null; }, true);
             _rs.addEventListener('click', () => { _rg = null; }, false);
             _rs.appendChild(_reBtn);
+            _running = { stop: () => _reHost.remove(), resume: () => document.documentElement.appendChild(_reHost) };
             return;
         }
 
@@ -2001,6 +2023,7 @@
         // went missing. The element still holds the whole panel, so re-attaching restores it.
         chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             if (!msg || msg.t !== 'nc-toggle') return;
+            if (_off) { sendResponse({ ok: false, off: true }); return; }
             if (!host.isConnected) document.documentElement.appendChild(host);
             if (modal.style.display === 'grid') closeModal(); else openPanel();
             // Answered synchronously. An unanswered message leaves the popup waiting on a channel
@@ -3370,7 +3393,7 @@
             const gen = ++_notifGen;
             _notifWs.forEach(w => { try { w.close(); } catch(_) {} });
             _notifWs = [];
-            if (!myPub) return;
+            if (!myPub || _off) return;
             const since = Math.floor(Date.now() / 1000);
             const sid = 'ncn' + Math.random().toString(36).slice(2, 8);
             const watching = myPub;
@@ -3436,13 +3459,23 @@
         }
 
         let connecting = false;
+        // Whether the NIP-07 signer itself has been asked for the key on this page. Until it has,
+        // myPub may be the key it gave last time, remembered in nostrcomments_signer_pub.
+        let _signerAsked = false;
+        function rememberSignerPub() {
+            _signerAsked = true;
+            if (myPub === _st.nostrcomments_signer_pub) return;
+            _st.nostrcomments_signer_pub = myPub;
+            try { chrome.storage.local.set({nostrcomments_signer_pub: myPub}); } catch(e) {}
+        }
         async function connect() {
-            if (!hasConsent || connecting) return;
+            if (_off || !hasConsent || connecting) return;
             connecting = true;
             const wallet = getWallet();
             if (!wallet) { connecting = false; return status.textContent = "Install Alby/nos2x"; }
             try {
                 myPub = await wallet.getPublicKey();
+                if (wallet !== localWallet) rememberSignerPub();
                 fetchProfiles([myPub]); paintIdentity();
                 // Votes may already have loaded while nobody was connected; now that we know who
                 // you are, work out which of them are yours.
@@ -3631,6 +3664,7 @@
                 // would sit silent for the full minute before the timeout.
                 const w = getWallet();
                 myPub = await watchSigner(w.getPublicKey());
+                if (w !== localWallet) rememberSignerPub();
                 fetchProfiles([myPub]); paintIdentity();
                 recountAll();
                 startNotifSub();
@@ -4877,9 +4911,30 @@
         }
         document.addEventListener('visibilitychange', armNetwork);
 
+        // The moment a NIP-07 signer is asked for the key: when the panel is on screen, however it got
+        // there (the button, the toolbar, a shortcut). A page that shows the panel itself can cause
+        // one prompt this way, which is no more than every page caused before. If the signer has not
+        // been seen yet, the look in startNetwork() connects once it is.
+        const _panelShown = () => modal.style.display === 'grid';
+        new MutationObserver(() => {
+            if (_panelShown() && _networkStarted && !localWallet && !_signerAsked && nip07Seen) connect();
+        }).observe(modal, { attributes: true, attributeFilter: ['style'] });
+
+        // The key the NIP-07 signer gave last time, used without asking it again. See _lookForSigner.
+        function adoptKnownSigner() {
+            const pub = _st.nostrcomments_signer_pub;
+            if (myPub || typeof pub !== 'string' || !/^[0-9a-f]{64}$/.test(pub)) return;
+            myPub = pub;
+            fetchProfiles([myPub]); paintIdentity();
+            recountAll(); render();
+            status.className = 'ok';
+            paintOnboard();
+            startNotifSub();
+        }
+
         function startNetwork() {
             if (_settleTimer) { clearTimeout(_settleTimer); _settleTimer = null; }
-            if (_networkStarted || !hasConsent) return;
+            if (_off || _networkStarted || !hasConsent) return;
             _networkStarted = true;
 
             // Load the stored key, or not, according to what the user actually chose.
@@ -4926,14 +4981,22 @@
             // called once, by connect(), so a signer sees no extra requests. Same ~30 s budget.
             const _signerAt = [300, 1000, 2000, 4000, 9000, 14000, 19000, 24000, 30000];
             let _signerTry = 0;
+            //
+            // A NIP-07 signer is not asked for the key until the panel is opened. A signer like Attest
+            // asks for permission once per site, so asking on load meant a prompt on every new site
+            // somebody merely visited (reported 19 Oct 2026). Until then the key it gave last time
+            // stands in, for notifications and for recognising your own comments: a public key, kept
+            // in the extension's storage, which no page can read. Anything that signs still asks the
+            // signer first (syncIdentity, signAsMe), so a stale one is corrected before it matters.
             const _lookForSigner = async () => {
-                if (myPub) return;
+                if (myPub && (localWallet || _signerAsked || !_panelShown())) return;
                 if (!localWallet) {
                     const hasNip07 = await signerPresent();
                     if (!hasNip07) {
                         if (++_signerTry < _signerAt.length) setTimeout(_lookForSigner, _signerAt[_signerTry] - _signerAt[_signerTry - 1]);
                         return;
                     }
+                    if (!_panelShown()) { adoptKnownSigner(); return; }
                 }
                 connect();
             };
@@ -4946,6 +5009,7 @@
         // (Re)load the comment thread for the current pageUrl. Re-runnable on SPA navigation:
         // a generation token discards stale relay/verification callbacks from the previous page.
         function loadPage() {
+            if (_off) return;
             paintPageKey();
             altPageUrls = findAltPageUrls();
             linkedEntity = findLinkedEntity();
@@ -5153,6 +5217,23 @@
             // pushState/replaceState fire no event; poll as a CSP-proof, cross-world fallback.
             setInterval(onNav, 700);
         }
+
+        _running = {
+            stop() {
+                if (_settleTimer) { clearTimeout(_settleTimer); _settleTimer = null; }
+                pageGen++; _notifGen++;   // ends every reconnect loop that checks its generation
+                _wsPool.forEach(w => { try { w.close(); } catch(_) {} }); _wsPool = [];
+                _notifWs.forEach(w => { try { w.close(); } catch(_) {} }); _notifWs = [];
+                closeModal();
+                host.remove();
+            },
+            resume() {
+                document.documentElement.appendChild(host);
+                if (!_networkStarted) { if (hasConsent) armNetwork(); return; }
+                loadPage();
+                startNotifSub();
+            },
+        };
 
         if (hasConsent) armNetwork();
         render();

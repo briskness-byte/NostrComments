@@ -70,6 +70,15 @@ export async function run() {
     ok('once granted it offers to open the panel', yes.open === true, yes);
     ok('with no access there is nothing to open', none.open === false, none);
 
+    // --- switched off everywhere ------------------------------------------------------------------
+    const off = view(true, false, true);
+    ok('switched off, it says so', /^Off\./.test(off.status), off.status);
+    ok('  and that the signer is not asked', /signer is not asked/i.test(off.status), off.status);
+    ok('  and offers nothing to open', off.open === false && off.grant === false, off);
+    ok('  and says nothing is lost', /kept/i.test(off.hint), off.hint);
+    ok('switched on again it is the ordinary view', JSON.stringify(view(true, false, false)) === JSON.stringify(yes));
+    ok('with no access the switch changes nothing: granting comes first', JSON.stringify(view(false, false, true)) === JSON.stringify(none));
+
     // --- granted just now ---------------------------------------------------------------------------
     // A grant does not reach pages that are already open; the content script arrives on the next
     // load. Without this line the user clicks Allow, looks at the page behind the popup, sees no

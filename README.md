@@ -105,6 +105,11 @@ The full policy is in **[PRIVACY.md](PRIVACY.md)**.
   the domain, not authorship
 - **Your history** — the toolbar button opens a page with the last 300 pages where you opened the panel,
   newest first, with a search and a Clear button. It stays on your device and makes no requests
+- **One switch for every page** — the toolbar button has an On/Off switch. Off: nothing appears on
+  any page, nothing connects to a relay, and your signer is not asked for anything, until you switch
+  it back on. Open tabs follow at once
+- **Your signer is asked when you open the panel**, not on every page you visit, so a signer that
+  asks permission per site (like Attest) only asks where you actually read or write comments
 
 ## Installation
 

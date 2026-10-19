@@ -16,9 +16,19 @@
 const api = typeof browser !== 'undefined' ? browser : chrome;
 const HOSTS = { origins: ['<all_urls>'] };
 
-// The entire popup is one decision. Kept as a pure function of the two things that matter, so it
-// can be tested without a browser — see tests/popup.test.mjs.
-function view(granted, justGranted) {
+// The entire popup is one decision. Kept as a pure function of the things that matter, so it can
+// be tested without a browser — see tests/popup.test.mjs. `off` is the switch at the top: off
+// everywhere, the way a signer's own switch works, for somebody who wants it quiet for a while
+// without uninstalling it.
+function view(granted, justGranted, off) {
+    if (granted && off) {
+        return {
+            status: 'Off. Nothing appears on any page, nothing connects to a relay, and your signer is not asked for anything.',
+            grant: false,
+            open: false,
+            hint: 'Switch it back on here whenever you like. Your key, settings and history are kept.',
+        };
+    }
     if (!granted) {
         return {
             status: 'NostrComments cannot see any page yet, so nothing appears on them.',
@@ -41,7 +51,9 @@ function view(granted, justGranted) {
     };
 }
 
-function paint(v) {
+function paint(v, off) {
+    document.getElementById('enabled').checked = !off;
+    document.getElementById('enabled-label').textContent = off ? 'Off' : 'On';
     document.getElementById('status').textContent = v.status;
     document.getElementById('hint').textContent = v.hint;
     document.getElementById('grant').hidden = !v.grant;
@@ -54,11 +66,22 @@ async function held() {
     try { return await api.permissions.contains(HOSTS) === true; } catch (e) { return false; }
 }
 
+async function isOff() {
+    try { return (await api.storage.local.get('nostrcomments_off')).nostrcomments_off === true; } catch (e) { return false; }
+}
+
 async function refresh(justGranted) {
     const granted = await held();
-    paint(view(granted, justGranted === true && granted));
+    const off = await isOff();
+    paint(view(granted, justGranted === true && granted, off), off);
     return granted;
 }
+
+// Pages that are open follow at once: each one listens for this key (content.js, nostrcomments_off).
+document.getElementById('enabled').onchange = async e => {
+    try { await api.storage.local.set({ nostrcomments_off: !e.target.checked }); } catch (err) {}
+    await refresh(false);
+};
 
 // The web reader shows a page's thread with no extension at all, so it still works on the pages a
 // browser keeps every extension off — its own add-on store above all. Respecting that block and

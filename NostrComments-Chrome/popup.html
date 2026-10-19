@@ -19,6 +19,8 @@
   button.secondary { background: none; color: #1d9bf0; border: 1px solid #1d9bf0; margin: 12px 0 0; font-weight: 600; }
   #reader { display: block; margin-top: 8px; font-size: 12px; color: #1d9bf0; }
   #reader[hidden] { display: none; }
+  .switch-row { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-weight: 600; cursor: pointer; }
+  .switch-row input { width: 16px; height: 16px; margin: 0; accent-color: #1d9bf0; }
   @media (prefers-color-scheme: dark) {
     body { background: #16181c; color: #e7e9ea; }
     #hint { color: #8b8b93; }
@@ -27,6 +29,7 @@
 </head>
 <body>
 <h1>NostrComments</h1>
+<label class="switch-row"><input type="checkbox" id="enabled" checked> <span id="enabled-label">On</span></label>
 <p id="status"></p>
 <button id="open" hidden>Open comments on this page</button>
 <button id="grant" hidden>Allow on all sites</button>
