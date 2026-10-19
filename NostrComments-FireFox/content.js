@@ -1702,6 +1702,7 @@
             if (m.startsWith('attest: the remote signer refused')) return 'refused';
             if (m.startsWith('attest: approve the login in your remote signer')) return 'login';
             if (m.startsWith('attest: too many requests are waiting')) return 'busy';
+            if (m.startsWith("attest: could not reach the remote signer's relays")) return 'unreachable';
             return null;
         };
         const _isSignerTimeout = e => _signerFailure(e) === 'timeout';
@@ -1712,6 +1713,7 @@
                 : k === 'refused' ? `Your signer refused the request, so nothing was signed and no ${what} was sent.`
                 : k === 'login' ? `Your remote signer wants you to log in first. Approve the login there, then try again — no ${what} was sent.`
                 : k === 'busy' ? `Your signer is busy with other requests. Try again in a moment — no ${what} was sent.`
+                : k === 'unreachable' ? `Your signer could not reach the relays of your remote signer, so nothing was signed and no ${what} was sent. Check your connection and try again.`
                 : 'Failed to sign — try again.', true);
         }
 

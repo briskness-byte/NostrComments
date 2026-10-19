@@ -41,6 +41,7 @@ export async function run() {
         ok(`${name}: a refusal with a reason after it`, _signerFailure(err('attest: the remote signer refused: user said no')) === 'refused');
         ok(`${name}: a login first`, _signerFailure(err('attest: approve the login in your remote signer, then try again')) === 'login');
         ok(`${name}: too busy`, _signerFailure(err('attest: too many requests are waiting, try again in a moment')) === 'busy');
+        ok(`${name}: the remote signer's relays out of reach`, _signerFailure(err("attest: could not reach the remote signer's relays")) === 'unreachable');
         ok(`${name}: anything else is unknown`, _signerFailure(err('User rejected')) === null);
         ok(`${name}: and so is no error at all`, _signerFailure(undefined) === null && _signerFailure(null) === null);
         ok(`${name}: the prefix must be at the start`, _signerFailure(err('note: attest: the remote signer refused')) === null);
@@ -52,6 +53,8 @@ export async function run() {
         ok(`${name}: a login request says to log in first`, /log in first/.test(last()) && /no vote was sent/.test(last()), last());
         showSignFailure(err('attest: the remote signer did not answer in time'), 'note');
         ok(`${name}: a remote timeout reads like any other timeout`, /never answered/.test(last()), last());
+        showSignFailure(err("attest: could not reach the remote signer's relays"), 'comment');
+        ok(`${name}: out of reach says so, and that nothing was sent`, /could not reach/.test(last()) && /no comment was sent/.test(last()) && /try again/.test(last()), last());
         showSignFailure(err('something else entirely'), 'comment');
         ok(`${name}: an unknown failure keeps the plain message`, last() === 'Failed to sign — try again.', last());
         ok(`${name}: and every one of them stays on screen`, shown.every(s => s.sticky === true));
