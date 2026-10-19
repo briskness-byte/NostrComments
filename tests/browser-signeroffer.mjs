@@ -50,6 +50,10 @@ const shape = () => js(`${ROOT}
     // Attest in the Firefox build, nos2x in the Chrome one — the suite runs against both.
     install:  [...ob.querySelectorAll('a')].filter(a => /alby|nos2x|attest/i.test(a.textContent)).some(vis),
     hint:     [...ob.querySelectorAll('p')].some(p => /install it, then reload/i.test(p.textContent) && vis(p)),
+    // What is on screen, top to bottom, so the "or" can be checked to sit between two choices.
+    order:    [...ob.querySelectorAll('button, .ob-or, .ob-wallets')].filter(vis)
+                .map(el => el.classList.contains('ob-or') ? 'or' : el.classList.contains('ob-wallets') ? 'install'
+                     : /connect your nostr signer/i.test(el.textContent) ? 'signer' : 'local'),
     npub:     s.getElementById('identity-npub').textContent,
   });`);
 
@@ -71,6 +75,7 @@ let sh = JSON.parse(await shape());
 ok('the onboarding block is up', sh.block === true, sh);
 ok('the install links are what is offered', sh.install === true, sh);
 ok('and the reload hint with them', sh.hint === true, sh);
+ok('"or" sits between the key and the install links', JSON.stringify(sh.order) === JSON.stringify(['local', 'or', 'install']), sh.order);
 ok('there is nothing to connect to', sh.signer === false, sh);
 ok('generating a key is the primary way in', sh.generate === true, sh);
 
@@ -89,6 +94,7 @@ ok('the block offers to connect it', sh.signer === true, sh);
 ok('the install links step aside', sh.install === false, sh);
 ok('as does the reload hint, which no longer applies', sh.hint === false, sh);
 ok('generating a key is still offered, as the second option', sh.generate === true, sh);
+ok('with "or" between the two, not hanging under the last one', JSON.stringify(sh.order) === JSON.stringify(['signer', 'or', 'local']), sh.order);
 
 console.log('\n=== approving it and pressing the button ===');
 await js(`window.__approved = true; return 1;`);

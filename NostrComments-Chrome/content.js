@@ -1656,7 +1656,15 @@
             if (_obSigner) _obSigner.style.display = signerHere ? 'block' : 'none';
             if (_obWallets) _obWallets.style.display = signerHere ? 'none' : 'flex';
             if (_obWalletHint) _obWalletHint.style.display = signerHere ? 'none' : 'block';
-            if (_obOr) _obOr.textContent = signerHere ? 'or' : 'or connect an existing Nostr wallet';
+            // The "or" sits between the two choices it joins. With a signer that is the Connect button
+            // and the local key under it; without one, the local key and the install links. It used to
+            // stay in the second place either way, so with a signer it hung below the last button,
+            // joining nothing (reported 19 Oct 2026).
+            if (_obOr) {
+                _obOr.textContent = signerHere ? 'or' : 'or connect an existing Nostr wallet';
+                const after = signerHere ? _obSigner : (_obUseLocal || _obGen);
+                if (after && after.nextSibling !== _obOr) after.after(_obOr);
+            }
             // Whichever local option applies is shown, and drops to secondary when a signer is
             // there, so two stacked buttons do not both read as the thing to press.
             if (_obGen) {
