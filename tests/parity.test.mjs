@@ -84,7 +84,12 @@ export async function run() {
         // the key and no fixed release existed. The fix shipped in nos2x-fox 1.21.0 (21 Sep 2026), so
         // the better-known signer is back. The label has to name the thing the user will land on.
         ok('firefox labels it nos2x-fox, the extension that exists there', has('firefox', "'nos2x-fox'"));
-        ok('firefox no longer recommends Attest', !has('firefox', 'addon/attest/'));
+        // Attest is back since 23.10.7, as a third option after nos2x-fox rather than instead of it,
+        // and said to be ours. Chrome has no Attest build, so it must not appear there.
+        ok('firefox offers Attest after nos2x-fox, not instead of it',
+           has('firefox', 'addon/attest/') && srcs.firefox.indexOf('addon/nos2x-fox/') < srcs.firefox.indexOf('addon/attest/'));
+        ok('and says it is by the same developer', has('firefox', 'Attest is made by the developer of NostrComments'));
+        ok('chrome does not offer Attest', !has('chrome', 'addon/attest/'));
         // Every place that names a signer has to name one that exists in this browser: the button,
         // the connect failure, and the refusal when nip07 is chosen with no signer present.
         ok('chrome names nos2x on the signer button', has('chrome', '>Alby / nos2x</button>'));

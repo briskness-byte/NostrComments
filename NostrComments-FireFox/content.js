@@ -1580,7 +1580,12 @@
             // web page read the PIN protecting the key and no fixed release existed. That fix was
             // merged upstream and shipped in nos2x-fox 1.21.0 on 21 Sep 2026, so the reason is gone,
             // and the better-known signer is the kinder recommendation for somebody new.
-            [['Alby', 'https://addons.mozilla.org/firefox/addon/alby/'], ['nos2x-fox', 'https://addons.mozilla.org/firefox/addon/nos2x-fox/']].forEach(([label, href]) => {
+            //
+            // Attest third, since 23.10.7, and named as ours: it is by the same developer, which a reader
+            // choosing a key manager is owed before clicking. It is listed for what the other two do not
+            // do — signing through a remote signer (NIP-46: nsec.app, Amber, a bunker) — and not instead
+            // of nos2x-fox, which most of it was forked from. Firefox only: there is no Chrome build.
+            [['Alby', 'https://addons.mozilla.org/firefox/addon/alby/'], ['nos2x-fox', 'https://addons.mozilla.org/firefox/addon/nos2x-fox/'], ['Attest', 'https://addons.mozilla.org/firefox/addon/attest/']].forEach(([label, href]) => {
                 const a = document.createElement('a');
                 a.className = 'ob-wallet'; a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer';
                 a.textContent = label;
@@ -1592,7 +1597,7 @@
             // is not something to rely on when one sentence removes the doubt.
             const walletHint = document.createElement('p');
             walletHint.className = 'ob-hint';
-            walletHint.textContent = 'Install it, then reload this page.';
+            walletHint.textContent = 'Install it, then reload this page. Attest is made by the developer of NostrComments; it can also sign through nsec.app or Amber.';
 
             // Selecting a signer that then stops answering used to be a dead end: the stored key
             // is deliberately not loaded, so nothing connects, the block stays up, and the only

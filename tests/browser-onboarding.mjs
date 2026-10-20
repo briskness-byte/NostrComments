@@ -87,8 +87,11 @@ const wallets = JSON.parse(await js(`${ROOT}
     hint: [...ob.querySelectorAll('p')].map(p => p.textContent).join(' | ') });`));
 const store = BROWSER === 'firefox' ? 'addons.mozilla.org' : 'chromewebstore.google.com';
 const wrongStore = BROWSER === 'firefox' ? 'chromewebstore.google.com' : 'addons.mozilla.org';
-ok('two signers are offered', wallets.links.length === 2, wallets.links.map(l => l.text));
-ok(`both link to ${store}`, wallets.links.every(l => l.href.includes(store)), wallets.links.map(l => l.href));
+// Firefox adds Attest (same developer, NIP-46) as a third since 23.10.7; Chrome has no Attest build.
+ok(BROWSER === 'firefox' ? 'three signers are offered' : 'two signers are offered',
+   wallets.links.length === (BROWSER === 'firefox' ? 3 : 2), wallets.links.map(l => l.text));
+if (BROWSER === 'firefox') ok('Attest is said to be by the same developer', /made by the developer of NostrComments/.test(wallets.hint), wallets.hint);
+ok(`all link to ${store}`, wallets.links.every(l => l.href.includes(store)), wallets.links.map(l => l.href));
 ok('neither links to the other browser\'s store', !wallets.links.some(l => l.href.includes(wrongStore)), wallets.links.map(l => l.href));
 ok('nobody is sent to a source repository', !wallets.links.some(l => /github\.com/.test(l.href)), wallets.links.map(l => l.href));
 // Firefox has no nos2x; it offers nos2x-fox (Attest from 23.2.1 until October 2026, while nos2x-fox had its PIN flaw); this

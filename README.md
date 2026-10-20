@@ -150,7 +150,9 @@ what gets sent where. After you accept it, the onboarding screen offers two opti
    at rest.
 2. **Connect a wallet** — use [Alby](https://getalby.com) for signing via the NIP-07 browser
    extension standard, or a dedicated signer: [nos2x](https://github.com/fiatjaf/nos2x) on Chrome,
-   [nos2x-fox](https://addons.mozilla.org/firefox/addon/nos2x-fox/) on Firefox.
+   [nos2x-fox](https://addons.mozilla.org/firefox/addon/nos2x-fox/) on Firefox. On Firefox there is also
+   [Attest](https://addons.mozilla.org/firefox/addon/attest/), by the same developer as NostrComments, which can
+   also sign through a remote signer such as nsec.app or Amber (NIP-46).
 
 ## Default relays
 
