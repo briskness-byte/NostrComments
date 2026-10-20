@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NostrComments",
-  "version": "23.10.6",
+  "version": "23.10.7",
   "description": "The comment section no website can close. A thread on every page, kept on Nostr relays.",
   "license": "MIT",
   "icons": {
