@@ -632,6 +632,15 @@
         #settings-close{background:none;border:1px solid #d5d9e0;cursor:pointer;font-size:13px;font-weight:600;color:#666;padding:5px 12px;border-radius:8px;line-height:1;font-family:inherit;transition:color .15s,border-color .15s}
         #settings-close:hover{color:#222;border-color:#9aa2ad}
         #settings strong{font-size:16px;color:#333}
+        /* Settings in five groups, with a row of buttons at the top that jumps to each. Nothing is
+           hidden: every control stays on screen and in the same place in the scroll. */
+        #set-nav{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px}
+        #set-nav button{background:#fff;border:1px solid #d5d9e0;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;font-family:inherit;color:#0c75bc;cursor:pointer}
+        #set-nav button:hover{border-color:#0c75bc}
+        .set-g{margin-top:22px}
+        .set-gh{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0c75bc;padding:0 0 6px;border-bottom:2px solid #0c75bc;margin:0 0 4px}
+        .set-gh + div > hr:first-child{display:none}
+        .set-gh + div{margin-top:10px}
         #relay-list{margin:10px 0}
         .relay-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:white;border-radius:8px;margin:5px 0;font-size:14px;color:#444;border:1px solid #eee}
         .relay-remove{background:none;border:none;color:#c62828;cursor:pointer;font-size:18px;padding:0 4px;line-height:1}
@@ -827,6 +836,9 @@
         #m.dark-mode .c.reply{border-left-color:#60a5fa}
         #m.dark-mode #settings{background:#0c0c0e;border-color:#2a2a30}
         #m.dark-mode #settings strong{color:#e4e4e7}
+        #m.dark-mode #set-nav button{background:#18181b;border-color:#3f3f46;color:#60a5fa}
+        #m.dark-mode #set-nav button:hover{border-color:#60a5fa}
+        #m.dark-mode .set-gh{color:#60a5fa;border-bottom-color:#60a5fa}
         #m.dark-mode .relay-item,#m.dark-mode .muted-item{background:#27272a;border-color:#3f3f46;color:#e4e4e7}
         #m.dark-mode .relay-state{color:#a1a1aa}
         #m.dark-mode .nc-hint{color:#a1a1aa}
@@ -943,40 +955,9 @@
         <h2>NostrComments</h2>
         <div id="settings">
         <div id="settings-header"><strong>Settings</strong><button id="settings-close" title="Back to the comments">← Back</button></div>
-        <strong class="set-h" style="font-size:15px">Relays</strong>
-        <p class="set-p" style="font-size:13px;margin:6px 0 10px">Where comments are read from and published to.</p>
-        <div id="relay-list"></div>
-        <div id="relay-add">
-        <input id="relay-input" placeholder="wss://relay.example.com">
-        <button id="relay-add-btn">Add</button>
-        </div>
-        <label id="widepub-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="widepub-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Also send what you post to three extra relays, so one relay removing it is not the end of it. They are never read from.</span></label>
-        <label id="worker-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="worker-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Open relay connections in the background instead of in the page. Some sites forbid the page from reaching a relay at all, and this gets past that. On by default; it takes effect on the next page load.</span></label>
-        <div style="margin-top:14px">
-        <hr style="margin:14px 0 12px;border:none;border-top:1px solid #eee">
-        <strong class="set-h" style="font-size:15px">The floating button</strong>
-        <label id="hidebtn-label" style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="hidebtn-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Hide it on every page. The panel stays reachable from this extension's toolbar icon — click it, then "Open comments on this page". You will not see the little reply-count badges without opening it that way. Off by default; it takes effect on the next page load.</span></label>
-        <label id="quietbtn-label" style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="quietbtn-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Only show it on pages that already have comments, or where somebody replied to you. Everywhere else, open the panel from this extension's toolbar icon. Off by default, so you can still start a thread on a page nobody has commented on yet. Also reachable from the small − on the button.</span></label>
-        <p class="set-p" style="font-size:13px;margin:12px 0 10px">Where it sits on <span id="site-origin"></span>, when it is shown at all.</p>
-        <div id="btnpos-row" style="display:flex;gap:8px">
-        <button class="btnpos" data-c="tl" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↖ Top left</button>
-        <button class="btnpos" data-c="tr" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↗ Top right</button>
-        <button class="btnpos" data-c="bl" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↙ Bottom left</button>
-        <button class="btnpos" data-c="br" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↘ Bottom right</button>
-        </div>
-        <button id="btndefault-btn" class="set-btn" style="margin-top:10px;padding:7px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Use this corner on every new site</button>
-        <p class="set-p" style="font-size:12px;margin:4px 0 0;line-height:1.45">A site you have not set a corner for yourself starts bottom right. Setting a default here changes that starting point going forward — it never moves a site you have already placed differently.</p>
-        </div>
-        <div style="margin-top:14px">
-        <hr style="margin:0 0 12px;border:none;border-top:1px solid #eee">
-        <strong class="set-h" style="font-size:15px">This site</strong>
-        <button id="site-disable-btn" class="set-btn red" style="margin-top:8px;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Disable on this site</button>
-        <p id="site-thread">Comments here are filed under <code id="site-thread-url"></code> — this is the address your relays are asked about.</p>
-        <p class="set-p" style="font-size:13px;margin:14px 0 6px">Every site you've switched off this way.</p>
-        <div id="disabled-section">
-        <div id="disabled-list"></div>
-        </div>
-        </div>
+        <div id="set-nav"><button data-g="set-g-you">You</button><button data-g="set-g-reading">Reading</button><button data-g="set-g-button">Button &amp; sites</button><button data-g="set-g-relays">Relays &amp; privacy</button><button data-g="set-g-activity">Activity</button></div>
+        <div id="set-g-you" class="set-g">
+        <div class="set-gh">You</div>
         <div id="identity-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
         <strong class="set-h" style="font-size:15px">Your identity</strong>
@@ -1042,6 +1023,9 @@
         </div>
         <p id="signer-note" class="set-p" style="font-size:12px;margin:8px 0 0"></p>
         </div>
+        </div>
+        <div id="set-g-reading" class="set-g">
+        <div class="set-gh">Reading</div>
         <div id="muted-section">
         <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
         <strong class="set-h" style="font-size:15px">Muted users</strong>
@@ -1068,11 +1052,56 @@
         <label id="nip05-label" style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="nip05-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Check the name@domain a commenter claims</span></label>
         <p class="set-p" style="font-size:12px;margin:6px 0 0;line-height:1.45">Off by default. Checking asks that commenter's domain whether the name is really theirs, which tells the domain you are reading this page. Nothing else here contacts anyone outside your relays.</p>
         </div>
+        </div>
+        <div id="set-g-button" class="set-g">
+        <div class="set-gh">Button &amp; sites</div>
+        <div style="margin-top:14px">
+        <hr style="margin:14px 0 12px;border:none;border-top:1px solid #eee">
+        <strong class="set-h" style="font-size:15px">The floating button</strong>
+        <label id="hidebtn-label" style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="hidebtn-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Hide it on every page. The panel stays reachable from this extension's toolbar icon — click it, then "Open comments on this page". You will not see the little reply-count badges without opening it that way. Off by default; it takes effect on the next page load.</span></label>
+        <label id="quietbtn-label" style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="quietbtn-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Only show it on pages that already have comments, or where somebody replied to you. Everywhere else, open the panel from this extension's toolbar icon. Off by default, so you can still start a thread on a page nobody has commented on yet. Also reachable from the small − on the button.</span></label>
+        <p class="set-p" style="font-size:13px;margin:12px 0 10px">Where it sits on <span id="site-origin"></span>, when it is shown at all.</p>
+        <div id="btnpos-row" style="display:flex;gap:8px">
+        <button class="btnpos" data-c="tl" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↖ Top left</button>
+        <button class="btnpos" data-c="tr" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↗ Top right</button>
+        <button class="btnpos" data-c="bl" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↙ Bottom left</button>
+        <button class="btnpos" data-c="br" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↘ Bottom right</button>
+        </div>
+        <button id="btndefault-btn" class="set-btn" style="margin-top:10px;padding:7px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Use this corner on every new site</button>
+        <p class="set-p" style="font-size:12px;margin:4px 0 0;line-height:1.45">A site you have not set a corner for yourself starts bottom right. Setting a default here changes that starting point going forward — it never moves a site you have already placed differently.</p>
+        </div>
+        <div style="margin-top:14px">
+        <hr style="margin:0 0 12px;border:none;border-top:1px solid #eee">
+        <strong class="set-h" style="font-size:15px">This site</strong>
+        <button id="site-disable-btn" class="set-btn red" style="margin-top:8px;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Disable on this site</button>
+        <p id="site-thread">Comments here are filed under <code id="site-thread-url"></code> — this is the address your relays are asked about.</p>
+        <p class="set-p" style="font-size:13px;margin:14px 0 6px">Every site you've switched off this way.</p>
+        <div id="disabled-section">
+        <div id="disabled-list"></div>
+        </div>
+        </div>
+        </div>
+        <div id="set-g-relays" class="set-g">
+        <div class="set-gh">Relays &amp; privacy</div>
+        <div>
+        <strong class="set-h" style="font-size:15px">Relays</strong>
+        <p class="set-p" style="font-size:13px;margin:6px 0 10px">Where comments are read from and published to.</p>
+        <div id="relay-list"></div>
+        <div id="relay-add">
+        <input id="relay-input" placeholder="wss://relay.example.com">
+        <button id="relay-add-btn">Add</button>
+        </div>
+        <label id="widepub-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="widepub-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Also send what you post to three extra relays, so one relay removing it is not the end of it. They are never read from.</span></label>
+        <label id="worker-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="worker-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Open relay connections in the background instead of in the page. Some sites forbid the page from reaching a relay at all, and this gets past that. On by default; it takes effect on the next page load.</span></label>
+        </div>
         <div style="margin-top:14px">
         <strong class="set-h" style="font-size:15px">What your comments say about this app</strong>
         <label id="clienttag-label" style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="clienttag-toggle" style="width:16px;height:16px;flex:none;margin:0"><span>Label what you post with the name of this extension</span></label>
         <p class="set-p" style="font-size:12px;margin:6px 0 0;line-height:1.45">On by default, the way most Nostr apps label what they write. It is what makes it possible to count how many people actually post from here, which download numbers cannot tell anyone. Turning it off drops the label from what you publish next. It does not change what you already published, and it does not make you invisible — these events keep the shape that gives them away.</p>
         </div>
+        </div>
+        <div id="set-g-activity" class="set-g">
+        <div class="set-gh">Activity</div>
         <div style="margin-top:14px">
         <strong class="set-h" style="font-size:15px">Your threads</strong>
         <p class="set-p" style="font-size:12px;margin:6px 0 0;line-height:1.45">Pages you have commented on. A comment is filed under one address, so without this there is no way back to a conversation you left.</p>
@@ -1082,6 +1111,7 @@
         <strong class="set-h" style="font-size:15px">Replies to you</strong>
         <p class="set-p" style="font-size:12px;margin:6px 0 0;line-height:1.45">Who answered you, and where. A reply about a page links back to the page; a reply to one of your notes lives on Nostr, and is marked that way.</p>
         <div id="notiflist"></div>
+        </div>
         </div>
         </div>
         <div id="notif-banner"></div>
@@ -1185,6 +1215,11 @@
         const gearBtn = s.getElementById('gear-btn');
         const settings = s.getElementById('settings');
         const settingsClose = s.getElementById('settings-close');
+        // Jump to a group. Not behind byUser: a page that scrolls the panel gains nothing.
+        s.getElementById('set-nav').addEventListener('click', e => {
+            const b = e.target.closest('button[data-g]');
+            if (b) s.getElementById(b.dataset.g)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        });
         const relayListEl = s.getElementById('relay-list');
         const relayInput = s.getElementById('relay-input');
         const relayAddBtn = s.getElementById('relay-add-btn');
