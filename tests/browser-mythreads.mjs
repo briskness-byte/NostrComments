@@ -109,13 +109,12 @@ console.log('\n=== rotating the key empties it ===');
 await nclick("s.getElementById('privkey-rotate')");
 await wait(800);
 // The confirmation is deliberate and cannot be skipped, so the suite answers it the way a reader
-// would rather than reaching past it.
-const confirmed = await js(`${ROOT}
-  const b = [...s.querySelectorAll('button')].find(x => /generate a new one/i.test(x.textContent));
-  if (!b) return 'no confirm button';
-  b.click();
-  return 'clicked';`);
-ok('the rotation asks before it acts', confirmed === 'clicked', confirmed);
+// would rather than reaching past it. With a real click: since 17 Oct (0f68376) the dialogs ignore a
+// scripted one, which is what this suite still sent, so the rotation silently never happened.
+const CONFIRM = "[...s.querySelectorAll('button')].find(x => /generate a new one/i.test(x.textContent))";
+const dialogUp = await js(`${ROOT} return !!(${CONFIRM});`);
+ok("the rotation asks before it acts", dialogUp === true, dialogUp);
+await nclick(CONFIRM);
 await wait(3000);
 
 r = JSON.parse(await readList());
