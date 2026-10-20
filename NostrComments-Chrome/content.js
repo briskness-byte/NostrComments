@@ -638,7 +638,7 @@
         #set-nav button{background:#fff;border:1px solid #d5d9e0;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;font-family:inherit;color:#0c75bc;cursor:pointer}
         #set-nav button:hover{border-color:#0c75bc}
         .set-g{margin-top:22px}
-        .set-gh{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0c75bc;padding:0 0 6px;border-bottom:2px solid #0c75bc;margin:0 0 4px}
+        .set-gh{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0a68a6;padding:0 0 6px;border-bottom:2px solid #0a68a6;margin:0 0 4px}
         .set-gh + div > hr:first-child{display:none}
         .set-gh + div{margin-top:10px}
         /* A checkbox with its label, and a "Why?" under it for the reasoning, which used to be the
@@ -648,7 +648,7 @@
         .set-check input{width:16px;height:16px;flex:none;margin:0}
         .set-why{margin:3px 0 0 24px;font-size:12px;line-height:1.45;color:#5b5b60}
         .set-why.flat{margin-left:0}
-        .set-why summary{cursor:pointer;color:#0c75bc;font-weight:600;width:max-content}
+        .set-why summary{cursor:pointer;color:#0a68a6;font-weight:600;width:max-content}
         .set-why p{margin:4px 0 0}
         .set-note{font-size:12px;margin:6px 0 0;line-height:1.45}
         /* What used to be style="" in the settings markup, one class per former attribute so the
@@ -1589,17 +1589,26 @@
         };
         keypairSection.appendChild(pwBtn);
 
-        siteDisableBtn.onclick = async () => {
-            // A page clicking this would switch the comment layer off on its own site — exactly what
-            // this extension exists to prevent. It takes a real gesture.
-            if (!byUser(siteDisableBtn)) return;
+        // Switching NostrComments off for this site. It used to save the choice and take the panel
+        // away, and leave everything behind it running: the thread subscription, notifications, and
+        // the navigation watcher, so on a single-page site every new address went on being sent to
+        // the relays from a site the reader had just switched off (reported 21 Oct 2026). Now it
+        // stops the lot, the same way the global switch does, and nothing restarts on this page.
+        let _siteDisabled = false;
+        async function disableHere() {
             const _d = await chrome.storage.local.get('nostrcomments_disabled');
             const arr = Array.isArray(_d.nostrcomments_disabled) ? _d.nostrcomments_disabled : [];
             if (!arr.includes(location.origin)) arr.push(location.origin);
             await chrome.storage.local.set({nostrcomments_disabled: arr});
-            modal.style.display = 'none';
+            _siteDisabled = true;
+            if (_running) _running.stop(); else { modal.style.display = 'none'; host.remove(); }
             btn.style.display = 'none';
-            host.remove();
+        }
+        siteDisableBtn.onclick = async () => {
+            // A page clicking this would switch the comment layer off on its own site — exactly what
+            // this extension exists to prevent. It takes a real gesture.
+            if (!byUser(siteDisableBtn)) return;
+            await disableHere();
         };
 
         // Onboard banner
@@ -2080,7 +2089,7 @@
             });
         }
 
-        function closeModal() { _trusted = false; modal.style.display = 'none'; try { btn.focus(); } catch(e) {} }
+        function closeModal() { _trusted = false; modal.style.display = 'none'; try { btn.focus(); } catch(e) {} _threadsGen++; paintSetName(); render(); }
         function openPanel() {
             _trusted = true;
             startNetwork();   // asked for by hand: no waiting
@@ -2089,6 +2098,7 @@
             if (!hasConsent) { consentOverlay.style.display = 'flex'; setTimeout(() => consentOverlay.querySelector('button')?.focus(), 0); return; }
             markPageSeen();
             paintOnboard();
+            paintSetName(); render();   // what is the reader's is only drawn now (see makeItem)
             if (unreadReplies > 0 || unreadPages.size > 0) paintNotifBanner();
             unreadReplies = 0;
             updateNotifBadge();
@@ -2103,13 +2113,7 @@
         dismiss.onclick = async e => {
             e.stopPropagation();
             if (!byUser(dismiss)) return;
-            const _d = await chrome.storage.local.get('nostrcomments_disabled');
-            const arr = Array.isArray(_d.nostrcomments_disabled) ? _d.nostrcomments_disabled : [];
-            if (!arr.includes(location.origin)) arr.push(location.origin);
-            await chrome.storage.local.set({nostrcomments_disabled: arr});
-            modal.style.display = 'none';
-            btn.style.display = 'none';
-            host.remove();
+            await disableHere();
         };
         // Same containment issue as dismiss: stop the click before it reaches btn and opens the panel.
         quiet.onclick = async e => {
@@ -2129,7 +2133,7 @@
         // went missing. The element still holds the whole panel, so re-attaching restores it.
         chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             if (!msg || msg.t !== 'nc-toggle') return;
-            if (_off) { sendResponse({ ok: false, off: true }); return; }
+            if (_off || _siteDisabled) { sendResponse({ ok: false, off: true }); return; }
             if (!host.isConnected) document.documentElement.appendChild(host);
             if (modal.style.display === 'grid') closeModal(); else openPanel();
             // Answered synchronously. An unanswered message leaves the popup waiting on a channel
@@ -2516,6 +2520,7 @@
                 if (el) el.replaceChildren();
             }
             _threadsAsked = false;   // the list is gone, so the next look has to fetch it again
+            _threadsGen++;           // and an answer still on its way belongs to that old look
         }
         const closeSettings = () => {
             settings.style.display = 'none';
@@ -2787,6 +2792,7 @@
         }
 
         let _threadsAsked = false;
+        let _threadsGen = 0;
         function loadMyThreads() {
             const box = s.getElementById('mythreads');
             if (!box) return;
@@ -2798,7 +2804,11 @@
             const seen = new Map();   // page url -> newest created_at
             const mtSeen = new Set();
             let done = 0;
+            const gen = ++_threadsGen;
+            // Answers arrive seconds later. Settings closed, or the panel, in the meantime: the list
+            // was cleared on purpose (it is other pages the reader visits) and stays cleared.
             const paint = () => {
+                if (gen !== _threadsGen || !panelOpen() || settings.style.display !== 'block') return;
                 box.textContent = '';
                 const pages = [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
                 if (!pages.length) { box.textContent = 'Nothing yet \u2014 comments you write will be listed here.'; return; }
@@ -2982,7 +2992,13 @@
         const profileAt = new Map();       // pubkey -> created_at of the kind 0 currently applied
         let namePrefill = null;            // what was filled in last, so typing is never overwritten
         const nip05s = new Map();          // pubkey -> the name@domain a profile claims
-        const nip05ok = new Map();         // pubkey -> true / false / null while in flight
+        // Keyed by key AND identifier. Keyed by key alone, a check of one name stood for whatever
+        // name a newer profile from that key claimed next: verify alice@honest.example, then
+        // publish _@victim.example, and the old "true" made it "speaks for victim.example"
+        // (reported 21 Oct 2026). A result now only ever counts for the name it was fetched for.
+        const nip05ok = new Map();         // nip05Key(pubkey, name@domain) -> true / false / null while in flight
+        const nip05Key = (pubkey, id) => pubkey + '\n' + (id || '');
+        const nip05Verified = pubkey => nip05Check && nip05s.has(pubkey) && nip05ok.get(nip05Key(pubkey, nip05s.get(pubkey))) === true;
         // Off unless asked for. Checking a NIP-05 name means fetching from the domain it claims,
         // once per commenter, which tells that domain someone is reading a page where that person
         // commented — and hands it the reader's IP. That is a third party this extension otherwise
@@ -3115,19 +3131,25 @@
         }
 
         async function verifyNip05(pubkey) {
-            if (!nip05Check || nip05ok.has(pubkey)) return;
-            const m = /^([^@\s]+)@([^@\s/]+)$/.exec(nip05s.get(pubkey) || '');
+            const id = nip05s.get(pubkey) || '';
+            const key = nip05Key(pubkey, id);
+            if (!nip05Check || nip05ok.has(key)) return;
+            const m = /^([^@\s]+)@([^@\s/]+)$/.exec(id);
             if (!m) return;
             const host = nip05Host(m[2]);
             // Recorded as failed rather than left pending: a claim that cannot be checked must not
             // sit there looking like one that is still being checked.
-            if (!host) { nip05ok.set(pubkey, false); scheduleRender(); return; }
-            nip05ok.set(pubkey, null);
+            if (!host) { nip05ok.set(key, false); scheduleRender(); return; }
+            nip05ok.set(key, null);
+            let ok = false;
             try {
                 const res = await fetch(`https://${host}/.well-known/nostr.json?name=${encodeURIComponent(m[1])}`, { redirect: 'error', credentials: 'omit' });
                 const data = await res.json();
-                nip05ok.set(pubkey, data?.names?.[m[1]] === pubkey);
-            } catch(e) { nip05ok.set(pubkey, false); }
+                ok = data?.names?.[m[1]] === pubkey;
+            } catch(e) {}
+            // Switched off while this was in flight: nothing is recorded, so nothing can light up.
+            if (!nip05Check) return;
+            nip05ok.set(key, ok);
             scheduleRender();
         }
         const autoImgToggle = s.getElementById('autoimg-toggle');
@@ -3279,7 +3301,7 @@
                                 profiles.set(ev.pubkey, p.name || p.display_name || null);
                                 if (ev.pubkey === myPub) { myProfileRaw = { pub: ev.pubkey, data: p }; paintSetName(); }
                                 if (p.lud16) lud16s.set(ev.pubkey, p.lud16);
-                                if (typeof p.nip05 === 'string') { nip05s.set(ev.pubkey, p.nip05); verifyNip05(ev.pubkey); }
+                                if (typeof p.nip05 === 'string') { nip05s.set(ev.pubkey, p.nip05); verifyNip05(ev.pubkey); } else nip05s.delete(ev.pubkey);
                                 // Checked here rather than at each <img>: this map feeds both the
                                 // comment avatars and the identity panel.
                                 if (p.picture) { const pic = safeMediaUrl(p.picture); if (pic) avatars.set(ev.pubkey, pic); }
@@ -3499,7 +3521,7 @@
             const gen = ++_notifGen;
             _notifWs.forEach(w => { try { w.close(); } catch(_) {} });
             _notifWs = [];
-            if (!myPub || _off) return;
+            if (!myPub || _off || _siteDisabled) return;
             const since = Math.floor(Date.now() / 1000);
             const sid = 'ncn' + Math.random().toString(36).slice(2, 8);
             const watching = myPub;
@@ -3575,7 +3597,7 @@
             try { chrome.storage.local.set({nostrcomments_signer_pub: myPub}); } catch(e) {}
         }
         async function connect() {
-            if (_off || !hasConsent || connecting) return;
+            if (_off || _siteDisabled || !hasConsent || connecting) return;
             connecting = true;
             const wallet = getWallet();
             if (!wallet) { connecting = false; return status.textContent = "Install Alby/nos2x"; }
@@ -3829,6 +3851,15 @@
         function paintSetName() {
             const row = s.getElementById('setname-row');
             if (!row) return;
+            // The name field holds the reader's own profile name: same rule as the identity card.
+            if (!panelOpen()) {
+                row.style.display = 'none';
+                const inp = s.getElementById('setname-input');
+                if (inp) { inp.value = ''; namePrefill = ''; }
+                const lead = s.getElementById('setname-lead');
+                if (lead) lead.textContent = '';
+                return;
+            }
             row.style.display = myPub ? 'block' : 'none';
             const raw = myProfileRaw.pub === myPub ? myProfileRaw.data : null;
             const known = myPub && profiles.get(myPub);
@@ -4241,8 +4272,14 @@
                 tomb.textContent = 'Comment deleted by its author';
                 return tomb;
             }
+            // Who the reader is, as far as this card may show it. The thread is drawn into an open
+            // shadow root whether or not the panel is open, so an "own" mark, a Delete button or a
+            // highlighted vote told the page which comment was the reader's — their key, without
+            // the panel ever being opened (reported 21 Oct 2026). Only shown while it is open;
+            // opening and closing redraw.
+            const me = panelOpen() ? myPub : null;
             const div = document.createElement('div');
-            div.className = 'c' + (hidden && !reveal ? ' h' : '') + (depth > 0 ? ' reply' : '') + (ev.pubkey === myPub ? ' own' : '') + (isLegacy(ev) ? ' nc-note' : '');
+            div.className = 'c' + (hidden && !reveal ? ' h' : '') + (depth > 0 ? ' reply' : '') + (me && ev.pubkey === me ? ' own' : '') + (isLegacy(ev) ? ' nc-note' : '');
             // A placeholder the reader can open. Rebuilding the item on click is what actually
             // reveals the comment: dropping the styling used to leave the placeholder sentence
             // sitting there, so "tap to show" changed how it looked and showed nothing.
@@ -4293,7 +4330,7 @@
             header.appendChild(profileLink);
             // Shown only once it has been checked. An unverified claim rendered as if it meant
             // something would be worse than showing nothing at all.
-            if (nip05ok.get(ev.pubkey) === true) {
+            if (nip05Verified(ev.pubkey)) {
                 const tick = document.createElement('span');
                 tick.className = 'nc-nip05';
                 tick.textContent = '✓';
@@ -4345,7 +4382,7 @@
             actions.className = 'nc-actions';
             [['1','↑',sc.up],['-1','↓',sc.down]].forEach(([val, arrow, count]) => {
                 const b = document.createElement('button');
-                const mine = sc.my !== undefined && String(sc.my) === val;
+                const mine = !!me && sc.my !== undefined && String(sc.my) === val;
                 b.className = 'v' + (mine ? (val === '1' ? ' mine' : ' mine down') : '');
                 b.dataset.id = ev.id; b.dataset.val = val;
                 b.type = 'button';
@@ -4373,7 +4410,7 @@
             copyBtn.title = 'Copy link to this comment';
             copyBtn.onclick = () => navigator.clipboard.writeText(`nostr:${toNote(ev.id)}`).then(() => showMsg('Link copied'));
             actions.appendChild(copyBtn);
-            if (ev.pubkey === myPub) {
+            if (me && ev.pubkey === me) {
                 // A comment here is only visible to somebody who has this extension and opens this
                 // page. Sharing publishes an ordinary note instead, which your followers see in
                 // whatever client they use — the thing a comment cannot do.
@@ -4462,7 +4499,7 @@
                 };
                 actions.appendChild(delBtn);
             }
-            if (ev.pubkey !== myPub) {
+            if (!me || ev.pubkey !== me) {
                 const muteBtn = document.createElement('button');
                 muteBtn.className = 'mute-btn';
                 muteBtn.textContent = '🚫 Mute';
@@ -5040,7 +5077,7 @@
 
         function startNetwork() {
             if (_settleTimer) { clearTimeout(_settleTimer); _settleTimer = null; }
-            if (_off || _networkStarted || !hasConsent) return;
+            if (_off || _siteDisabled || _networkStarted || !hasConsent) return;
             _networkStarted = true;
 
             // Load the stored key, or not, according to what the user actually chose.
@@ -5115,7 +5152,7 @@
         // (Re)load the comment thread for the current pageUrl. Re-runnable on SPA navigation:
         // a generation token discards stale relay/verification callbacks from the previous page.
         function loadPage() {
-            if (_off) return;
+            if (_off || _siteDisabled) return;
             paintPageKey();
             altPageUrls = findAltPageUrls();
             linkedEntity = findLinkedEntity();
@@ -5334,6 +5371,7 @@
                 host.remove();
             },
             resume() {
+                if (_siteDisabled) return;   // switched off for this site: the global switch does not undo that
                 document.documentElement.appendChild(host);
                 if (!_networkStarted) { if (hasConsent) armNetwork(); return; }
                 loadPage();

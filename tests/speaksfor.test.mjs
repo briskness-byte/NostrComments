@@ -35,8 +35,19 @@ export async function run() {
 
         // The label is drawn only inside the verified branch, and says what it proves.
         const drawn = src.indexOf("badge.className = 'nc-site';");
-        const tickBranch = src.lastIndexOf("if (nip05ok.get(ev.pubkey) === true) {", drawn);
+        const tickBranch = src.lastIndexOf("if (nip05Verified(ev.pubkey)) {", drawn);
         ok(`${name}: the label is drawn only where the name was checked`, drawn > 0 && tickBranch > 0 && drawn - tickBranch < 800);
+
+        // Reported 21 Oct 2026: a check was cached per key, so a newer profile claiming
+        // _@victim.example inherited the "true" of an earlier, honest name. A result now belongs to
+        // the key and the exact name it was fetched for, and the label reads the current name.
+        ok(`${name}: results are keyed by key and name, not by key alone`,
+           src.includes("const nip05Key = (pubkey, id) => pubkey + '\\n' + (id || '');") &&
+           /nip05Verified = pubkey => nip05Check && nip05s\.has\(pubkey\) && nip05ok\.get\(nip05Key\(pubkey, nip05s\.get\(pubkey\)\)\) === true/.test(src));
+        ok(`${name}: no result is ever stored under the key alone`, !/nip05ok\.(set|get|has)\((ev\.)?pubkey[,)]/.test(src));
+        ok(`${name}: a newer profile with no name drops the old one`, src.includes('else nip05s.delete(ev.pubkey);'));
+        ok(`${name}: a check that finishes after the setting was switched off records nothing`,
+           /if \(!nip05Check\) return;\s*nip05ok\.set\(key, ok\);/.test(src));
         ok(`${name}: it says "speaks for", not "author" or "owner"`, /badge\.textContent = `speaks for \$\{site\}`;/.test(src) && !/badge\.textContent = `[^`]*(author|owner)/i.test(src));
     }
     return { name: 'speaks for the site', pass, fail };
