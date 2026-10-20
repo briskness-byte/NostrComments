@@ -651,6 +651,48 @@
         .set-why summary{cursor:pointer;color:#0c75bc;font-weight:600;width:max-content}
         .set-why p{margin:4px 0 0}
         .set-note{font-size:12px;margin:6px 0 0;line-height:1.45}
+        /* What used to be style="" in the settings markup, one class per former attribute so the
+           panel looks as it did. A strict page CSP strips style attributes in Firefox (17 Oct 2026,
+           tests/browser-csp-style.mjs); this sheet is adopted and is not affected. #settings in
+           front keeps them above "#settings strong", as an inline style was. display:none stays
+           inline where the code toggles it through el.style. */
+        #settings .s-sep1{margin:14px 0;border:none;border-top:1px solid #eee}
+        #settings .s-h1{font-size:15px}
+        #settings .s-p1{font-size:13px;margin:6px 0 8px}
+        #settings .s-box1{display:flex;align-items:center;gap:10px;margin:8px 0 0}
+        #settings .s-box2{min-width:0;flex:1}
+        #settings .s-box3{font-weight:600;font-size:14px}
+        #settings .s-box4{font-size:11px;font-family:monospace;word-break:break-all}
+        #settings .s-p2{font-size:13px;margin:0 0 6px}
+        #settings .s-box5{display:flex;gap:8px;flex-wrap:wrap}
+        #settings .s-in1{flex:1;min-width:160px;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;font-family:inherit}
+        #settings .s-btn1{padding:9px 14px;background:#0c75bc;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;font-family:inherit}
+        #settings .s-p3{font-size:12px;margin:6px 0 0}
+        #settings .s-box6{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+        #settings .s-btn2{padding:6px 12px;background:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit}
+        #settings .s-btn3{width:100%;padding:9px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit}
+        #settings .s-in2{width:100%;font-size:12px;font-family:monospace;padding:8px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box}
+        #settings .s-box7{display:flex;gap:8px;margin-top:6px}
+        #settings .s-btn4{flex:1;padding:8px 14px;background:#0c75bc;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
+        #settings .s-btn5{flex:1;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
+        #settings .s-lbl1{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer}
+        #settings .s-in3{width:16px;height:16px;flex:none;margin:0}
+        #settings .s-box8{display:flex;gap:8px;margin-top:8px}
+        #settings .s-btn6{flex:1;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px}
+        #settings .s-p4{font-size:13px;margin:6px 0 10px}
+        #settings .s-box9{display:flex;gap:8px}
+        #settings .s-in4{flex:1;font-size:12px;font-family:monospace;padding:8px;border:1px solid #ddd;border-radius:8px}
+        #settings .s-btn7{padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
+        #settings .s-btn8{flex:1;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit}
+        #settings .s-p5{font-size:12px;margin:8px 0 0}
+        #settings .s-box10{margin-top:14px}
+        #settings .s-sep2{margin:14px 0 12px;border:none;border-top:1px solid #eee}
+        #settings .s-p6{font-size:13px;margin:12px 0 10px}
+        #settings .s-btn9{flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit}
+        #settings .s-btn10{margin-top:10px;padding:7px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px}
+        #settings .s-sep3{margin:0 0 12px;border:none;border-top:1px solid #eee}
+        #settings .s-btn11{margin-top:8px;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px}
+        #settings .s-p7{font-size:13px;margin:14px 0 6px}
         #relay-list{margin:10px 0}
         .relay-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:white;border-radius:8px;margin:5px 0;font-size:14px;color:#444;border:1px solid #eee}
         .relay-remove{background:none;border:none;color:#c62828;cursor:pointer;font-size:18px;padding:0 4px;line-height:1}
@@ -717,6 +759,9 @@
         #m.dark-mode .set-btn.red{color:#f87171}
         #m.dark-mode .set-btn.amber{color:#fbbf24}
         #m.dark-mode .set-btn.grey{color:#a1a1aa}
+        /* A set-btn with no colour of its own ("Use this corner on every new site") took the page's
+           default text colour, near-black on the dark panel. */
+        #m.dark-mode .set-btn:not(.blue):not(.red):not(.amber):not(.grey){color:#e4e4e7}
         #notiflist{margin-top:10px;font-size:12px;color:#5b5b60}
         .nf-row{padding:7px 0;border-bottom:1px solid #ececf0}
         .nf-row:last-child{border-bottom:0}
@@ -971,125 +1016,125 @@
         <div id="set-g-you" class="set-g">
         <div class="set-gh">You</div>
         <div id="identity-section">
-        <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong class="set-h" style="font-size:15px">Your identity</strong>
-        <p class="set-p" style="font-size:13px;margin:6px 0 8px">This is the public half — the name people see. Safe to share anywhere.</p>
-        <div id="identity-card" style="display:flex;align-items:center;gap:10px;margin:8px 0 0">
+        <hr class="s-sep1">
+        <strong class="set-h s-h1">Your identity</strong>
+        <p class="set-p s-p1">This is the public half — the name people see. Safe to share anywhere.</p>
+        <div class="s-box1" id="identity-card">
         <img id="identity-avatar" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;background:#e8e8e8;display:none;flex:none">
-        <div style="min-width:0;flex:1">
-        <div id="identity-name" class="set-blue" style="font-weight:600;font-size:14px"></div>
-        <div id="identity-npub" class="set-p" style="font-size:11px;font-family:monospace;word-break:break-all"></div>
+        <div class="s-box2">
+        <div id="identity-name" class="set-blue s-box3"></div>
+        <div id="identity-npub" class="set-p s-box4"></div>
         <div id="identity-hex" class="set-p" style="font-size:11px;font-family:monospace;word-break:break-all;display:none"></div>
         </div>
         </div>
         <div id="setname-row" style="display:none;margin:10px 0 0">
-        <p id="setname-lead" class="set-p" style="font-size:13px;margin:0 0 6px"></p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <input id="setname-input" maxlength="40" placeholder="A name people will see" style="flex:1;min-width:160px;padding:9px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;font-family:inherit">
-        <button id="setname-btn" style="padding:9px 14px;background:#0c75bc;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;font-family:inherit">Publish name</button>
+        <p id="setname-lead" class="set-p s-p2"></p>
+        <div class="s-box5">
+        <input class="s-in1" id="setname-input" maxlength="40" placeholder="A name people will see">
+        <button class="s-btn1" id="setname-btn">Publish name</button>
         </div>
-        <p class="set-p" style="font-size:12px;margin:6px 0 0">Public, like your comments. Any Nostr app can change it later, and so can this one.</p>
+        <p class="set-p s-p3">Public, like your comments. Any Nostr app can change it later, and so can this one.</p>
         </div>
-        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <button id="identity-copy-npub" class="set-btn blue" style="padding:6px 12px;background:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">Copy npub</button>
-        <button id="identity-hex-toggle" class="set-btn grey" style="padding:6px 12px;background:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">Show hex</button>
+        <div class="s-box6">
+        <button id="identity-copy-npub" class="set-btn blue s-btn2">Copy npub</button>
+        <button id="identity-hex-toggle" class="set-btn grey s-btn2">Show hex</button>
         <button id="identity-copy-hex" class="set-btn grey" style="padding:6px 12px;background:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;display:none">Copy hex</button>
         </div>
         </div>
         <div id="keypair-section" style="display:none">
-        <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong class="set-h warn" style="font-size:15px">Your private key</strong>
-        <p class="set-p warn" style="font-size:13px;margin:6px 0 8px">⚠ Anyone who has this can post as you, forever. Never paste it anywhere but a Nostr app you trust — and keep a copy, because it is stored in this browser only.</p>
-        <button id="privkey-reveal" class="set-btn red" style="width:100%;padding:9px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Show private key</button>
+        <hr class="s-sep1">
+        <strong class="set-h warn s-h1">Your private key</strong>
+        <p class="set-p warn s-p1">⚠ Anyone who has this can post as you, forever. Never paste it anywhere but a Nostr app you trust — and keep a copy, because it is stored in this browser only.</p>
+        <button id="privkey-reveal" class="set-btn red s-btn3">Show private key</button>
         <div id="privkey-box" style="display:none;margin-top:8px">
-        <input id="privkey-display" readonly style="width:100%;font-size:12px;font-family:monospace;padding:8px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box">
-        <div style="display:flex;gap:8px;margin-top:6px">
-        <button id="copy-nsec" style="flex:1;padding:8px 14px;background:#0c75bc;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Copy nsec</button>
-        <button id="privkey-copy" class="set-btn blue" style="flex:1;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Copy hex</button>
+        <input class="s-in2" id="privkey-display" readonly>
+        <div class="s-box7">
+        <button class="s-btn4" id="copy-nsec">Copy nsec</button>
+        <button id="privkey-copy" class="set-btn blue s-btn5">Copy hex</button>
         </div>
         </div>
-        <label id="privkey-backup-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer"><input type="checkbox" id="privkey-backup" style="width:16px;height:16px;flex:none;margin:0"><span>I've saved my private key somewhere safe</span></label>
+        <label class="s-lbl1" id="privkey-backup-label"><input class="s-in3" type="checkbox" id="privkey-backup"><span>I've saved my private key somewhere safe</span></label>
 
-        <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="privkey-rotate" class="set-btn amber" style="flex:1;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Rotate key</button>
-        <button id="privkey-delete" class="set-btn red" style="flex:1;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Delete keypair</button>
+        <div class="s-box8">
+        <button id="privkey-rotate" class="set-btn amber s-btn6">Rotate key</button>
+        <button id="privkey-delete" class="set-btn red s-btn6">Delete keypair</button>
         </div>
         </div>
         <div id="import-section">
-        <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong class="set-h" style="font-size:15px">Use an existing identity</strong>
-        <p class="set-p" style="font-size:13px;margin:6px 0 10px">Paste the nsec from another Nostr app to post as that identity here. Raw hex works too.</p>
-        <div style="display:flex;gap:8px">
-        <input id="privkey-import" placeholder="nsec1… or 64-char hex" style="flex:1;font-size:12px;font-family:monospace;padding:8px;border:1px solid #ddd;border-radius:8px">
-        <button id="privkey-import-btn" class="set-btn blue" style="padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Import</button>
+        <hr class="s-sep1">
+        <strong class="set-h s-h1">Use an existing identity</strong>
+        <p class="set-p s-p4">Paste the nsec from another Nostr app to post as that identity here. Raw hex works too.</p>
+        <div class="s-box9">
+        <input class="s-in4" id="privkey-import" placeholder="nsec1… or 64-char hex">
+        <button id="privkey-import-btn" class="set-btn blue s-btn7">Import</button>
         </div>
-        <p class="set-p" style="font-size:12px;margin:6px 0 0">This replaces any key stored here — back that one up first.</p>
+        <p class="set-p s-p3">This replaces any key stored here — back that one up first.</p>
         </div>
         <div id="signer-section">
-        <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong class="set-h" style="font-size:15px">Signing</strong>
-        <p class="set-p" style="font-size:13px;margin:6px 0 10px">Which key signs your comments. Switch to your signer to use whichever account is selected there.</p>
-        <div style="display:flex;gap:8px">
-        <button id="signer-local" style="flex:1;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Key stored here</button>
-        <button id="signer-nip07" style="flex:1;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Alby / nos2x-fox</button>
+        <hr class="s-sep1">
+        <strong class="set-h s-h1">Signing</strong>
+        <p class="set-p s-p4">Which key signs your comments. Switch to your signer to use whichever account is selected there.</p>
+        <div class="s-box9">
+        <button class="s-btn8" id="signer-local">Key stored here</button>
+        <button class="s-btn8" id="signer-nip07">Alby / nos2x-fox</button>
         </div>
-        <p id="signer-note" class="set-p" style="font-size:12px;margin:8px 0 0"></p>
+        <p id="signer-note" class="set-p s-p5"></p>
         </div>
         </div>
         <div id="set-g-reading" class="set-g">
         <div class="set-gh">Reading</div>
         <div id="muted-section">
-        <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong class="set-h" style="font-size:15px">Muted users</strong>
-        <p class="set-p" style="font-size:13px;margin:6px 0 8px">Comments from these people are hidden, on every site.</p>
+        <hr class="s-sep1">
+        <strong class="set-h s-h1">Muted users</strong>
+        <p class="set-p s-p1">Comments from these people are hidden, on every site.</p>
         <div id="muted-list"></div>
         </div>
         <div id="muteword-section">
-        <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
-        <strong class="set-h" style="font-size:15px">Muted words</strong>
-        <p class="set-p" style="font-size:13px;margin:6px 0 8px">Hide comments containing any of these words.</p>
+        <hr class="s-sep1">
+        <strong class="set-h s-h1">Muted words</strong>
+        <p class="set-p s-p1">Hide comments containing any of these words.</p>
         <div id="muteword-list"></div>
         <div id="muteword-add">
         <input id="muteword-input" placeholder="word or phrase">
         <button id="muteword-add-btn">Add</button>
         </div>
         </div>
-        <div style="margin-top:14px">
-        <strong class="set-h" style="font-size:15px">Pictures</strong>
+        <div class="s-box10">
+        <strong class="set-h s-h1">Pictures</strong>
         <label id="autoimg-label" class="set-check"><input type="checkbox" id="autoimg-toggle"><span>Load pictures automatically</span></label>
         <details class="set-why"><summary>Why?</summary><p>On by default. A picture is fetched from wherever the person who posted it chose, which tells that server your IP address — and nobody moderates a thread here, so you may not want every picture arriving unasked. Turn this off and each one waits behind its host name until you ask for it. Avatars wait too.</p></details>
         </div>
-        <div style="margin-top:14px">
-        <strong class="set-h" style="font-size:15px">Verified names</strong>
+        <div class="s-box10">
+        <strong class="set-h s-h1">Verified names</strong>
         <label id="nip05-label" class="set-check"><input type="checkbox" id="nip05-toggle"><span>Check the name@domain a commenter claims</span></label>
         <details class="set-why"><summary>Why?</summary><p>Off by default. Checking asks that commenter's domain whether the name is really theirs, which tells the domain you are reading this page. Nothing else here contacts anyone outside your relays.</p></details>
         </div>
         </div>
         <div id="set-g-button" class="set-g">
         <div class="set-gh">Button &amp; sites</div>
-        <div style="margin-top:14px">
-        <hr style="margin:14px 0 12px;border:none;border-top:1px solid #eee">
-        <strong class="set-h" style="font-size:15px">The floating button</strong>
+        <div class="s-box10">
+        <hr class="s-sep2">
+        <strong class="set-h s-h1">The floating button</strong>
         <label id="hidebtn-label" class="set-check"><input type="checkbox" id="hidebtn-toggle"><span>Hide it on every page.</span></label>
         <details class="set-why"><summary>Why?</summary><p>The panel stays reachable from this extension's toolbar icon — click it, then "Open comments on this page". You will not see the little reply-count badges without opening it that way. Off by default; it takes effect on the next page load.</p></details>
         <label id="quietbtn-label" class="set-check"><input type="checkbox" id="quietbtn-toggle"><span>Only show it on pages that already have comments, or where somebody replied to you.</span></label>
         <details class="set-why"><summary>Why?</summary><p>Everywhere else, open the panel from this extension's toolbar icon. Off by default, so you can still start a thread on a page nobody has commented on yet. Also reachable from the small − on the button.</p></details>
-        <p class="set-p" style="font-size:13px;margin:12px 0 10px">Where it sits on <span id="site-origin"></span>, when it is shown at all.</p>
-        <div id="btnpos-row" style="display:flex;gap:8px">
-        <button class="btnpos" data-c="tl" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↖ Top left</button>
-        <button class="btnpos" data-c="tr" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↗ Top right</button>
-        <button class="btnpos" data-c="bl" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↙ Bottom left</button>
-        <button class="btnpos" data-c="br" style="flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">↘ Bottom right</button>
+        <p class="set-p s-p6">Where it sits on <span id="site-origin"></span>, when it is shown at all.</p>
+        <div class="s-box9" id="btnpos-row">
+        <button class="btnpos s-btn9" data-c="tl">↖ Top left</button>
+        <button class="btnpos s-btn9" data-c="tr">↗ Top right</button>
+        <button class="btnpos s-btn9" data-c="bl">↙ Bottom left</button>
+        <button class="btnpos s-btn9" data-c="br">↘ Bottom right</button>
         </div>
-        <button id="btndefault-btn" class="set-btn" style="margin-top:10px;padding:7px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Use this corner on every new site</button>
+        <button id="btndefault-btn" class="set-btn s-btn10">Use this corner on every new site</button>
         <details class="set-why flat"><summary>Why?</summary><p>A site you have not set a corner for yourself starts bottom right. Setting a default here changes that starting point going forward — it never moves a site you have already placed differently.</p></details>
         </div>
-        <div style="margin-top:14px">
-        <hr style="margin:0 0 12px;border:none;border-top:1px solid #eee">
-        <strong class="set-h" style="font-size:15px">This site</strong>
-        <button id="site-disable-btn" class="set-btn red" style="margin-top:8px;padding:8px 14px;background:none;border-radius:8px;cursor:pointer;font-size:13px">Disable on this site</button>
+        <div class="s-box10">
+        <hr class="s-sep3">
+        <strong class="set-h s-h1">This site</strong>
+        <button id="site-disable-btn" class="set-btn red s-btn11">Disable on this site</button>
         <p id="site-thread">Comments here are filed under <code id="site-thread-url"></code> — this is the address your relays are asked about.</p>
-        <p class="set-p" style="font-size:13px;margin:14px 0 6px">Every site you've switched off this way.</p>
+        <p class="set-p s-p7">Every site you've switched off this way.</p>
         <div id="disabled-section">
         <div id="disabled-list"></div>
         </div>
@@ -1098,8 +1143,8 @@
         <div id="set-g-relays" class="set-g">
         <div class="set-gh">Relays &amp; privacy</div>
         <div>
-        <strong class="set-h" style="font-size:15px">Relays</strong>
-        <p class="set-p" style="font-size:13px;margin:6px 0 10px">Where comments are read from and published to.</p>
+        <strong class="set-h s-h1">Relays</strong>
+        <p class="set-p s-p4">Where comments are read from and published to.</p>
         <div id="relay-list"></div>
         <div id="relay-add">
         <input id="relay-input" placeholder="wss://relay.example.com">
@@ -1110,22 +1155,22 @@
         <label id="worker-label" class="set-check"><input type="checkbox" id="worker-toggle"><span>Open relay connections in the background, not in the page.</span></label>
         <details class="set-why"><summary>Why?</summary><p>Some sites forbid the page from reaching a relay at all, and this gets past that. On by default; it takes effect on the next page load.</p></details>
         </div>
-        <div style="margin-top:14px">
-        <strong class="set-h" style="font-size:15px">What your comments say about this app</strong>
+        <div class="s-box10">
+        <strong class="set-h s-h1">What your comments say about this app</strong>
         <label id="clienttag-label" class="set-check"><input type="checkbox" id="clienttag-toggle"><span>Label what you post with the name of this extension</span></label>
         <details class="set-why"><summary>Why?</summary><p>On by default, the way most Nostr apps label what they write. It is what makes it possible to count how many people actually post from here, which download numbers cannot tell anyone. Turning it off drops the label from what you publish next. It does not change what you already published, and it does not make you invisible — these events keep the shape that gives them away.</p></details>
         </div>
         </div>
         <div id="set-g-activity" class="set-g">
         <div class="set-gh">Activity</div>
-        <div style="margin-top:14px">
-        <strong class="set-h" style="font-size:15px">Your threads</strong>
+        <div class="s-box10">
+        <strong class="set-h s-h1">Your threads</strong>
         <p class="set-p set-note">Pages you have commented on.</p>
         <details class="set-why flat"><summary>Why?</summary><p>A comment is filed under one address, so without this there is no way back to a conversation you left.</p></details>
         <div id="mythreads"></div>
         </div>
-        <div style="margin-top:14px">
-        <strong class="set-h" style="font-size:15px">Replies to you</strong>
+        <div class="s-box10">
+        <strong class="set-h s-h1">Replies to you</strong>
         <p class="set-p set-note">Who answered you, and where.</p>
         <details class="set-why flat"><summary>Why?</summary><p>A reply about a page links back to the page; a reply to one of your notes lives on Nostr, and is marked that way.</p></details>
         <div id="notiflist"></div>
