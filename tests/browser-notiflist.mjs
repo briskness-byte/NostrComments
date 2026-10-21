@@ -96,12 +96,15 @@ let b = JSON.parse(await banner());
 ok('the banner appears', b.shown === true, b.shown);
 ok('and names who replied rather than only counting', /this one is about the article/.test(b.text), b.text);
 ok('with a link back to the page', b.links.some(l => l.href.includes('example.com')), b.links);
+// Reported 21 Oct 2026: "npub1…: <text>" on an unrelated page did not say what it was.
+ok('it says where it happened', /mentioned you on example\.com: “this one is about the article/.test(b.text), b.text);
 
 console.log('\n=== a reply with no page at all ===');
 // This is the case the report was about: an answer to one of your notes carries no page.
 const noteReply = await reply('replying to your note, not to a page', [['e', 'ab'.repeat(32)], ['p', ME_PUB]]);
 b = JSON.parse(await banner());
 ok('it is still announced', b.shown === true, b.shown);
+ok('and says it answered a note of yours, quoting it', /replied to your note: “replying to your note/.test(b.text), b.text);
 ok('and it still has somewhere to go', b.links.length > 0, b.links);
 ok('pointed at a nostr client, not at a page', b.links.some(l => /njump\.me\/note1/.test(l.href)), b.links);
 
@@ -135,6 +138,7 @@ let l = JSON.parse(await list());
 ok('the list exists', !l.missing, l);
 ok('all three replies are in it', l.rows.length === 3, l.rows.length);
 ok('each says who', l.rows.every(r => r.who.length > 0), l.rows.map(r => r.who));
+ok('and what kind of notification it is', l.rows.some(r => /replied to your note:$/.test(r.who)) && l.rows.some(r => /mentioned you on example\.com:$/.test(r.who)), l.rows.map(r => r.who));
 ok('each shows what was said', l.rows.some(r => /about the article/.test(r.txt)) && l.rows.some(r => /replying to your note/.test(r.txt)), l.rows.map(r => r.txt));
 // The whole point of the distinction: one is a page, the other is not, and the label says so.
 ok('the page reply links to the page', l.rows.some(r => r.href.includes('example.com')), l.rows.map(r => r.href));

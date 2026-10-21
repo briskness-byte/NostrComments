@@ -2727,6 +2727,16 @@
         // Where a reply goes. A page comment goes back to the page; a reply to one of your notes
         // has no page and belongs in a Nostr client, so it is labelled as such rather than dressed
         // up as something this panel can open.
+        // What a notification is, in a few words before the quote, so it makes sense on a page that
+        // has nothing to do with it (reported 21 Oct 2026: "npub1…: <text>" read as noise). Where it
+        // happened if there is a page, otherwise whether it answered you or only named you. Entries
+        // saved before the kind was kept say "replied to you".
+        function notifPhrase(n) {
+            let host = '';
+            try { host = n.where ? new URL(n.where).hostname.replace(/^www\./, '') : ''; } catch (e) {}
+            if (host) return n.kind === 'mention' ? `mentioned you on ${host}` : `replied on ${host}`;
+            return n.kind === 'reply' ? 'replied to your note' : n.kind === 'mention' ? 'mentioned you' : 'replied to you';
+        }
         function notifDest(n) {
             const w = safeLink(n.where);   // the log is kept across sessions, so it is checked on the way out too
             if (w) return { href: w, label: w.replace(/^https?:\/\//, '') };
@@ -2748,10 +2758,10 @@
                 row.className = 'nf-row' + (n.seen ? '' : ' nf-new');
                 const who = document.createElement('span');
                 who.className = 'nf-who';
-                who.textContent = (myPub && profiles.get(n.pub)) || toNpub(n.pub).slice(0, 12) + '…';
+                who.textContent = ((myPub && profiles.get(n.pub)) || toNpub(n.pub).slice(0, 12) + '…') + ' ' + notifPhrase(n) + ':';
                 const txt = document.createElement('span');
                 txt.className = 'nf-txt';
-                txt.textContent = n.txt || '(no text)';
+                txt.textContent = n.txt ? `“${n.txt}”` : '(no text)';
                 row.append(who, txt);
                 const d = notifDest(n);
                 if (d) {
@@ -3469,8 +3479,9 @@
             // is the difference between a prompt and a notification.
             const newest = notifLog.find(n => !n.seen);
             const whoNewest = newest ? ((myPub && profiles.get(newest.pub)) || toNpub(newest.pub).slice(0, 12) + '…') : '';
+            // Their words in quotes: what follows the colon is somebody else's, not the panel's.
             label.textContent = newest && newest.txt
-                ? `🔔 ${whoNewest}: ${newest.txt.slice(0, 60)}${newest.txt.length > 60 ? '…' : ''}`
+                ? `🔔 ${whoNewest} ${notifPhrase(newest)}: “${newest.txt.slice(0, 60)}${newest.txt.length > 60 ? '…' : ''}”`
                 : (() => { const n = notifLog.filter(x => !x.seen).length || unreadReplies;
                            return `🔔 ${n} new repl${n === 1 ? 'y' : 'ies'} on your comments`; })();
             const x = document.createElement('button');
@@ -3566,6 +3577,9 @@
                         if (!notifLog.some(n => n.id === ev.id)) {
                             notifLog.unshift({ id: ev.id, pub: ev.pubkey, at: ev.created_at,
                                 txt: String(ev.content || '').replace(/\s+/g, ' ').slice(0, 140),
+                                // An answer points at what it answers (an e tag); a mention does not.
+                                // Kept so the banner can say which of the two it is.
+                                kind: (ev.tags || []).some(x => x[0] === 'e' || x[0] === 'E') ? 'reply' : 'mention',
                                 where: '', seen: false });
                         }
                         // 1111 carries the page in an uppercase I tag; a legacy kind 1 uses r. A
