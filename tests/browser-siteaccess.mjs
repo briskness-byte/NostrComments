@@ -17,9 +17,9 @@ import { reporter, startRelay, startSite, startBrowser, BROWSER, ROOT } from './
 
 if (BROWSER === 'firefox') { console.log('Chromium only; skipped under Firefox.'); process.exit(0); }
 
-const CD_PORT = Number(process.env.QA_PORT || 9597);
-const SITE_PORT = Number(process.env.QA_SITE_PORT || 8157);
-const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8517);
+const CD_PORT = Number(process.env.QA_PORT || 9611);
+const SITE_PORT = Number(process.env.QA_SITE_PORT || 8171);
+const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8531);
 
 const { ok, state } = reporter();
 const relay = await startRelay({ port: RELAY_PORT });
@@ -96,5 +96,28 @@ for (let i = 0; i < 30 && !m; i++) { await wait(250); m = await js('return windo
 ok('the popup\'s message to a tab without access rejects (so the popup shows its hint)', typeof m === 'string' && m.startsWith('rejected'), m);
 const hint = await js(`return document.getElementById('open') ? 'has open button' : 'no open button';`);
 ok('the popup itself loads normally', hint === 'has open button', hint);
+
+// The popup tells "allowed here" from "allowed elsewhere" with these two calls (singleSites()).
+await js(`
+    window.__p = null;
+    (async () => {
+        const allowed = await chrome.permissions.contains({ origins: ['http://localhost:${SITE_PORT}/*'] });
+        const blocked = await chrome.permissions.contains({ origins: ['http://127.0.0.1:${SITE_PORT}/*'] });
+        const every = await chrome.permissions.contains({ origins: ['<all_urls>'] });
+        const all = await chrome.permissions.getAll();
+        window.__p = { allowed, blocked, every, origins: all.origins };
+    })();
+    return 1;`);
+let p = null;
+for (let i = 0; i < 20 && !p; i++) { await wait(250); p = await js('return window.__p;'); }
+ok('the browser confirms the allowed site to the popup', p && p.allowed === true, p);
+ok('  and denies the other one', p && p.blocked === false, p);
+ok('  and reports no access to all sites', p && p.every === false, p);
+ok('  and lists the allowed site among its origins', p && (p.origins || []).some(o => o.includes('localhost')), p);
+// Opened as a tab, the popup's own tab is the active one: an extension page, so "elsewhere".
+await goto(`chrome-extension://${ID}/popup.html`);
+await wait(1500);
+const status = await js(`return document.getElementById('status').textContent;`);
+ok('the popup shows the "not allowed on this site" view there', /not allowed on this site/i.test(status), status);
 
 await finish(state.fail ? 1 : 0);

@@ -20,13 +20,35 @@ const HOSTS = { origins: ['<all_urls>'] };
 // be tested without a browser — see tests/popup.test.mjs. `off` is the switch at the top: off
 // everywhere, the way a signer's own switch works, for somebody who wants it quiet for a while
 // without uninstalling it.
-function view(granted, justGranted, off) {
-    if (granted && off) {
+//
+// `site` covers the browser's own whitelist (Chrome "On specific sites", Firefox "Always Allow on"):
+// 'here' when this tab's site was allowed one by one, 'elsewhere' when some other sites were, and
+// nothing when none were. Without it, somebody who allowed only this site was told the extension
+// could not see any page — on a page where it was running (reported 23 Oct 2026).
+function view(granted, justGranted, off, site) {
+    if ((granted || site === 'here') && off) {
         return {
             status: 'Off. Nothing appears on any page, nothing connects to a relay, and your signer is not asked for anything.',
             grant: false,
             open: false,
             hint: 'Switch it back on here whenever you like. Your key, settings and history are kept.',
+        };
+    }
+    if (!granted && site === 'here') {
+        return {
+            status: 'Active on this site. Sites you have not allowed stay untouched.',
+            // Still offered, never pressed for: choosing sites one by one is a fine way to use it.
+            grant: true,
+            open: true,
+            hint: 'You allow sites one by one from the browser’s extensions button. The button above allows all of them instead.',
+        };
+    }
+    if (!granted && site === 'elsewhere') {
+        return {
+            status: 'Not allowed on this site, so nothing appears here.',
+            grant: true,
+            open: false,
+            hint: 'To use it here, allow this site from the browser’s extensions button, or all sites with the button above.',
         };
     }
     if (!granted) {
@@ -66,6 +88,21 @@ async function held() {
     try { return await api.permissions.contains(HOSTS) === true; } catch (e) { return false; }
 }
 
+// Which single sites the browser lets it see, as view() wants it. A tab's address is only readable
+// with access to that tab (there is no "tabs" permission), so a readable address that the browser
+// also confirms as granted is this site allowed one by one. Any failure answers "none": the popup
+// then shows the plain no-access view, as it always did.
+async function singleSites() {
+    try {
+        const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+        const origin = tab && tab.url && new URL(tab.url).origin;
+        if (origin && /^https?:/.test(origin) && await api.permissions.contains({ origins: [origin + '/*'] }) === true) return 'here';
+        const all = await api.permissions.getAll();
+        if ((all.origins || []).some(o => o !== '<all_urls>' && /^(\*|https?):\/\//.test(o))) return 'elsewhere';
+    } catch (e) {}
+    return null;
+}
+
 async function isOff() {
     try { return (await api.storage.local.get('nostrcomments_off')).nostrcomments_off === true; } catch (e) { return false; }
 }
@@ -73,7 +110,8 @@ async function isOff() {
 async function refresh(justGranted) {
     const granted = await held();
     const off = await isOff();
-    paint(view(granted, justGranted === true && granted, off), off);
+    const site = granted ? null : await singleSites();
+    paint(view(granted, justGranted === true && granted, off, site), off);
     return granted;
 }
 

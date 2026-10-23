@@ -79,6 +79,21 @@ export async function run() {
     ok('switched on again it is the ordinary view', JSON.stringify(view(true, false, false)) === JSON.stringify(yes));
     ok('with no access the switch changes nothing: granting comes first', JSON.stringify(view(false, false, true)) === JSON.stringify(none));
 
+    // --- the browser's own whitelist: single sites allowed (Emre's request, fixed 23 Oct 2026) ------
+    const here = view(false, false, false, 'here');
+    ok('allowed on this site only, it says it is active here', /active on this site/i.test(here.status), here.status);
+    ok('  and never that it cannot see any page', !/cannot see any page/i.test(here.status + here.hint), here);
+    ok('  and offers to open the panel, which is running here', here.open === true, here);
+    ok('  and still offers all sites, without pressing', here.grant === true && /one by one/i.test(here.hint), here);
+    const elsewhere = view(false, false, false, 'elsewhere');
+    ok('allowed elsewhere but not here, it says so', /not allowed on this site/i.test(elsewhere.status), elsewhere.status);
+    ok('  and offers nothing to open', elsewhere.open === false, elsewhere);
+    ok('  and says how to allow this site', /extensions button/i.test(elsewhere.hint), elsewhere.hint);
+    ok('allowed here and switched off, it is the off view', JSON.stringify(view(false, false, true, 'here')) === JSON.stringify(off));
+    ok('no single sites at all is the plain no-access view', JSON.stringify(view(false, false, false, null)) === JSON.stringify(none));
+    ok('all sites granted ignores the single-site answer', JSON.stringify(view(true, false, false, 'here')) === JSON.stringify(yes));
+    ok('the popup asks the browser about this tab\'s own site', /permissions\.contains\(\{ origins: \[origin \+ '\/\*'\] \}\)/.test(srcs.chrome));
+
     // --- granted just now ---------------------------------------------------------------------------
     // A grant does not reach pages that are already open; the content script arrives on the next
     // load. Without this line the user clicks Allow, looks at the page behind the popup, sees no
