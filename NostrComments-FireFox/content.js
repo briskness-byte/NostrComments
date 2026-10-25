@@ -965,6 +965,9 @@
         .nc-body{margin:12px 0;font-size:17px;line-height:1.6}
         .nc-actions{margin-top:12px}
         .nc-img{max-width:100%;border-radius:10px;margin:8px 0;display:block;cursor:pointer}
+        .nc-hashtag{color:#0c75bc;font-weight:500}
+        #m.dark-mode .nc-hashtag{color:#60a5fa}
+        .nc-quote{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em}
         .nc-vid{max-width:100%;border-radius:10px;margin:8px 0;display:block}
         #nc-btn{border:0;padding:0;position:fixed;width:48px;height:48px;background:linear-gradient(135deg,#1d9bf0,#0d8bf0);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2147483647;box-shadow:0 6px 18px rgba(29,155,240,0.45);transition:transform .25s ease,opacity .2s ease;user-select:none;opacity:.72}
         /* Bottom right is the most contested corner on the web — every support chat widget defaults
@@ -4210,6 +4213,35 @@
             }
         })();
 
+        // Plain text with its hashtags marked and its nostr: quotes turned into a short link. The long
+        // nostr:nevent1… string told a reader nothing (issue #4). The link goes to njump.me, a
+        // public viewer, and only when clicked; the quoted note is not fetched to show it inline.
+        // plainWithRefs: start
+        function plainWithRefs(frag, s) {
+            const re = /(?<![^\s(])#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,63})|nostr:((?:note|nevent|naddr)1[02-9ac-hj-np-z]{6,1000})/giu;
+            let last = 0, m;
+            while ((m = re.exec(s)) !== null) {
+                if (m[1] != null && !/\p{L}/u.test(m[1])) continue;
+                if (m[2] != null && !decodeLinkedEntity(m[2])) continue;
+                if (m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
+                if (m[1] != null) {
+                    const el = document.createElement('span'); el.className = 'nc-hashtag'; el.textContent = m[0]; frag.appendChild(el);
+                } else {
+                    const ref = m[2].toLowerCase();
+                    const a = document.createElement('a');
+                    a.className = 'nc-quote';
+                    a.href = 'https://njump.me/' + ref;
+                    a.textContent = '↪ quoted ' + (ref.startsWith('naddr') ? 'post' : 'note') + ' ' + ref.slice(0, ref.indexOf('1') + 5) + '…' + ref.slice(-4);
+                    a.title = 'nostr:' + ref;
+                    a.target = '_blank'; a.rel = 'noopener noreferrer';
+                    frag.appendChild(a);
+                }
+                last = m.index + m[0].length;
+            }
+            if (last < s.length) frag.appendChild(document.createTextNode(s.slice(last)));
+        }
+        // plainWithRefs: end
+
         function renderMarkdown(text) {
             const frag = document.createDocumentFragment();
             text.split('\n').forEach((line, i) => {
@@ -4221,7 +4253,7 @@
                 const pat = /\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^)]+)\)|(https?:\/\/\S+)/g;
                 let last = 0, m;
                 while ((m = pat.exec(line)) !== null) {
-                    if (m.index > last) frag.appendChild(document.createTextNode(line.slice(last, m.index)));
+                    if (m.index > last) plainWithRefs(frag, line.slice(last, m.index));
                     if (m[1] != null) { const el = document.createElement('strong'); el.textContent = m[1]; frag.appendChild(el); }
                     else if (m[2] != null) { const el = document.createElement('em'); el.textContent = m[2]; frag.appendChild(el); }
                     else if (m[3] != null) { const el = document.createElement('code'); el.textContent = m[3]; frag.appendChild(el); }
@@ -4283,7 +4315,7 @@
                     }
                     last = m.index + m[0].length;
                 }
-                if (last < line.length) frag.appendChild(document.createTextNode(line.slice(last)));
+                if (last < line.length) plainWithRefs(frag, line.slice(last));
             });
             return frag;
         }
@@ -4483,7 +4515,9 @@
                         kind: 1,
                         created_at: Math.floor(Date.now() / 1000),
                         content: `${ev.content}\n\n${pageUrl}\n\nRead the thread: ${readerUrl}`,
-                        tags: labelClient ? [['client', 'NostrComments']] : [],
+                        // The comment's hashtags and quotes travel with it: a shared note is where
+                        // hashtag followers would see it.
+                        tags: [...contentTags(ev.content), ...(labelClient ? [['client', 'NostrComments']] : [])],
                         pubkey: myPub
                     };
                     try {
@@ -4960,6 +4994,39 @@
         // it; off wherever labelClient says so.
         const CLIENT_TAG = ["client", "NostrComments"];
 
+        // What the text itself says, as tags other clients read (issues #3 and #4, Oct 2026).
+        //
+        // Hashtags become t tags, lowercase, so a warning tagged #scam reaches people who follow
+        // #scam. A # counts only at the start of a word, so the anchor in example.com/page#part
+        // never becomes one, and it needs a letter, so "#3" stays a number.
+        //
+        // A quoted nostr:note / nevent / naddr becomes a q tag (NIP-18, which NIP-22 points to for
+        // citations), so other clients show it as a quote. Only the event itself: the relay hints
+        // inside an nevent are the quoting author's choice and are never copied or contacted.
+        //
+        // Capped, because the text is the reader's own but a pasted wall of tags should not turn one
+        // comment into a hundred-tag event relays refuse.
+        // contentTags: start
+        const HASHTAG_RE = /(?<![^\s(])#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,63})/gu;
+        const NOSTR_REF_RE = /nostr:((?:note|nevent|naddr)1[02-9ac-hj-np-z]{6,1000})/gi;
+        function contentTags(text) {
+            const out = [], seenT = new Set(), seenQ = new Set();
+            if (typeof text !== 'string') return out;
+            for (const m of text.matchAll(HASHTAG_RE)) {
+                const t = m[1].toLowerCase();
+                if (!/\p{L}/u.test(t) || seenT.has(t) || seenT.size >= 10) continue;
+                seenT.add(t); out.push(["t", t]);
+            }
+            for (const m of text.matchAll(NOSTR_REF_RE)) {
+                const ent = decodeLinkedEntity(m[1]);
+                const ref = ent && (ent.id || ent.addr);
+                if (!ref || seenQ.has(ref) || seenQ.size >= 5) continue;
+                seenQ.add(ref); out.push(["q", ref]);
+            }
+            return out;
+        }
+        // contentTags: end
+
         function buildEvent(text) {
             // Two shapes, and which one is used is decided by the parent, never by a setting.
             //
@@ -4977,6 +5044,7 @@
                 // Keeps the reply in this page's thread for the next reader, the same way the note
                 // it answers got there.
                 tags.push(["r", pageUrl]);
+                tags.push(...contentTags(text));
                 if (labelClient) tags.push(CLIENT_TAG);
                 ev = {kind:LEGACY_KIND, created_at:Math.floor(Date.now()/1000), tags, content:text, pubkey:myPub};
             } else {
@@ -4989,6 +5057,7 @@
                 } else {
                     tags.push(["i", pageUrl], ["k", "web"]);
                 }
+                tags.push(...contentTags(text));
                 if (labelClient) tags.push(CLIENT_TAG);
                 ev = {kind:COMMENT_KIND, created_at:Math.floor(Date.now()/1000), tags, content:text, pubkey:myPub};
             }

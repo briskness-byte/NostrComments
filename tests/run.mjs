@@ -20,8 +20,9 @@ import { run as history } from './history.test.mjs';
 import { run as thirdparty } from './thirdparty.test.mjs';
 import { run as speaksfor } from './speaksfor.test.mjs';
 import { run as settingsgroups } from './settingsgroups.test.mjs';
+import { run as contenttags } from './contenttags.test.mjs';
 
-const suites = [await secp(), await encrypt(), await normalize(), await zap(), await bech32(), await deletion(), await keyimport(), await popup(), await relaymigration(), await nip05host(), await parity(), await ports(), await background(), await curve(), await niplink(), await signerfail(), await history(), await thirdparty(), await speaksfor(), await settingsgroups()];
+const suites = [await secp(), await encrypt(), await normalize(), await zap(), await bech32(), await deletion(), await keyimport(), await popup(), await relaymigration(), await nip05host(), await parity(), await ports(), await background(), await curve(), await niplink(), await signerfail(), await history(), await thirdparty(), await speaksfor(), await settingsgroups(), await contenttags()];
 
 let totalFail = 0;
 console.log('');

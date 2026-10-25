@@ -134,7 +134,7 @@ export async function run() {
         // Sharing to your feed is a separate event with its own literal tag, and it was missed
         // once already by a change that only looked at buildEvent.
         ok(`${name}: sharing to your feed asks too`,
-           src.includes("tags: labelClient ? [['client', 'NostrComments']] : [],"));
+           src.includes("...(labelClient ? [['client', 'NostrComments']] : [])],"));
         ok(`${name}: the preference is read at startup, defaulting to on`,
            /let labelClient = _st\.(nostrcomments_)?clienttag !== false;/.test(src));
         ok(`${name}: and the checkbox writes it back`,
