@@ -968,6 +968,14 @@
         .nc-hashtag{color:#0c75bc;font-weight:500}
         #m.dark-mode .nc-hashtag{color:#60a5fa}
         .nc-quote{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em}
+        .nc-qcard{display:block;margin:8px 0;padding:8px 12px;border-left:3px solid #c9d6e2;background:#f6f8fa;border-radius:6px;font-size:15px}
+        .nc-qcard .nc-qhead{display:block;font-size:13px;margin-bottom:4px}
+        .nc-qcard .nc-qhead .nc-quote{font-family:inherit;font-size:inherit}
+        .nc-qcard .nc-qbody{display:block;white-space:pre-wrap;overflow-wrap:anywhere;color:#333}
+        .nc-qcard.nc-qhidden .nc-qbody{color:#6b7280;font-style:italic}
+        #m.dark-mode .nc-qcard{background:#1f2328;border-left-color:#3b4652}
+        #m.dark-mode .nc-qcard .nc-qbody{color:#d1d5db}
+        #m.dark-mode .nc-qcard.nc-qhidden .nc-qbody{color:#9ca3af}
         .nc-vid{max-width:100%;border-radius:10px;margin:8px 0;display:block}
         #nc-btn{border:0;padding:0;position:fixed;width:48px;height:48px;background:linear-gradient(135deg,#1d9bf0,#0d8bf0);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2147483647;box-shadow:0 6px 18px rgba(29,155,240,0.45);transition:transform .25s ease,opacity .2s ease;user-select:none;opacity:.72}
         /* Bottom right is the most contested corner on the web — every support chat widget defaults
@@ -3326,6 +3334,106 @@
             });
         }
 
+        // Quoted notes, shown inline (issue #4, step 2). A comment that quotes nostr:nevent… used to
+        // show only a link; the quoted note is now fetched and drawn as a card under it.
+        //
+        // Asked only of the reader's own relays — never the relay hints inside the nevent, which the
+        // quoting author chose and could point at a server of their own to see who reads the thread.
+        // Asked only while the panel is open, so a page nobody looked at causes no lookup. A reply
+        // counts only if it is exactly what was asked for (the id, or kind, author and d tag of an
+        // naddr) and its signature holds. The card is plain text: no links, pictures or quotes of its
+        // own, so a quote cannot pull in more fetches. Mutes apply to it like to any comment.
+        const quoted = new Map();       // ref (event id, or kind:pubkey:d) -> event, or null while unknown
+        const _quoteWant = new Set();
+        const _seenQuote = new Set();   // kept apart from the thread's, see queueVerify
+        let _quoteCards = 3;            // per comment; reset by renderMarkdown
+        function quoteRefOf(bech) {
+            const ent = decodeLinkedEntity(bech);
+            return ent ? (ent.id || ent.addr) : null;
+        }
+        function quoteCard(bech) {
+            const ref = quoteRefOf(bech);
+            if (!ref) return null;
+            if (!quoted.has(ref)) { _quoteWant.add(ref); return null; }
+            const ev = quoted.get(ref);
+            if (!ev || _quoteCards <= 0) return null;
+            _quoteCards--;
+            const card = document.createElement('span');
+            card.className = 'nc-qcard';
+            const head = document.createElement('span');
+            head.className = 'nc-qhead';
+            const a = document.createElement('a');
+            a.className = 'nc-quote';
+            a.href = 'https://njump.me/' + bech;
+            a.target = '_blank'; a.rel = 'noopener noreferrer';
+            a.title = 'nostr:' + bech;
+            const who = profiles.get(ev.pubkey) || (toNpub(ev.pubkey).slice(0, 12) + '…');
+            a.textContent = '↪ ' + who;
+            head.appendChild(a);
+            const when = document.createElement('span');
+            when.textContent = ' · ' + new Date(ev.created_at * 1000).toLocaleDateString();
+            head.appendChild(when);
+            card.appendChild(head);
+            const body = document.createElement('span');
+            body.className = 'nc-qbody';
+            const lc = ev.content.toLowerCase();
+            if (mutedPubkeys.has(ev.pubkey) || muteWords.some(w => lc.includes(w))) {
+                card.classList.add('nc-qhidden');
+                body.textContent = 'Quoted note hidden — you muted its author or a word in it.';
+            } else {
+                body.textContent = ev.content.length > 500 ? ev.content.slice(0, 500) + '…' : ev.content;
+            }
+            card.appendChild(body);
+            return card;
+        }
+        function fetchQuotes() {
+            if (!_quoteWant.size || !panelOpen()) return;
+            const refs = [..._quoteWant].slice(0, 20);
+            refs.forEach(r => { _quoteWant.delete(r); quoted.set(r, null); });
+            const ids = refs.filter(r => /^[0-9a-f]{64}$/.test(r));
+            const addrs = refs.filter(r => !ids.includes(r)).map(r => {
+                const i = r.indexOf(':'), j = r.indexOf(':', i + 1);
+                const kind = Number(r.slice(0, i)), pubkey = r.slice(i + 1, j), d = r.slice(j + 1);
+                return Number.isInteger(kind) && /^[0-9a-f]{64}$/.test(pubkey) && j > i ? { ref: r, kind, pubkey, d } : null;
+            }).filter(Boolean);
+            const filters = [];
+            if (ids.length) filters.push({ ids });
+            addrs.forEach(x => filters.push({ kinds: [x.kind], authors: [x.pubkey], '#d': [x.d], limit: 1 }));
+            if (!filters.length) return;
+            const refFor = ev => {
+                if (ids.includes(ev.id)) return ev.id;
+                const d = (ev.tags.find(t => t[0] === 'd') || [])[1] ?? '';
+                const hit = addrs.find(x => x.kind === ev.kind && x.pubkey === ev.pubkey && x.d === d);
+                return hit ? hit.ref : null;
+            };
+            RELAYS.forEach(r => {
+                try {
+                    const ws = ncSocket(r);
+                    const qid = 'q' + Math.random().toString(36).slice(2, 6);
+                    const t = setTimeout(() => ws.close(), 8000);
+                    ws.onopen = () => ws.send(JSON.stringify(["REQ", qid, ...filters]));
+                    ws.onmessage = m => {
+                        let parsed;
+                        try { parsed = JSON.parse(m.data); } catch(e) { return; }
+                        const [type,,ev] = parsed;
+                        if (type === 'EOSE') { clearTimeout(t); ws.close(); return; }
+                        if (type !== 'EVENT' || !wellFormed(ev)) return;
+                        const ref = refFor(ev);
+                        if (!ref) return;
+                        queueVerify(ev, () => {
+                            // An naddr names a replaceable event: the newest copy wins, whichever
+                            // relay answered last.
+                            const had = quoted.get(ref);
+                            if (had && had.created_at >= ev.created_at) return;
+                            quoted.set(ref, ev);
+                            fetchProfiles([ev.pubkey]);
+                            scheduleRender();
+                        }, _seenQuote);
+                    };
+                } catch(e) {}
+            });
+        }
+
         // NIP-07 bridge (isolated world → main world via CustomEvent)
         const _nip07q = {};
         document.addEventListener('nc_nip07_res', ({detail}) => {
@@ -4216,6 +4324,10 @@
                     const el = document.createElement('span'); el.className = 'nc-hashtag'; el.textContent = m[0]; frag.appendChild(el);
                 } else {
                     const ref = m[2].toLowerCase();
+                    // A card when the quoted note is known (quoteCard, outside this block); the
+                    // short link until then, or when it cannot be found.
+                    const card = typeof quoteCard === 'function' ? quoteCard(ref) : null;
+                    if (card) { frag.appendChild(card); last = m.index + m[0].length; continue; }
                     const a = document.createElement('a');
                     a.className = 'nc-quote';
                     a.href = 'https://njump.me/' + ref;
@@ -4231,6 +4343,7 @@
         // plainWithRefs: end
 
         function renderMarkdown(text) {
+            _quoteCards = 3;
             const frag = document.createDocumentFragment();
             text.split('\n').forEach((line, i) => {
                 if (i > 0) frag.appendChild(document.createElement('br'));
@@ -4768,6 +4881,7 @@
             badge.textContent = count > 99 ? '99+' : String(count);
             badge.style.display = count > 0 ? 'block' : 'none';
             placeBtn();
+            fetchQuotes();   // what the comments just drawn quote, if the panel is open
         }
 
         let renderTimer = null;

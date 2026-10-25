@@ -6,6 +6,10 @@
 // tags, and the thread shows the hashtag marked and the quote as a short link — while a page anchor
 // in a URL stays part of the link and never becomes a tag.
 //
+// Then step 2 of #4: a quoted note that the reader's relays hold is drawn inline as a card, fetched
+// only once the panel is open, never from the relay named inside the nevent, and hidden behind a
+// line when its words are muted. A quoted note nobody holds stays a short link.
+//
 //   node tests/browser-contenttags.mjs
 //   NC_BROWSER=firefox node tests/browser-contenttags.mjs
 //
@@ -15,8 +19,10 @@ import { extensionCode, reporter, startRelay, startSite, startBrowser, configure
 const CD_PORT = Number(process.env.QA_PORT || 9613);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8173);
 const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8533);
+// The relay a quoting author names inside the nevent. Nothing may ever connect to it.
+const DECOY_PORT = Number(process.env.QA_DECOY_PORT || 8534);
 
-const { normalizeUrl, newKey, toBech32 } = extensionCode();
+const { normalizeUrl, newKey, toBech32, sign } = extensionCode();
 const { ok, state } = reporter();
 
 const NEVENT = 'nevent1qvzqqqqy2upzq3hnc7an8npsryzfkaku38dmjm35cfrmmkngk6kcvvngy7fllzs6qy88wumn8ghj7mn0wvhxcmmv9uq3wamnwvaz7tmjv4kxz7fwwpexjmtpdshxuet59uqzqgzxryf57ez3uzwj9v27zkza725nt7p4knatj3ktvzrh5u8rru5m4klnsa';
@@ -27,10 +33,24 @@ const relay = await startRelay({ port: RELAY_PORT, onEvent: (ev, api) => { publi
 const site = await startSite({ port: SITE_PORT, heading: 'Hashtag and quote QA page' });
 const PAGE = normalizeUrl(site.url);
 const ME = newKey();
+const THEM = newKey();
 
-const { js, wait, goto, finish, nclick } = await startBrowser({
+// The note that gets quoted: on the reader's relay, not on the page, so only a lookup by id finds it.
+const QUOTED = await sign(THEM, { kind: 1, created_at: Math.floor(Date.now() / 1000) - 3600, tags: [],
+    content: 'Their speed test files sit behind the Cloudflare proxy, so the numbers say nothing. flurble' });
+relay.stored.push(QUOTED);
+// Counts every time a relay answer includes it: that is the lookup happening.
+let quotedAsked = 0;
+const realFilter = relay.stored.filter;
+relay.stored.filter = function (...a) { const r = realFilter.apply(this, a); if (r.some(e => e.id === QUOTED.id)) quotedAsked++; return r; };
+const decoy = await startRelay({ port: DECOY_PORT });
+// An nevent with the decoy as its relay hint (TLV 0: id, TLV 1: relay).
+const tlv = [0, 32, ...Buffer.from(QUOTED.id, 'hex'), 1, ...[Buffer.from(decoy.url).length], ...Buffer.from(decoy.url)];
+const QUOTE_REF = toBech32('nevent', Buffer.from(tlv).toString('hex'));
+
+const { js, wait, goto, finish, nclick, wd, sid } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncctags-',
-    onClose: () => { site.close(); relay.close(); },
+    onClose: () => { site.close(); relay.close(); decoy.close(); },
 });
 
 await goto(site.url);
@@ -111,5 +131,59 @@ ok('the note is published', !!note, published.map(e => e.kind));
 ok('with the comment\'s hashtags', JSON.stringify(tags(note, 't').map(t => t[1])) === '["vps","scam"]', tags(note, 't'));
 ok('and its quote', tags(note, 'q')[0]?.[1] === NEVENT_ID, tags(note, 'q'));
 ok('and still the client label', tags(note, 'client').length === 1, note && note.tags);
+
+console.log('\n=== a quoted note the relays hold becomes a card (step 2) ===');
+published.length = 0;
+const QTEXT = `Proof, quoted: nostr:${QUOTE_REF}`;
+await js(`${ROOT}
+  const i = s.getElementById('input');
+  i.value = ${JSON.stringify(QTEXT)};
+  i.dispatchEvent(new Event('input', {bubbles:true}));
+  return 1;`);
+await nclick("s.getElementById('send')");
+await wait(3000);
+ok('the quoting comment is published', published.some(e => e.content === QTEXT));
+
+// Reload with the panel closed: the thread loads, but nobody is looking, so nothing is looked up.
+quotedAsked = 0;
+await goto(site.url);
+await wait(5000);
+ok('with the panel closed the quoted note is not looked up', quotedAsked === 0, quotedAsked);
+
+await nclick("s.getElementById('nc-btn')");
+await wait(4000);
+const card = await js(`${ROOT}
+  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('Proof, quoted'));
+  const k = c && c.querySelector('.nc-qcard');
+  return k ? { body: k.querySelector('.nc-qbody').textContent, links: k.querySelectorAll('a').length,
+               href: k.querySelector('a').href, imgs: k.querySelectorAll('img').length, hidden: k.classList.contains('nc-qhidden') } : null;`);
+ok('opening the panel looks it up', quotedAsked > 0, quotedAsked);
+ok('and draws it as a card', !!card && card.body.includes('speed test files'), card);
+ok('the card links to the quoted note, and has no other links or pictures', card && card.links === 1 && card.imgs === 0 && card.href.startsWith('https://njump.me/nevent1'), card);
+ok('the relay named inside the nevent was never contacted', decoy.conns.size === 0, decoy.conns.size);
+const stillLink = await js(`${ROOT}
+  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('Beware of possible'));
+  return c ? { cards: c.querySelectorAll('.nc-qcard').length, links: c.querySelectorAll('a.nc-quote').length } : null;`);
+ok('a quoted note no relay holds stays a short link', stillLink && stillLink.cards === 0 && stillLink.links === 1, stillLink);
+
+// NC_SHOT=file.png saves what the card looks like, for a person to check.
+if (process.env.NC_SHOT && wd) {
+    await js(`${ROOT} [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('Proof, quoted'))?.scrollIntoView(); return 1;`);
+    await wait(500);
+    const png = (await wd('GET', `/session/${sid}/screenshot`)).value;
+    if (png) (await import('fs')).writeFileSync(process.env.NC_SHOT, Buffer.from(png, 'base64'));
+}
+
+console.log('\n=== mutes apply to the card ===');
+await js(`${ROOT} s.getElementById('gear-btn').click(); s.getElementById('muteword-input').value = 'flurble'; return 1;`);
+await nclick("s.getElementById('muteword-add-btn')");
+await wait(800);
+await js(`${ROOT} s.getElementById('settings-close')?.click(); return 1;`);
+await wait(800);
+const muted = await js(`${ROOT}
+  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('Proof, quoted'));
+  const k = c && c.querySelector('.nc-qcard');
+  return k ? { hidden: k.classList.contains('nc-qhidden'), body: k.querySelector('.nc-qbody').textContent } : null;`);
+ok('a muted word hides the quoted text behind a line', muted && muted.hidden && !muted.body.includes('speed test'), muted);
 
 await finish(state.fail ? 1 : 0);
