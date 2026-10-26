@@ -72,7 +72,8 @@ const nclick = async selector => {
 await wd('POST',`/session/${sid}/url`,{url:'http://127.0.0.1:8099/'});
 await new Promise(r=>setTimeout(r,2800));
 
-// With nothing connected, Connect is the one thing left to do, so it has to be on screen.
+// With nothing connected the welcome block offers the choice, with words that say what each
+// option does, so the header's Connect button stays out of the way (first-run review, 26 Oct 2026).
 const connectDisplay = () => js(`${ROOT} return getComputedStyle(s.getElementById('connect')).display;`);
 await nclick("s.getElementById('nc-btn')"); await new Promise(r=>setTimeout(r,800));
 const btnBefore = await js(`${ROOT}
@@ -80,7 +81,8 @@ const btnBefore = await js(`${ROOT}
   if(o) o.querySelector('button').click();
   s.getElementById('gear-btn').click();
   return getComputedStyle(s.getElementById('connect')).display;`);
-ok('Connect is shown while nothing is connected', btnBefore !== 'none', btnBefore);
+const obShown = await js(`${ROOT} return getComputedStyle(s.getElementById('onboard')).display;`);
+ok('while nothing is connected there is a way to connect, offered once', (btnBefore !== 'none') !== (obShown !== 'none'), { connect: btnBefore, welcome: obShown });
 
 // Import identity A into an empty extension (no dialog expected — nothing to lose).
 await js(`${ROOT}

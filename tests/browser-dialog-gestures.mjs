@@ -87,7 +87,7 @@ ok('the reader\'s own "Cancel" closes it', await shown('ask-yes') === false);
 const stillThere = await js(`${ROOT} return /Delete keypair/i.test(s.getElementById('privkey-delete')?.textContent || '') && getComputedStyle(s.getElementById('keypair-section')).display !== 'none';`);
 ok('and the key is still stored', stillThere === true, stillThere);
 
-console.log('\n=== "Save your key?", which opens by itself after a first comment ===');
+console.log('\n=== the backup bar, which appears by itself after a first comment ===');
 await goto(site.url);                                   // a fresh page: one prompt per page
 await wait(3000);
 await nclick("s.getElementById('nc-btn')");
@@ -95,14 +95,14 @@ await wait(1500);
 await js(`${ROOT} const i = s.getElementById('input'); i.value = 'A first comment.'; i.dispatchEvent(new Event('input', { bubbles: true })); return 1;`);
 await nclick("s.getElementById('send')");
 let offered = false;
-for (let i = 0; i < 20 && !offered; i++) { await wait(500); offered = await shown('ask-yes') === true; }
+for (let i = 0; i < 20 && !offered; i++) { await wait(500); offered = await shown('backup-yes') === true; }
 ok('the backup offer appears after the first comment', offered);
 if (offered) {
-    await js(`${ROOT} s.getElementById('ask-yes').click(); return 1;`);
+    await js(`${ROOT} s.getElementById('backup-yes').click(); return 1;`);
     await wait(1200);
-    ok('a scripted "Show my key" does not put the key in the DOM', await keyInDom() === false);
-    ok('and the offer is still waiting for the reader', await shown('ask-yes') === true);
-    await nclick("s.getElementById('ask-yes')");
+    ok('a scripted "Back up my key" does not put the key in the DOM', await keyInDom() === false);
+    ok('and the offer is still waiting for the reader', await shown('backup-yes') === true);
+    await nclick("s.getElementById('backup-yes')");
     await wait(1500);
     ok('the reader\'s own click does show it', await keyInDom() === true);
 }

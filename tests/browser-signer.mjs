@@ -75,7 +75,7 @@ await wait(3000);
 
 const status = () => js(`${ROOT} return s.getElementById('status').textContent;`);
 const before = await status();
-ok('the panel connects to the signer', /Connected as/.test(before || ''), before);
+ok('the panel connects to the signer', /Posting as/.test(before || ''), before);
 
 console.log('\n=== what the panel believes before anything is signed ===');
 // Nothing has been proved yet, so the claim is all there is — and it is shown.

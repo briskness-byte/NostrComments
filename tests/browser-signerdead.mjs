@@ -76,7 +76,7 @@ await js(`${ROOT} s.getElementById('m').style.display='grid'; return 1;`);
 await wait(3000);
 
 const status = await js(`${ROOT} return s.getElementById('status').textContent;`);
-ok('the panel connects to the signer', /Connected as/.test(status || ''), status);
+ok('the panel connects to the signer', /Posting as/.test(status || ''), status);
 
 console.log('\n=== while the signer is still answering ===');
 await js(`${ROOT}

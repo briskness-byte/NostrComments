@@ -1021,6 +1021,15 @@
            "Not connected" ended up at 3.15:1 on the dark panel. */
         #m.dark-mode .nc-empty{color:#8c8c8c}
         #status.ok{color:#2e7d32}
+        #status.wait{color:#6b7280}
+        #onboard button:disabled{opacity:.55;cursor:default}
+        #m.dark-mode #status.wait{color:#9ca3af}
+        #backup-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 0;padding:10px 12px;border-radius:10px;background:#fff8e1;color:#5d4300;font-size:13px;line-height:1.45}
+        #backup-bar span{flex:1 1 260px}
+        #backup-bar button{padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #b45309;background:#b45309;color:#fff}
+        #backup-bar #backup-later{background:transparent;color:#5d4300;border-color:transparent}
+        #m.dark-mode #backup-bar{background:#2a2414;color:#f3e3b5}
+        #m.dark-mode #backup-bar #backup-later{color:#f3e3b5}
         #status.err{color:#c62828}
         #m.dark-mode #status.ok{color:#4ade80}
         #m.dark-mode #status.err{color:#f87171}
@@ -1234,6 +1243,7 @@
         <textarea id="input" placeholder="Write your comment…"></textarea>
         <button id="send">Post</button>
         </div>
+        <div id="backup-bar"><span>Your key exists only in this browser. Clear the browser or switch computers, and this identity is gone. Back it up now.</span><button id="backup-yes" type="button">Back up my key</button><button id="backup-later" type="button">Later</button></div>
         <p id="post-note">Comments are published to public relays. You can request deletion afterwards, but that is a request — some relays will not honour it, and copies may remain.</p>
         <div id="donate">
         <div id="donate-row">
@@ -1650,6 +1660,7 @@
 
         // Onboard banner
         let _obNew, _obUnlock, _obPitch, _obUseLocal, _obGen, _obSigner, _obOr, _obWallets, _obWalletHint;
+        let createLocalKey = async () => false;   // set by the welcome block below
         // Whether a key exists in storage, which is not the same as one being loaded. Choosing the
         // NIP-07 signer deliberately leaves a stored key unloaded, so this is the difference
         // between "no identity yet" and "an identity we are not currently using".
@@ -1660,6 +1671,14 @@
         // during init. The panel never got built, and the only symptom was an extension that seemed
         // not to load at all.
         let nip07Seen = false;
+        // What the panel says while nobody is connected yet, beyond "not connected" (first-run review,
+        // 26 Oct 2026). A signer's own prompt names the website — NIP-07 is asked from inside the
+        // page — and meanwhile the panel said "Not connected" in red, so nothing connected the two.
+        let _connState = null;          // 'waiting' | 'declined' | 'noanswer' | 'nokey' | 'nosigner' | null
+        // A "no" in the signer stands for the rest of this page: it is not asked again by itself, only
+        // when somebody presses the button. Asking on every panel open is a prompt nobody wanted.
+        let _signerDeclined = false;
+        const _connFailState = e => { const k = _signerFailure(e); return k === 'timeout' || k === 'unreachable' || k === 'busy' || k === 'login' ? 'noanswer' : k === 'nokey' ? 'nokey' : 'declined'; };
         (() => {
             const headline = document.createElement('div');
             headline.className = 'ob-title';
@@ -1675,6 +1694,12 @@
             genBtn.onclick = async () => {
                 if (!byUser(genBtn)) return;
                 genBtn.disabled = true;
+                if (await createLocalKey()) { try { input.focus(); } catch(e) {} showMsg('Key created — you can comment now.'); }
+                else genBtn.disabled = false;
+            };
+            // Also reached from Post, when somebody typed a comment before having any identity.
+            // Returns whether a key now exists and is loaded.
+            createLocalKey = async () => {
                 try {
                     // This writes straight to storage with no undo, and it is the only key path
                     // that never asked. Rotate and import both confirm first. Storage is re-read
@@ -1683,8 +1708,8 @@
                     const _cur = await chrome.storage.local.get('nostrcomments_privkey');
                     if (_cur.nostrcomments_privkey) {
                         paintOnboard();
-                        genBtn.disabled = false;
-                        return showMsg('There is already a key stored here — nothing was changed. Use “Rotate key” in settings to replace it on purpose.');
+                        showMsg('There is already a key stored here — nothing was changed. Use “Rotate key” in settings to replace it on purpose.');
+                        return false;
                     }
                     const priv = _secp.b2h(crypto.getRandomValues(new Uint8Array(32)));
                     await chrome.storage.local.set({nostrcomments_privkey: priv, nostrcomments_keybackup: false});
@@ -1704,11 +1729,10 @@
                     // handed a red warning block and a secret instead. Nothing is at stake yet
                     // either: an identity with no comments on it is not worth backing up. The ask
                     // moved to just after the first comment, where the argument is actually true.
-                    try { input.focus(); } catch(e) {}
-                    showMsg('Key created — you can comment now.');
+                    return true;
                 } catch(e) {
                     showMsg('Key generation failed — try again');
-                    genBtn.disabled = false;
+                    return false;
                 }
             };
 
@@ -1821,9 +1845,16 @@
             }
             // Whichever local option applies is shown, and drops to secondary when a signer is
             // there, so two stacked buttons do not both read as the thing to press.
+            // After a "no" or no answer from the signer, making a key here becomes the main way on.
+            const signerStuck = signerHere && (_connState === 'declined' || _connState === 'noanswer' || _connState === 'nokey');
+            if (_obSigner) {
+                _obSigner.textContent = signerStuck ? '⚡ Ask my signer again' : '⚡ Connect your Nostr signer';
+                _obSigner.className = signerStuck ? 'ob-secondary' : 'ob-primary';
+                _obSigner.disabled = _connState === 'waiting';
+            }
             if (_obGen) {
                 _obGen.style.display = storedAvailable ? 'none' : 'block';
-                _obGen.className = signerHere ? 'ob-secondary' : 'ob-primary';
+                _obGen.className = signerHere && !signerStuck ? 'ob-secondary' : 'ob-primary';
             }
             if (_obUseLocal) {
                 _obUseLocal.style.display = storedAvailable ? 'block' : 'none';
@@ -1831,6 +1862,14 @@
             }
             _obPitch.textContent = locked
                 ? 'Your saved key is password-protected. Unlock it to post — reading comments needs no password.'
+                : signerHere && _connState === 'waiting'
+                    ? 'Waiting for your signer: approve the request in its window. It names this website, because NostrComments runs inside the page you are reading.'
+                : signerHere && _connState === 'declined'
+                    ? 'You declined in your signer, so it will not be asked again on this page. You can comment with a key made here instead, or ask your signer again.'
+                : signerHere && _connState === 'noanswer'
+                    ? 'Your signer did not answer. Open it to check that it is unlocked, ask it again, or comment with a key made here.'
+                : signerHere && _connState === 'nokey'
+                    ? 'Your signer has no key yet. Open it to create one, or comment with a key made here.'
                 : signerHere
                     ? (storedAvailable
                         ? 'A Nostr signer is available in this page. Connect it, or post with the key stored in this extension instead.'
@@ -3893,9 +3932,12 @@
             if (_off || _siteDisabled || !hasConsent || connecting) return;
             connecting = true;
             const wallet = getWallet();
-            if (!wallet) { connecting = false; return status.textContent = "Install Alby/nos2x-fox"; }
+            if (!wallet) { connecting = false; _connState = 'nosigner'; paintIdentity(); return; }
+            const viaSigner = wallet !== localWallet;
+            if (viaSigner) { _connState = 'waiting'; paintIdentity(); }
             try {
                 myPub = await wallet.getPublicKey();
+                _connState = null; _signerDeclined = false;
                 if (wallet !== localWallet) rememberSignerPub();
                 fetchProfiles([myPub]); paintIdentity();
                 // Votes may already have loaded while nobody was connected; now that we know who
@@ -3905,7 +3947,11 @@
                 paintOnboard();
                 startNotifSub();
                 if (_authWanted) { _authWanted = false; loadPage(); }
-            } catch(e) { status.textContent = "Couldn't connect — check your Nostr signer"; status.className = 'err'; }
+            } catch(e) {
+                _connState = viaSigner ? _connFailState(e) : 'noanswer';
+                if (_connState === 'declined') _signerDeclined = true;
+                paintIdentity();
+            }
             connecting = false;
         }
         connectBtn.onclick = connect;
@@ -3993,14 +4039,23 @@
             // Once you are connected the button has nothing left to offer. It was disabled but kept
             // its full primary styling, so it read as a live call to action that ignored clicks.
             // Deriving it from the identity here means every path that changes one gets it right.
-            connectBtn.style.display = myPub ? 'none' : '';
+            // The welcome block offers the same choice, with words that say what each does, so the
+            // header button only stays for the case it is the sole way in.
+            connectBtn.style.display = (myPub || (hasConsent && onboard)) ? 'none' : '';
             paintOnboard();
             paintSignerChoice();
             // Structural state above is safe to keep current; anything that names the reader waits.
             if (!panelOpen()) return clearIdentityDom();
             if (!myPub) {
-                status.textContent = 'Not connected';
-                status.className = 'err';
+                const say = {
+                    waiting:  ['Waiting for your signer…', 'wait'],
+                    declined: ['You declined in your signer', 'wait'],
+                    noanswer: ['Your signer did not answer', 'wait'],
+                    nokey:    ['Your signer has no key yet', 'wait'],
+                    nosigner: ['No Nostr signer in this browser. Install Alby/nos2x-fox, or make a key below.', 'wait'],
+                }[_connState] || ['Not connected', 'wait'];
+                status.textContent = say[0];
+                status.className = say[1];
                 identityName.textContent = 'Not connected';
                 identityNpub.textContent = '';
                 identityHex.textContent = '';
@@ -4009,7 +4064,7 @@
             }
             const np = toNpub(myPub);
             const name = profiles.get(myPub);
-            status.textContent = name ? `Connected as ${name}` : `Connected as ${shortNpub(np)}`;
+            status.textContent = name ? `Posting as ${name}` : `Posting as ${shortNpub(np)}`;
             status.className = 'ok';
             identityName.textContent = name || '(no profile name published)';
             paintSetName();
@@ -4061,6 +4116,7 @@
                 let present = false;
                 try { present = await signerPresent(); } catch(e) {}
                 if (!present) return showMsg('No Nostr signer found — install Alby or nos2x-fox first');
+                _signerDeclined = false;
             } else if (!localWallet && !encPriv) {
                 // `localWallet` is whether the key is *loaded*, not whether it exists. Choosing the
                 // signer and reloading leaves it deliberately unloaded, and this then told you that
@@ -4084,7 +4140,9 @@
                 // says yes and this is the first thing to find out otherwise. Without the watch it
                 // would sit silent for the full minute before the timeout.
                 const w = getWallet();
+                if (w !== localWallet) { _connState = 'waiting'; paintIdentity(); }
                 myPub = await watchSigner(w.getPublicKey());
+                _connState = null;
                 if (w !== localWallet) rememberSignerPub();
                 fetchProfiles([myPub]); paintIdentity();
                 recountAll();
@@ -4092,7 +4150,10 @@
                 paintOnboard();
                 render();
                 showMsg('Now signing as ' + toNpub(myPub).slice(0, 12) + '…');
-            } catch(e) { showMsg('Could not read the identity from that source'); }
+            } catch(e) {
+                if (pref === 'nip07') { _connState = _connFailState(e); if (_connState === 'declined') _signerDeclined = true; paintIdentity(); }
+                else showMsg('Could not read the identity from that source');
+            }
         }
         paintIdentity();
         signerLocalBtn.onclick = () => { if (byUser(signerLocalBtn)) chooseSigner('local'); };
@@ -4185,7 +4246,7 @@
             const nameBtn = s.getElementById('setname-btn');
             if (nameBtn) nameBtn.onclick = async () => {
                 if (!byUser(nameBtn)) return;
-                if (!myPub) return showMsg('Connect first!');
+                if (!myPub) return showMsg("First choose who you post as: make a key or connect your signer, at the top of the panel.");
                 const name = (nameInput.value || '').trim().replace(/\s+/g, ' ');
                 if (!name) return showMsg('Type a name first');
                 if (await carriesPrivateKey(name)) return showMsg(PRIVKEY_WARNING);
@@ -4845,7 +4906,7 @@
         // it; it is not a guarantee, and the wording in the UI says so rather than implying it is.
         async function requestDeletion(ev) {
             if (!myPub && encPriv) { const w = await unlockLocalWallet(); if (!w) return; }
-            if (!myPub) return showMsg('Connect first!');
+            if (!myPub) return showMsg("First choose who you post as: make a key or connect your signer, at the top of the panel.");
             await syncIdentity();
             if (ev.pubkey !== myPub) return showMsg('You can only delete your own comments');
             const del = {
@@ -5071,7 +5132,7 @@
                 const id = e.target.dataset.id;
                 const val = Number(e.target.dataset.val);
                 if (!myPub && encPriv) { const w = await unlockLocalWallet(); if (!w) return; }
-                if (!myPub) return showMsg("Connect first!");
+                if (!myPub) return showMsg("First choose who you post as: make a key or connect your signer, at the top of the panel.");
                 vote(id, val);
             }
         });
@@ -5347,17 +5408,21 @@
             if (Date.now() - backupAskedAt < 864e5) return;
             backupAsked = true; keyPromptShown = true;
             backupAskedAt = Date.now(); rememberBackupAsked();
-            const go = await askConfirm({
-                title: 'Save your key?',
-                danger: false,
-                lines: [
-                    'That comment was signed with a key that exists only in this browser. There is no account behind it and nothing to reset — a key is the whole identity.',
-                    'Clear this browser\'s data, or move to another computer, and the identity that comment belongs to is gone with it.',
-                ],
-                confirmLabel: 'Show my key',
-                declineLabel: 'Later',
-            });
-            if (!go) return showMsg('You can save it whenever you like under ⚙ Settings.');
+            // A bar under the box rather than a dialog over the comment just posted: the moment
+            // somebody's first comment appears is not the moment to cover it (first-run review).
+            backupBar.style.display = 'flex';
+        }
+        const backupBar = s.getElementById('backup-bar');
+        s.getElementById('backup-later').onclick = () => {
+            backupBar.style.display = 'none';
+            showMsg('You can back it up whenever you like under ⚙ Settings.');
+        };
+        const backupYes = s.getElementById('backup-yes');
+        backupYes.onclick = async () => {
+            // Shows the private key, so only for a real click: a page could press this as easily as
+            // anything else in an open shadow root.
+            if (!byUser(backupYes)) return;
+            backupBar.style.display = 'none';
             await openSettings();
             keypairSection.style.display = 'block';
             const box = s.getElementById('privkey-box'), btn = s.getElementById('privkey-reveal');
@@ -5372,7 +5437,26 @@
         send.onclick = async () => {
             if (!byUser(send)) return;
             if (!myPub && encPriv) { const w = await unlockLocalWallet(); if (!w) return; }
-            if (!myPub) return showMsg("Connect first!");
+            if (!myPub) {
+                if (!input.value.trim()) return showMsg("First choose who you post as: make a key or connect your signer, at the top of the panel.");
+                // A key stored here but not in use (the signer was chosen) is a choice to make in the
+                // box above, not something to replace from here.
+                if (haveStoredKey || encPriv) return showMsg("First choose who you post as: make a key or connect your signer, at the top of the panel.");
+                // Typing first and finding out afterwards that an identity is needed is the common
+                // order. "Connect first!" left the text in the box and no way on; this is one click.
+                const go = await askConfirm({
+                    title: 'Post with a new key?',
+                    danger: false,
+                    lines: [
+                        'Nothing is connected yet. NostrComments can make a key for you, kept in this browser — no account, no email — and post this comment with it.',
+                        ...(signerInPage() ? ['To post with your Nostr signer instead, choose it at the top of the panel and press Post again.'] : []),
+                    ],
+                    confirmLabel: 'Make a key and post',
+                    declineLabel: 'Not now',
+                });
+                if (!go) return;
+                if (!(await createLocalKey())) return;
+            }
             await syncIdentity();
             const text = input.value.trim();
             if (!text) return;
@@ -5429,7 +5513,7 @@
         // been seen yet, the look in startNetwork() connects once it is.
         const _panelShown = () => modal.style.display === 'grid';
         new MutationObserver(() => {
-            if (_panelShown() && _networkStarted && !localWallet && !_signerAsked && nip07Seen) connect();
+            if (_panelShown() && _networkStarted && !localWallet && !_signerAsked && !_signerDeclined && nip07Seen) connect();
         }).observe(modal, { attributes: true, attributeFilter: ['style'] });
 
         // The key the NIP-07 signer gave last time, used without asking it again. See _lookForSigner.
@@ -5510,7 +5594,7 @@
                     }
                     if (!_panelShown()) { adoptKnownSigner(); return; }
                 }
-                connect();
+                if (!_signerDeclined) connect();
             };
             setTimeout(_lookForSigner, _signerAt[0]);
 

@@ -75,7 +75,7 @@ await js(`${ROOT} s.getElementById('m').style.display='grid'; return 1;`);
 await wait(2000);
 
 const connected = await js(`${ROOT} return s.getElementById('status').textContent;`);
-ok('reconnects with the stored identity', /Connected as/.test(connected), connected);
+ok('reconnects with the stored identity', /Posting as/.test(connected), connected);
 
 console.log('\n=== reading votes cast by other people ===');
 const shownComments = await js(`${ROOT} return s.getElementById('list').querySelectorAll('.c').length;`);

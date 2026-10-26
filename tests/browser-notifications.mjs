@@ -142,7 +142,7 @@ await wait(1000);
 if (await js(`${ROOT} const y = s.getElementById('ask-yes'); return !!y && getComputedStyle(y.parentElement).display !== 'none';`)) await nclick("s.getElementById('ask-yes')");
 await wait(2500);
 const identity = await js(`${ROOT} return s.getElementById('status').textContent;`);
-ok('the panel reports the new identity', /Connected as/.test(identity), identity);
+ok('the panel reports the new identity', /Posting as/.test(identity), identity);
 
 const forOld = await sign(REPLIER, {
     kind: 1, created_at: Math.floor(Date.now() / 1000),

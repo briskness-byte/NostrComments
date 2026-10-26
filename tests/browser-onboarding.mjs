@@ -186,9 +186,11 @@ ok('and it says they can comment', /can comment now/i.test(after.msg), after.msg
 
 // --- and the ask, moved to where the argument is true --------------------------------------------------
 console.log('\n=== the backup ask comes after the first comment ===');
+// Since the first-run review (26 Oct 2026) the ask is a bar under the comment box rather than a
+// dialog over the thread: the moment a first comment appears is not the moment to cover it.
 const dialog = () => js(`${ROOT}
-  const ov = [...s.getElementById('p').children].find(c => c.style.zIndex === '30' && getComputedStyle(c).display !== 'none');
-  if (!ov) return JSON.stringify({ open: false });
+  const ov = s.getElementById('backup-bar');
+  if (!ov || getComputedStyle(ov).display === 'none') return JSON.stringify({ open: false });
   return JSON.stringify({ open: true, text: ov.textContent,
                           buttons: [...ov.querySelectorAll('button')].map(b => b.textContent) });`);
 ok('nothing is asked before anything is posted', JSON.parse(await dialog()).open === false);
@@ -206,9 +208,9 @@ ok('it explains what would be lost', /only in this browser/i.test(d.text || ''),
 ok('and offers to put it off', (d.buttons || []).some(b => /^Later$/.test(b)), d.buttons);
 ok('rather than saying "Cancel"', !(d.buttons || []).some(b => /^Cancel$/.test(b)), d.buttons);
 
-await nclick("(() => { const ov = [...s.getElementById('p').children].find(c => c.style.zIndex === '30' && getComputedStyle(c).display !== 'none'); return ov && [...ov.querySelectorAll('button')].find(x => /^Later$/.test(x.textContent)); })()");
+await nclick("s.getElementById('backup-later')");
 await wait(1200);
-ok('the dialog closes', JSON.parse(await dialog()).open === false);
+ok('the bar goes away', JSON.parse(await dialog()).open === false);
 
 // Once, not on every comment. A prompt that returns after each post is a prompt people learn to
 // dismiss without reading.

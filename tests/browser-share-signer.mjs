@@ -88,7 +88,7 @@ console.log('connecting through:', used || '(no button found)');
 if (used) await nclick(`s.querySelector('[data-qa="connect"]')`);
 await wait(4000);
 st = await status();
-ok('the panel is connected as the signer\'s identity', /Connected as/.test(st || ''), st);
+ok('the panel is connected as the signer\'s identity', /Posting as/.test(st || ''), st);
 
 console.log('\n=== which buttons each card has ===');
 let cards = [];
