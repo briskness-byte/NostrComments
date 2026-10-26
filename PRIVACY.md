@@ -94,6 +94,11 @@ open on their own, and are described as such:
   identity, and removing your key stops it. With the delivery setting above on, it is
   also opened on up to two of the relays your own relay list names for reading, because
   that is where other apps send replies addressed to you.
+- **Your mute list from other Nostr apps (on by default):** once you are connected, the
+  extension asks your own relays for the public mute list your key has published (NIP-51, kind
+  10000), at most once every six hours, and hides those people and words here too. It only reads
+  that list and never changes it; encrypted entries are not read. The relays learn nothing they
+  did not already know from the reply notifications above. Switch it off under ⚙ Settings.
 - **Quoted notes:** when a comment quotes a Nostr note (`nostr:nevent…`) and the panel is
   open, the extension asks your own relays for that note and shows it under the comment.
   A quote can name a relay of its own; that relay is never contacted unless you press

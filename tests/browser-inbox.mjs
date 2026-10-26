@@ -109,4 +109,13 @@ await reply('A second answer, kept to my relays.');
 ok('the reply is still published', relay.published.some(e => e.content === 'A second answer, kept to my relays.'));
 ok('but not sent to their inbox', !theirInbox.published.some(e => e.content === 'A second answer, kept to my relays.'));
 
+console.log('\n=== and it stays off after a reload ===');
+await goto(site.url);
+await wait(4000);
+await nclick("s.getElementById('nc-btn')");
+await wait(1500);
+await reply('A third answer, after reloading.');
+ok('the reply is published', relay.published.some(e => e.content === 'A third answer, after reloading.'));
+ok('and still not sent to their inbox', !theirInbox.published.some(e => e.content === 'A third answer, after reloading.'));
+
 await finish(state.fail ? 1 : 0);

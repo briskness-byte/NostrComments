@@ -27,7 +27,7 @@
         _starting = true;
 
         // Load all persistent storage up front (cross-origin, unlike localStorage)
-        const _st = await chrome.storage.local.get(['nostrcomments_off','nostrcomments_signer_pub','nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_btndefault','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker','nostrcomments_clienttag','nostrcomments_hidebtn','nostrcomments_quietbtn']);
+        const _st = await chrome.storage.local.get(['nostrcomments_off','nostrcomments_signer_pub','nostrcomments_privkey','nostrcomments_relays','nostrcomments_muted','nostrcomments_disabled','nostrcomments_consent','nostrcomments_keybackup','nostrcomments_supporter','nostrcomments_lastseen','nostrcomments_mutewords','nostrcomments_signer','nostrcomments_nip05','nostrcomments_pwoffered','nostrcomments_backupasked','nostrcomments_btnpos','nostrcomments_btndefault','nostrcomments_notifs','nostrcomments_relaymig','nostrcomments_widepublish','nostrcomments_theme','nostrcomments_autoimg','nostrcomments_worker','nostrcomments_clienttag','nostrcomments_hidebtn','nostrcomments_quietbtn','nostrcomments_listmutes','nostrcomments_listmutes_on','nostrcomments_inbox']);
         _starting = false;
         _off = _st.nostrcomments_off === true;
         if (_off) return;   // switched off everywhere: draw nothing, connect nothing, ask nothing
@@ -1039,6 +1039,8 @@
         .nc-actions{margin-top:12px}
         .nc-img{max-width:100%;border-radius:10px;margin:8px 0;display:block;cursor:pointer}
         .nc-hashtag{color:#0c75bc;font-weight:500}
+        .nc-cw{display:block;width:100%;text-align:left;padding:10px 12px;border:1px dashed #b0bec5;border-radius:8px;background:transparent;color:#5b6570;font-size:14px;cursor:pointer}
+        #m.dark-mode .nc-cw{border-color:#4a5563;color:#a3adb8}
         .c a.nc-mention{font-weight:600}
         #m.dark-mode .nc-hashtag{color:#60a5fa}
         .nc-quote{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em}
@@ -1186,6 +1188,8 @@
         <strong class="set-h s-h1">Muted users</strong>
         <p class="set-p s-p1">Comments from these people are hidden, on every site.</p>
         <div id="muted-list"></div>
+        <label id="listmutes-label" class="set-check"><input type="checkbox" id="listmutes-toggle"><span>Also hide people and words muted in your other Nostr apps.</span></label>
+        <p id="listmutes-note" class="set-p s-p1"></p>
         </div>
         <div id="muteword-section">
         <hr class="s-sep1">
@@ -2562,6 +2566,11 @@
         }
 
         function renderMutedList() {
+            const lmNote = s.getElementById('listmutes-note');
+            if (lmNote) lmNote.textContent = !panelOpen() || !useListMutes ? ''
+                : (listMuted.size || listWords.length)
+                    ? `From your Nostr mute list: ${listMuted.size} ${listMuted.size === 1 ? 'person' : 'people'} and ${listWords.length} ${listWords.length === 1 ? 'word' : 'words'}. Change it in the app you made it with.`
+                    : (myPub ? 'No mute list found for your key on your relays.' : '');
             const mutedList = s.getElementById('muted-list');
             const mutedSection = s.getElementById('muted-section');
             mutedSection.style.display = 'block';
@@ -3424,6 +3433,25 @@
         function saveMuted() { chrome.storage.local.set({nostrcomments_muted: [...mutedPubkeys]}); }
         let muteWords = Array.isArray(_st.nostrcomments_mutewords) ? _st.nostrcomments_mutewords.map(w => String(w).toLowerCase()) : [];
         function saveMuteWords() { chrome.storage.local.set({nostrcomments_mutewords: muteWords}); }
+        // The mute list the reader keeps in other Nostr apps (NIP-51, kind 10000): its public p and word
+        // entries, read from the reader's own relays and never written — a public mute list is the
+        // reader's to manage, in the app they made it with. Private (encrypted) entries are not read.
+        // Cached per identity for six hours, so it is not asked for on every page.
+        let useListMutes = _st.nostrcomments_listmutes_on !== false;
+        let listMuted = new Set(), listWords = [];
+        const _lmCache = _st.nostrcomments_listmutes;
+        // One question for every place that hides by person or by word, so they cannot disagree.
+        const isMutedPk = pk => mutedPubkeys.has(pk) || (useListMutes && listMuted.has(pk));
+        const hitsMuted = text => { const lc = String(text || '').toLowerCase(); return muteWords.some(w => lc.includes(w)) || (useListMutes && listWords.some(w => lc.includes(w))); };
+        const listMutesToggle = s.getElementById('listmutes-toggle');
+        listMutesToggle.checked = useListMutes;
+        listMutesToggle.onchange = () => {
+            if (!byUserSettled(listMutesToggle)) { listMutesToggle.checked = useListMutes; return; }
+            useListMutes = listMutesToggle.checked;
+            chrome.storage.local.set({nostrcomments_listmutes_on: useListMutes});
+            if (useListMutes) { _lmAskedFor = null; fetchListMutes(); }
+            renderMutedList(); render();
+        };
         // The badge is what interrupts; the list is what you look at. They should not count the
         // same thing. A reply to one of your notes has no page, cannot be answered from this panel
         // and belongs in a Nostr client — so it goes in the list, where you find it when you look,
@@ -3569,9 +3597,13 @@
             const body = document.createElement('span');
             body.className = 'nc-qbody';
             const lc = ev.content.toLowerCase();
-            if (mutedPubkeys.has(ev.pubkey) || muteWords.some(w => lc.includes(w))) {
+            const qcw = (ev.tags || []).find(t => t[0] === 'content-warning');
+            if (isMutedPk(ev.pubkey) || hitsMuted(ev.content)) {
                 card.classList.add('nc-qhidden');
                 body.textContent = 'Quoted note hidden — you muted its author or a word in it.';
+            } else if (qcw) {
+                card.classList.add('nc-qhidden');
+                body.textContent = qcw[1] ? `Content warning: “${quoteThirdParty(qcw[1])}”. Open the note to read it.` : 'Content warning. Open the note to read it.';
             } else {
                 body.textContent = ev.content.length > 500 ? ev.content.slice(0, 500) + '…' : ev.content;
             }
@@ -3693,6 +3725,53 @@
             if (!profiles.has(pubkey)) fetchProfiles([pubkey]);
             const n = profiles.get(pubkey);
             return typeof n === 'string' && n ? n.slice(0, 40) : null;
+        }
+
+        function applyListMutes(pub, pks, words) {
+            if (pub !== myPub) return;
+            listMuted = new Set(pks); listWords = words;
+            scheduleRender();
+            if (settings.style.display === 'block') renderMutedList();
+        }
+        let _lmAskedFor = null;
+        function fetchListMutes() {
+            const pub = myPub;
+            if (!pub || !useListMutes || _lmAskedFor === pub) return;
+            _lmAskedFor = pub;
+            if (_lmCache && _lmCache.pub === pub && Date.now() - _lmCache.at < 6 * 3600e3) {
+                return applyListMutes(pub, _lmCache.pks || [], _lmCache.words || []);
+            }
+            let best = null, left = RELAYS.length;
+            const seen = new Set();
+            const done = () => {
+                if (--left > 0) return;
+                _vq.then(() => {
+                    const pks = !best ? [] : best.tags.filter(t => t[0] === 'p' && /^[0-9a-f]{64}$/.test(t[1] || '')).map(t => t[1]).slice(0, 5000);
+                    const words = !best ? [] : best.tags.filter(t => t[0] === 'word' && t[1]).map(t => String(t[1]).toLowerCase().slice(0, 100)).slice(0, 500);
+                    try { chrome.storage.local.set({nostrcomments_listmutes: { pub, at: Date.now(), pks, words }}); } catch(e) {}
+                    applyListMutes(pub, pks, words);
+                });
+            };
+            if (!left) return;
+            RELAYS.forEach(r => {
+                let finished = false;
+                const fin = () => { if (finished) return; finished = true; done(); };
+                try {
+                    const ws = ncSocket(r);
+                    const t = setTimeout(() => { try { ws.close(); } catch(_) {} fin(); }, 6000);
+                    ws.onopen = () => ws.send(JSON.stringify(["REQ", 'm' + Math.random().toString(36).slice(2, 6), {kinds:[10000], authors:[pub], limit:1}]));
+                    ws.onerror = () => { clearTimeout(t); fin(); };
+                    ws.onclose = () => { clearTimeout(t); fin(); };
+                    ws.onmessage = m => {
+                        let parsed;
+                        try { parsed = JSON.parse(m.data); } catch(e) { return; }
+                        const [type,,ev] = parsed;
+                        if (type === 'EOSE' || type === 'CLOSED') { clearTimeout(t); try { ws.close(); } catch(_) {} fin(); return; }
+                        if (type !== 'EVENT' || !wellFormed(ev) || ev.kind !== 10000 || ev.pubkey !== pub) return;
+                        queueVerify(ev, () => { if (!best || ev.created_at > best.created_at) best = ev; }, seen);
+                    };
+                } catch(e) { fin(); }
+            });
         }
 
         // NIP-07 bridge (isolated world → main world via CustomEvent)
@@ -3910,6 +3989,7 @@
             _notifWs = [];
             old.forEach(w => { try { w.close(); } catch(_) {} });
             if (!myPub || _off || _siteDisabled) return;
+            fetchListMutes();
             const since = Math.floor(Date.now() / 1000);
             const sid = 'ncn' + Math.random().toString(36).slice(2, 8);
             const watching = myPub;
@@ -4756,13 +4836,13 @@
             // Muting is the reader's own choice and reversible, so unlike a deletion this one says
             // whose it is not, and offers a way in. It is only rendered at all when a reply hangs
             // off it — otherwise a muted comment is filtered out well before here.
-            if (!reveal && mutedPubkeys.has(ev.pubkey)) {
+            if (!reveal && isMutedPk(ev.pubkey)) {
                 div.className = 'c tomb' + (depth > 0 ? ' reply' : '');
                 return openable('Comment from a muted user — tap to show');
             }
             // Same reasoning as a muted person: your own reversible choice, so it says what
             // happened and lets you look. Only reached when a reply hangs off it.
-            if (!reveal && muteWords.some(w => ev.content.toLowerCase().includes(w))) {
+            if (!reveal && hitsMuted(ev.content)) {
                 div.className = 'c tomb' + (depth > 0 ? ' reply' : '');
                 return openable('Comment hidden by one of your muted words — tap to show');
             }
@@ -4842,7 +4922,18 @@
             }
             const body = document.createElement('div');
             body.className = 'nc-body';
-            body.appendChild(renderMarkdown(ev.content));
+            // NIP-36: the author marked it sensitive. Folded behind its reason until the reader asks,
+            // and pictures in it are not built — so not fetched — before then. The reason is the
+            // author's own text, so it is quoted and cut short like any third party's.
+            const cw = !reveal && (ev.tags || []).find(t => t[0] === 'content-warning');
+            if (cw) {
+                const fold = document.createElement('button');
+                fold.type = 'button';
+                fold.className = 'nc-cw';
+                fold.textContent = cw[1] ? `Content warning: “${quoteThirdParty(cw[1])}” — show` : 'Content warning — show';
+                fold.onclick = () => body.replaceChildren(renderMarkdown(ev.content));
+                body.appendChild(fold);
+            } else body.appendChild(renderMarkdown(ev.content));
             const actions = document.createElement('div');
             actions.className = 'nc-actions';
             [['1','↑',sc.up],['-1','↓',sc.down]].forEach(([val, arrow, count]) => {
@@ -5034,11 +5125,11 @@
         function render() {
             // One predicate, used by the filter and by the placeholder logic below, so the two
             // cannot disagree about what a muted word is.
-            const hitsMuteWord = ev => { const cl = ev.content.toLowerCase(); return muteWords.some(w => cl.includes(w)); };
+            const hitsMuteWord = ev => hitsMuted(ev.content);
             // What this reader could see, before the search box narrows it. The badge counts this
             // rather than the raw list, so it cannot promise a discussion that turns out to be one
             // deleted comment and two people you muted.
-            const visible = c => !mutedPubkeys.has(c.pubkey) && !isDeleted(c) && !hitsMuteWord(c);
+            const visible = c => !isMutedPk(c.pubkey) && !isDeleted(c) && !hitsMuteWord(c);
             let shown = comments.filter(c => visible(c) && c.content.toLowerCase().includes(q));
 
             // A reply is only ever drawn from its parent, so dropping a hidden comment used to drop
@@ -5058,7 +5149,7 @@
                     let p = parentIdOf(c);
                     for (let d = 0; p && d <= 10; d++, p = parentIdOf(byId.get(p))) {
                         const parent = byId.get(p);
-                        if (isDeleted(parent) || mutedPubkeys.has(parent.pubkey) || hitsMuteWord(parent)) keep.add(p);
+                        if (isDeleted(parent) || isMutedPk(parent.pubkey) || hitsMuteWord(parent)) keep.add(p);
                     }
                 }
                 if (keep.size) shown = shown.concat(comments.filter(c => keep.has(c.id)));
