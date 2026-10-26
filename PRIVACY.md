@@ -61,6 +61,14 @@ open on their own, and are described as such:
   your public key, all of it public by design — plus your IP address, as any
   server you contact does. They are told nothing about pages you merely read.
   Switch it off under ⚙ Settings and only the relays you listed are used.
+- **Replies delivered to the person you answer (on by default, and only when you post):**
+  people list the relays they read in a public relay list (NIP-65). When you reply to
+  someone, the extension looks up that list on your own relays when you press Reply, and
+  sends your reply to at most three of the relays it names as well, so it reaches them
+  even if their relays turn away posts that arrive elsewhere. Those relays receive the
+  reply, which is public anyway, and your IP address. Nothing is read from them, and a
+  relay on a local network or named by a bare IP address is never used. Switch it off
+  under ⚙ Settings ("Deliver replies to the relays the person you answer reads").
 - **Sharing your own comment (only when you press Share, and confirm):** an
   ordinary Nostr note is published carrying the text of that comment and a link to
   the page it was written on. This is the one thing here that goes into the feeds
@@ -83,7 +91,14 @@ open on their own, and are described as such:
   above this is not tied to a page you are reading: those relays see your public
   key and that you are online for as long as the subscription is open, even in a
   session where you never post anything. It starts only after you connect an
-  identity, and removing your key stops it.
+  identity, and removing your key stops it. With the delivery setting above on, it is
+  also opened on up to two of the relays your own relay list names for reading, because
+  that is where other apps send replies addressed to you.
+- **Quoted notes:** when a comment quotes a Nostr note (`nostr:nevent…`) and the panel is
+  open, the extension asks your own relays for that note and shows it under the comment.
+  A quote can name a relay of its own; that relay is never contacted unless you press
+  "Look it up on …" under the quote, because whoever wrote the quote chose it and it
+  would learn that somebody is reading the thread.
 - **Identifying yourself to a relay (NIP-42):** some relays refuse to serve or accept anything
   until a client proves which key it is. When one of yours does, the extension signs a short
   event naming that relay and its challenge, which tells the relay your public key. This happens
@@ -94,8 +109,9 @@ open on their own, and are described as such:
 - **Verified names (off by default):** a profile can claim a `name@domain`. If you switch
   **Verified names** on in Settings, the extension asks that domain whether the name really
   belongs to that key, once per commenter. That domain then knows somebody is reading a page
-  where that person commented, and sees your IP address. It is off until you turn it on, and it
-  is the only request this extension makes to anywhere other than your own relays.
+  where that person commented, and sees your IP address. It is off until you turn it on, and,
+  apart from the posting relays above and a quote you choose to look up, it is the only request
+  this extension makes to anywhere other than your own relays.
 - **Zapping (optional):** if you choose to send a Lightning tip — to another
   commenter, or to the developer via "Support the developer" — your browser
   contacts that recipient's Lightning provider to fetch an invoice, and your own

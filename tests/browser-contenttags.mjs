@@ -8,19 +8,24 @@
 //
 // Then step 2 of #4: a quoted note that the reader's relays hold is drawn inline as a card, fetched
 // only once the panel is open, never from the relay named inside the nevent, and hidden behind a
-// line when its words are muted. A quoted note nobody holds stays a short link.
+// line when its words are muted. A quoted note nobody holds stays a short link — or, when the nevent
+// names a relay, a button to look it up there, which nothing presses on the reader's behalf.
+// (That last part needs a test hostname mapped onto loopback, which only Chromium can do.)
 //
 //   node tests/browser-contenttags.mjs
 //   NC_BROWSER=firefox node tests/browser-contenttags.mjs
 //
 // Requires: chromium (or Chrome) and chromedriver, or Firefox and geckodriver; openssl; Node 18+.
-import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT } from './harness.mjs';
+import { extensionCode, reporter, startRelay, startSite, startBrowser, configureScript, ROOT, BROWSER } from './harness.mjs';
 
 const CD_PORT = Number(process.env.QA_PORT || 9613);
 const SITE_PORT = Number(process.env.QA_SITE_PORT || 8173);
 const RELAY_PORT = Number(process.env.QA_RELAY_PORT || 8533);
 // The relay a quoting author names inside the nevent. Nothing may ever connect to it.
 const DECOY_PORT = Number(process.env.QA_DECOY_PORT || 8534);
+// A relay with a proper name, holding a note the reader's relay does not: what "look it up" asks.
+const HINT_PORT = Number(process.env.QA_HINT_PORT || 8536);
+const HINT_HOST = 'hint.nctest';
 
 const { normalizeUrl, newKey, toBech32, sign } = extensionCode();
 const { ok, state } = reporter();
@@ -48,9 +53,18 @@ const decoy = await startRelay({ port: DECOY_PORT });
 const tlv = [0, 32, ...Buffer.from(QUOTED.id, 'hex'), 1, ...[Buffer.from(decoy.url).length], ...Buffer.from(decoy.url)];
 const QUOTE_REF = toBech32('nevent', Buffer.from(tlv).toString('hex'));
 
+const hint = await startRelay({ port: HINT_PORT });
+const ELSEWHERE = await sign(THEM, { kind: 1, created_at: Math.floor(Date.now() / 1000) - 1800, tags: [],
+    content: 'Only the relay named in the quote has this one.' });
+hint.stored.push(ELSEWHERE);
+const HINT_URL = `wss://${HINT_HOST}:${HINT_PORT}`;
+const tlv2 = [0, 32, ...Buffer.from(ELSEWHERE.id, 'hex'), 1, Buffer.from(HINT_URL).length, ...Buffer.from(HINT_URL)];
+const HINT_REF = toBech32('nevent', Buffer.from(tlv2).toString('hex'));
+
 const { js, wait, goto, finish, nclick, wd, sid } = await startBrowser({
     cdPort: CD_PORT, prefix: 'ncctags-',
-    onClose: () => { site.close(); relay.close(); decoy.close(); },
+    onClose: () => { site.close(); relay.close(); decoy.close(); hint.close(); },
+    resolverRules: [`MAP ${HINT_HOST} 127.0.0.1`],
 });
 
 await goto(site.url);
@@ -172,6 +186,38 @@ if (process.env.NC_SHOT && wd) {
     await wait(500);
     const png = (await wd('GET', `/session/${sid}/screenshot`)).value;
     if (png) (await import('fs')).writeFileSync(process.env.NC_SHOT, Buffer.from(png, 'base64'));
+}
+
+if (BROWSER === 'chromium') {
+    console.log('\n=== a quote only the named relay holds: a button, pressed by the reader ===');
+    await js(`${ROOT} s.getElementById('m').style.display='none'; return 1;`);
+    published.length = 0;
+    await nclick("s.getElementById('nc-btn')");
+    await wait(800);
+    const HTEXT = `Elsewhere: nostr:${HINT_REF}`;
+    await js(`${ROOT}
+      const i = s.getElementById('input');
+      i.value = ${JSON.stringify(HTEXT)};
+      i.dispatchEvent(new Event('input', {bubbles:true}));
+      return 1;`);
+    await nclick("s.getElementById('send')");
+    await wait(12000);   // the reader's relays are asked first, and given time to say no
+    const before = await js(`${ROOT}
+      const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('Elsewhere:'));
+      const b = c && c.querySelector('.nc-qlookup');
+      return c ? { button: b ? b.textContent : null, cards: c.querySelectorAll('.nc-qcard').length } : null;`);
+    ok('not on the reader\'s relays: a button offers the named relay', before && before.button === `Look it up on ${HINT_HOST}:${HINT_PORT}` && before.cards === 0, before);
+    ok('and nothing has asked that relay yet', hint.conns.size === 0, hint.conns.size);
+    await nclick("[...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('Elsewhere:')).querySelector('.nc-qlookup')");
+    await wait(4000);
+    const after = await js(`${ROOT}
+      const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('Elsewhere:'));
+      const k = c && c.querySelector('.nc-qcard');
+      return k ? k.querySelector('.nc-qbody').textContent : null;`);
+    ok('and draws the note it holds', typeof after === 'string' && after.includes('Only the relay named'), after);
+    ok('the relay hint inside the first quote (an address literal) was still never used', decoy.conns.size === 0, decoy.conns.size);
+} else {
+    console.log('\n(look-up button: Chromium only, it needs a test hostname on loopback)');
 }
 
 console.log('\n=== mutes apply to the card ===');

@@ -84,6 +84,24 @@ export async function run() {
         ok(`${name}: and nothing here writes HTML`, !/innerHTML|outerHTML|insertAdjacentHTML/.test(pr));
     }
 
+    // A relay somebody else named: a hint inside a quote, or a relay list in a profile. Only wss://,
+    // never an address on the reader's own network, never with a name and password.
+    for (const [name, src] of Object.entries(srcs)) {
+        const n0 = src.indexOf('        function normRelay(u) {'), n1 = src.indexOf('        function dedupeRelays', n0);
+        const fr = block(src, 'safeForeignRelay'), bech = block(src, 'bech32-to-hex-string');
+        ok(`${name}: safeForeignRelay and linkedRelays can be read out`, n0 >= 0 && n1 > n0 && fr && bech && bech.includes('function linkedRelays('));
+        if (!(n0 >= 0 && n1 > n0 && fr && bech)) continue;
+        const { safeForeignRelay, linkedRelays } = new Function(`${src.slice(n0, n1)}\n${fr}\n${bech}\nreturn { safeForeignRelay, linkedRelays };`)();
+        ok(`${name}: a normal relay passes, normalised`, safeForeignRelay('wss://Relay.Example.com/') === 'wss://relay.example.com', safeForeignRelay('wss://Relay.Example.com/'));
+        for (const bad of ['ws://relay.example.com', 'https://relay.example.com', 'wss://10.0.0.5', 'wss://192.168.1.1:7777', 'wss://[::1]', 'wss://localhost',
+                           'wss://router.local', 'wss://printer', 'wss://user:pw@relay.example.com', 'javascript:alert(1)', '', null, 'wss://' + 'a'.repeat(300) + '.com'])
+            ok(`${name}: refused: ${String(bad).slice(0, 40)}`, safeForeignRelay(bad) === null, safeForeignRelay(bad));
+        const hints = linkedRelays('nostr:' + NEVENT);
+        ok(`${name}: the relay hints inside a real nevent are read`, Array.isArray(hints) && hints.length >= 1 && hints.every(h => h.startsWith('wss://')), hints);
+        ok(`${name}: a note1 has none`, linkedRelays('note1' + 'q'.repeat(58)).length === 0);
+        ok(`${name}: garbage has none`, linkedRelays('nevent1qqqq').length === 0 && linkedRelays(42).length === 0);
+    }
+
     // Every event that carries the reader's words gets them: the NIP-22 comment, the kind 1 reply
     // to a note, and the note "Share" posts to the reader's feed.
     for (const [name, src] of Object.entries(srcs)) {

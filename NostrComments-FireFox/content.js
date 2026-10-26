@@ -423,6 +423,25 @@
             return { addr: `${kind}:${pubkey}:${addr}`, id: null };
         }
         // decodeLinkedEntity: end
+        // The relay hints (TLV 1) inside an nevent or naddr, as written. Only ever used when a reader
+        // presses "look it up there" under a quote; see quoteCard.
+        function linkedRelays(uri) {
+            if (typeof uri !== 'string' || uri.length > 2000) return [];
+            const str = uri.replace(/^nostr:/i, '').trim().toLowerCase();
+            const hrp = str.slice(0, str.lastIndexOf('1'));
+            if (hrp !== 'nevent' && hrp !== 'naddr') return [];
+            const bytes = _bech32Decode(hrp, str);
+            if (!bytes || bytes.length > 500) return [];
+            const out = [];
+            let i = 0;
+            while (i + 2 <= bytes.length) {
+                const t = bytes[i], l = bytes[i + 1];
+                if (i + 2 + l > bytes.length) break;
+                if (t === 1) { try { out.push(new TextDecoder().decode(new Uint8Array(bytes.slice(i + 2, i + 2 + l)))); } catch(_) {} }
+                i += 2 + l;
+            }
+            return out;
+        }
         // bech32-to-hex-string: end
 
         const toNpub = hex => toBech32('npub', hex);
@@ -976,6 +995,10 @@
         #m.dark-mode .nc-qcard{background:#1f2328;border-left-color:#3b4652}
         #m.dark-mode .nc-qcard .nc-qbody{color:#d1d5db}
         #m.dark-mode .nc-qcard.nc-qhidden .nc-qbody{color:#9ca3af}
+        .nc-qlookup{margin-left:8px;padding:2px 8px;font-size:12px;border:1px solid #c9d6e2;border-radius:6px;background:transparent;color:#0c75bc;cursor:pointer}
+        .nc-qlookup:disabled{color:#6b7280;cursor:default}
+        #m.dark-mode .nc-qlookup{border-color:#3b4652;color:#60a5fa}
+        #m.dark-mode .nc-qlookup:disabled{color:#9ca3af}
         .nc-vid{max-width:100%;border-radius:10px;margin:8px 0;display:block}
         #nc-btn{border:0;padding:0;position:fixed;width:48px;height:48px;background:linear-gradient(135deg,#1d9bf0,#0d8bf0);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2147483647;box-shadow:0 6px 18px rgba(29,155,240,0.45);transition:transform .25s ease,opacity .2s ease;user-select:none;opacity:.72}
         /* Bottom right is the most contested corner on the web — every support chat widget defaults
@@ -1163,6 +1186,8 @@
         </div>
         <label id="widepub-label" class="set-check"><input type="checkbox" id="widepub-toggle"><span>Also send what you post to three extra relays.</span></label>
         <details class="set-why"><summary>Why?</summary><p>So one relay removing it is not the end of it. They are never read from.</p></details>
+        <label id="inbox-label" class="set-check"><input type="checkbox" id="inbox-toggle"><span>Deliver replies to the relays the person you answer reads.</span></label>
+        <details class="set-why"><summary>Why?</summary><p>People list the relays they read in their profile's relay list (NIP-65). Sending your reply there too means it reaches them even when their relays turn away posts from strangers' relays. Only when you post, to at most three of their relays; nothing is read from them. Your notifications also come from the relays you list as your own.</p></details>
         <label id="worker-label" class="set-check"><input type="checkbox" id="worker-toggle"><span>Open relay connections in the background, not in the page.</span></label>
         <details class="set-why"><summary>Why?</summary><p>Some sites forbid the page from reaching a relay at all, and this gets past that. On by default; it takes effect on the next page load.</p></details>
         </div>
@@ -2331,6 +2356,9 @@
         // everything between DEFAULT_RELAYS and RELAYS with no _st in scope. Putting a storage read
         // in that range breaks the suite, which is a good enough reason to keep it out.
         let publishWide = _st.nostrcomments_widepublish !== false;
+        // NIP-65 delivery: replies also go to the inbox relays of the person answered, and your own
+        // notifications are read from your own inbox relays. See inboxRelays().
+        let useInbox = _st.nostrcomments_inbox !== false;
         // NIP-89's client tag, and whether it is written at all. Kept next to publishWide because
         // the two answer the same kind of question: what leaves this machine beyond the comment
         // itself. The reasoning for the default, and for offering the choice, is at CLIENT_TAG.
@@ -3094,6 +3122,26 @@
         }
         // safeMediaUrl: end
 
+        // A relay address that came from somebody else's event: a relay hint in a quote, or a relay
+        // list in a profile. Only wss://, no name and password, and nothing on the reader's own
+        // network — the same rules as a picture's host, for the same reason.
+        // safeForeignRelay: start
+        function safeForeignRelay(raw) {
+            if (typeof raw !== 'string' || !raw || raw.length > 256) return null;
+            let u;
+            try { u = new URL(raw.trim()); } catch (_) { return null; }
+            if (u.protocol !== 'wss:') return null;
+            if (u.username || u.password) return null;
+            const h = u.hostname.toLowerCase();
+            if (!h || h.startsWith('[')) return null;
+            if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return null;
+            if (!h.includes('.')) return null;
+            const tld = h.slice(h.lastIndexOf('.') + 1);
+            if (tld === 'local' || tld === 'localhost' || !/^[a-z]/.test(tld)) return null;
+            return normRelay(u.href);
+        }
+        // safeForeignRelay: end
+
         // An address that came out of somebody else's event and is about to become a link. Only http(s),
         // and nothing with a name and password in it. `javascript:`, `data:` and the rest do nothing
         // useful in a new tab today, but a link the panel draws is the panel vouching for it, and there
@@ -3243,6 +3291,16 @@
                              : 'Quiet mode off — the button shows on every page again.');
         };
 
+        const inboxToggle = s.getElementById('inbox-toggle');
+        inboxToggle.checked = useInbox;
+        inboxToggle.onchange = () => {
+            if (!byUserSettled(inboxToggle)) { inboxToggle.checked = useInbox; return; }
+            useInbox = inboxToggle.checked;
+            chrome.storage.local.set({nostrcomments_inbox: useInbox});
+            showMsg(useInbox ? 'Replies now also go to the relays the person you answer reads'
+                             : 'Replies now go to your own relays only');
+            startNotifSub();
+        };
         const widepubToggle = s.getElementById('widepub-toggle');
         widepubToggle.checked = publishWide;
         widepubToggle.onchange = () => {
@@ -3356,31 +3414,58 @@
         // own, so a quote cannot pull in more fetches. Mutes apply to it like to any comment.
         const quoted = new Map();       // ref (event id, or kind:pubkey:d) -> event, or null while unknown
         const _quoteWant = new Set();
+        const _quoteMissing = new Set(); // asked of every relay of the reader's, found on none
         const _seenQuote = new Set();   // kept apart from the thread's, see queueVerify
         let _quoteCards = 3;            // per comment; reset by renderMarkdown
         function quoteRefOf(bech) {
             const ent = decodeLinkedEntity(bech);
             return ent ? (ent.id || ent.addr) : null;
         }
-        function quoteCard(bech) {
-            const ref = quoteRefOf(bech);
-            if (!ref) return null;
-            if (!quoted.has(ref)) { _quoteWant.add(ref); return null; }
-            const ev = quoted.get(ref);
-            if (!ev || _quoteCards <= 0) return null;
-            _quoteCards--;
-            const card = document.createElement('span');
-            card.className = 'nc-qcard';
-            const head = document.createElement('span');
-            head.className = 'nc-qhead';
+        function quoteLink(bech, label) {
             const a = document.createElement('a');
             a.className = 'nc-quote';
             a.href = 'https://njump.me/' + bech;
             a.target = '_blank'; a.rel = 'noopener noreferrer';
             a.title = 'nostr:' + bech;
-            const who = profiles.get(ev.pubkey) || (toNpub(ev.pubkey).slice(0, 12) + '…');
-            a.textContent = '↪ ' + who;
-            head.appendChild(a);
+            a.textContent = label;
+            return a;
+        }
+        function quoteCard(bech) {
+            const ref = quoteRefOf(bech);
+            if (!ref) return null;
+            if (!quoted.has(ref)) { _quoteWant.add(ref); return null; }
+            const ev = quoted.get(ref);
+            if (!ev) {
+                // Not on the reader's relays. The relay the quoting author named may have it, but
+                // asking it is the reader's call: it is a server somebody else picked, and it would
+                // learn that this thread is being read. One button, like a picture that waits.
+                const hints = linkedRelays(bech).map(safeForeignRelay).filter(Boolean).filter(r => !RELAYS.includes(r)).slice(0, 2);
+                if (!_quoteMissing.has(ref) || !hints.length) return null;
+                const wrap = document.createElement('span');
+                wrap.appendChild(quoteLink(bech, '↪ quoted ' + (bech.startsWith('naddr') ? 'post' : 'note') + ' ' + bech.slice(0, bech.indexOf('1') + 5) + '…' + bech.slice(-4)));
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'nc-qlookup';
+                const host = (() => { try { return new URL(hints[0]).host; } catch(_) { return hints[0]; } })();
+                btn.textContent = 'Look it up on ' + host;
+                btn.title = 'Not on your relays. This asks ' + hints.join(' and ') + ', which the quoting author named; it will see that you are reading this thread.';
+                btn.onclick = () => {
+                    if (!byUser(btn)) return;
+                    btn.disabled = true; btn.textContent = 'Looking on ' + host + '…';
+                    fetchQuotesFrom([ref], hints, () => {
+                        if (!quoted.get(ref)) { btn.textContent = 'Not there either'; }
+                    });
+                };
+                wrap.appendChild(btn);
+                return wrap;
+            }
+            if (_quoteCards <= 0) return null;
+            _quoteCards--;
+            const card = document.createElement('span');
+            card.className = 'nc-qcard';
+            const head = document.createElement('span');
+            head.className = 'nc-qhead';
+            head.appendChild(quoteLink(bech, '↪ ' + (profiles.get(ev.pubkey) || (toNpub(ev.pubkey).slice(0, 12) + '…'))));
             const when = document.createElement('span');
             when.textContent = ' · ' + new Date(ev.created_at * 1000).toLocaleDateString();
             head.appendChild(when);
@@ -3397,10 +3482,8 @@
             card.appendChild(body);
             return card;
         }
-        function fetchQuotes() {
-            if (!_quoteWant.size || !panelOpen()) return;
-            const refs = [..._quoteWant].slice(0, 20);
-            refs.forEach(r => { _quoteWant.delete(r); quoted.set(r, null); });
+        // Asks `relays` for `refs`; calls onDone once every one of them has answered or given up.
+        function fetchQuotesFrom(refs, relays, onDone) {
             const ids = refs.filter(r => /^[0-9a-f]{64}$/.test(r));
             const addrs = refs.filter(r => !ids.includes(r)).map(r => {
                 const i = r.indexOf(':'), j = r.indexOf(':', i + 1);
@@ -3410,40 +3493,104 @@
             const filters = [];
             if (ids.length) filters.push({ ids });
             addrs.forEach(x => filters.push({ kinds: [x.kind], authors: [x.pubkey], '#d': [x.d], limit: 1 }));
-            if (!filters.length) return;
+            let left = relays.length;
+            const one = () => { if (--left === 0) { try { onDone && onDone(); } catch(_) {} scheduleRender(); } };
+            if (!filters.length || !left) { left = 1; one(); return; }
             const refFor = ev => {
                 if (ids.includes(ev.id)) return ev.id;
                 const d = (ev.tags.find(t => t[0] === 'd') || [])[1] ?? '';
                 const hit = addrs.find(x => x.kind === ev.kind && x.pubkey === ev.pubkey && x.d === d);
                 return hit ? hit.ref : null;
             };
-            RELAYS.forEach(r => {
+            relays.forEach(r => {
+                let finished = false;
+                const fin = () => { if (finished) return; finished = true; one(); };
                 try {
                     const ws = ncSocket(r);
                     const qid = 'q' + Math.random().toString(36).slice(2, 6);
-                    const t = setTimeout(() => ws.close(), 8000);
+                    const t = setTimeout(() => { try { ws.close(); } catch(_) {} fin(); }, 8000);
                     ws.onopen = () => ws.send(JSON.stringify(["REQ", qid, ...filters]));
+                    ws.onerror = () => { clearTimeout(t); fin(); };
+                    ws.onclose = () => { clearTimeout(t); fin(); };
                     ws.onmessage = m => {
                         let parsed;
                         try { parsed = JSON.parse(m.data); } catch(e) { return; }
                         const [type,,ev] = parsed;
-                        if (type === 'EOSE') { clearTimeout(t); ws.close(); return; }
+                        if (type === 'EOSE' || type === 'CLOSED') { clearTimeout(t); try { ws.close(); } catch(_) {} fin(); return; }
                         if (type !== 'EVENT' || !wellFormed(ev)) return;
                         const ref = refFor(ev);
                         if (!ref) return;
                         queueVerify(ev, () => {
-                            // An naddr names a replaceable event: the newest copy wins, whichever
-                            // relay answered last.
+                            // An naddr names a replaceable event: the newest copy wins.
                             const had = quoted.get(ref);
                             if (had && had.created_at >= ev.created_at) return;
                             quoted.set(ref, ev);
+                            _quoteMissing.delete(ref);
                             fetchProfiles([ev.pubkey]);
                             scheduleRender();
                         }, _seenQuote);
                     };
-                } catch(e) {}
+                } catch(e) { fin(); }
             });
         }
+        function fetchQuotes() {
+            if (!_quoteWant.size || !panelOpen()) return;
+            const refs = [..._quoteWant].slice(0, 20);
+            refs.forEach(r => { _quoteWant.delete(r); quoted.set(r, null); });
+            // Verification is queued, so "done" waits for it before calling anything missing.
+            fetchQuotesFrom(refs, RELAYS, () => _vq.then(() => {
+                refs.forEach(r => { if (!quoted.get(r)) _quoteMissing.add(r); });
+                scheduleRender();
+            }));
+        }
+
+        // NIP-65 inbox relays: the relays a person says they read (r tags marked "read", or not
+        // marked), from their newest kind 10002 on the reader's own relays. Used for two things,
+        // both behind useInbox: a reply also goes to the inbox of the person answered, and the
+        // reader's own notifications are read from the reader's own inbox. Never more than three,
+        // never one on a local network, never for reading a page's thread.
+        const _inbox = new Map();       // pubkey -> Promise<string[]>
+        function inboxRelays(pubkey) {
+            if (!/^[0-9a-f]{64}$/.test(pubkey || '')) return Promise.resolve([]);
+            if (_inbox.has(pubkey)) return _inbox.get(pubkey);
+            const p = new Promise(resolve => {
+                let best = null, left = RELAYS.length;
+                const seen = new Set();
+                const done = () => {
+                    if (--left > 0) return;
+                    _vq.then(() => {
+                        const read = !best ? [] : best.tags
+                            .filter(t => t[0] === 'r' && (t.length < 3 || t[2] === 'read' || t[2] === ''))
+                            .map(t => safeForeignRelay(t[1])).filter(Boolean);
+                        resolve(dedupeRelays(read).slice(0, 3));
+                    });
+                };
+                if (!left) { left = 1; done(); return; }
+                RELAYS.forEach(r => {
+                    let finished = false;
+                    const fin = () => { if (finished) return; finished = true; done(); };
+                    try {
+                        const ws = ncSocket(r);
+                        const t = setTimeout(() => { try { ws.close(); } catch(_) {} fin(); }, 4000);
+                        ws.onopen = () => ws.send(JSON.stringify(["REQ", 'i' + Math.random().toString(36).slice(2, 6), {kinds:[10002], authors:[pubkey], limit:1}]));
+                        ws.onerror = () => { clearTimeout(t); fin(); };
+                        ws.onclose = () => { clearTimeout(t); fin(); };
+                        ws.onmessage = m => {
+                            let parsed;
+                            try { parsed = JSON.parse(m.data); } catch(e) { return; }
+                            const [type,,ev] = parsed;
+                            if (type === 'EOSE' || type === 'CLOSED') { clearTimeout(t); try { ws.close(); } catch(_) {} fin(); return; }
+                            if (type !== 'EVENT' || !wellFormed(ev) || ev.kind !== 10002 || ev.pubkey !== pubkey) return;
+                            queueVerify(ev, () => { if (!best || ev.created_at > best.created_at) best = ev; }, seen);
+                        };
+                    } catch(e) { fin(); }
+                });
+            });
+            _inbox.set(pubkey, p);
+            return p;
+        }
+        // At most `ms` of waiting: a reply is not held up by a slow relay list.
+        const inboxSoon = (pubkey, ms) => Promise.race([inboxRelays(pubkey), new Promise(r => setTimeout(() => r([]), ms))]);
 
         // NIP-07 bridge (isolated world → main world via CustomEvent)
         const _nip07q = {};
@@ -3653,8 +3800,12 @@
         let _notifWs = [];
         function startNotifSub() {
             const gen = ++_notifGen;
-            _notifWs.forEach(w => { try { w.close(); } catch(_) {} });
+            // Emptied before closing: a socket's onclose takes itself out of _notifWs, and with the
+            // background socket that happens inside close(), so closing while iterating the live
+            // array skipped every other socket and left its subscription open on the relay.
+            const old = _notifWs;
             _notifWs = [];
+            old.forEach(w => { try { w.close(); } catch(_) {} });
             if (!myPub || _off || _siteDisabled) return;
             const since = Math.floor(Date.now() / 1000);
             const sid = 'ncn' + Math.random().toString(36).slice(2, 8);
@@ -3721,6 +3872,11 @@
                 };
             };
             RELAYS.slice(0, 3).forEach(r => open(r, 0));
+            // Replies addressed to you are sent to the relays you say you read; listen there too.
+            if (useInbox) inboxRelays(watching).then(list => {
+                if (gen !== _notifGen) return;
+                list.filter(r => !RELAYS.slice(0, 3).includes(r)).slice(0, 2).forEach(r => open(r, 0));
+            });
         }
 
         let connecting = false;
@@ -4092,6 +4248,7 @@
         // Reply state
         function setReply(ev) {
             replyTo = ev;
+            if (useInbox && ev.pubkey !== myPub) inboxRelays(ev.pubkey);   // ready by the time it is sent
             const name = profiles.get(ev.pubkey) || toNpub(ev.pubkey).slice(0,12)+'…';
             replyToLabel.textContent = `Replying to ${name}`;
             // Answering a note publishes an ordinary Nostr note, which behaves differently from a
@@ -5022,8 +5179,8 @@
         // retrying are asked again. How many ended up holding the event comes back on `settled`,
         // because resolving on the first acceptance made one relay and nine look identical, and the
         // difference between those two is whether the comment survives somebody's spring clean.
-        function publishToRelays(signed) {
-            const targets = dedupeRelays(RELAYS.concat(publishWide ? EXTRA_PUBLISH_RELAYS : []));
+        function publishToRelays(signed, extra = []) {
+            const targets = dedupeRelays(RELAYS.concat(publishWide ? EXTRA_PUBLISH_RELAYS : [], extra));
             if (!targets.length) return Promise.resolve({accepted:false, reasons:['no relays configured'], settled: Promise.resolve({on:0, total:0})});
             const first = targets.map(r => publishOne(r, signed).then(res => ({r, res})));
             const settled = Promise.all(first).then(async all => {
@@ -5228,7 +5385,10 @@
                 if (!(await verifyEvent(signed))) { showMsg("Signature check failed — not sent."); return; }
                 // Only treat it as posted once a relay says so. On failure the text stays in the
                 // box, which is the whole point: it is the only copy left.
-                const pub = await publishToRelays(signed);
+                // A reply also goes to where the person answered reads (NIP-65), so a strict relay
+                // of theirs does not leave them without it. Looked up when Reply was pressed.
+                const inbox = (useInbox && replyTo && replyTo.pubkey !== myPub) ? await inboxSoon(replyTo.pubkey, 2500) : [];
+                const pub = await publishToRelays(signed, inbox);
                 if (publishFailed(pub, 'comment')) return;
                 publishedThinly(pub, 'comment');
                 comments.unshift(signed);
