@@ -142,26 +142,42 @@
         // It is for readers who would otherwise remove the extension over the button (one did, Oct
         // 2026). Unlike hideBtn it applies at once, because the button just comes and goes below.
         let quietBtn = _st.nostrcomments_quietbtn === true;
-        if (Array.isArray(_st.nostrcomments_disabled) && _st.nostrcomments_disabled.includes(location.origin)) {
+        // The way back on a site where NostrComments was switched off: a small button in the corner the
+        // reader chose, and an answer to the toolbar popup, which can switch it back on from there. Shown
+        // at load on a disabled site, and straight after × — it used to appear only after a reload, so
+        // the moment somebody switched it off by mistake there was nothing at all (reported from a phone,
+        // 26 Oct 2026).
+        const showReEnable = () => {
             const _reBtn = document.createElement('button');
             _reBtn.type = 'button';
-            Object.assign(_reBtn.style, {border:'none',padding:'0',position:'fixed',right:'18px',bottom:'18px',width:'28px',height:'28px',background:'rgba(100,100,100,0.35)',borderRadius:'50%',cursor:'pointer',zIndex:'2147483647',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'14px',opacity:'0.4',userSelect:'none',transition:'opacity .2s'});
+            const _c = /^(tl|tr|bl|br)$/.test(_btnPosAll[location.origin]) ? _btnPosAll[location.origin] : (btnDefault || 'br');
+            Object.assign(_reBtn.style, {border:'none',padding:'0',position:'fixed',[_c[1] === 'l' ? 'left' : 'right']:'18px',[_c[0] === 't' ? 'top' : 'bottom']:'18px',width:'28px',height:'28px',background:'rgba(100,100,100,0.35)',borderRadius:'50%',cursor:'pointer',zIndex:'2147483647',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'14px',opacity:'0.6',userSelect:'none',transition:'opacity .2s'});
             _reBtn.title = 'NostrComments is disabled on this site — click to re-enable';
+            _reBtn.setAttribute('aria-label', 'NostrComments is off on this site. Turn it back on');
             _reBtn.textContent = '💬';
             _reBtn.onmouseenter = () => _reBtn.style.opacity = '1';
-            _reBtn.onmouseleave = () => _reBtn.style.opacity = '0.4';
+            _reBtn.onmouseleave = () => _reBtn.style.opacity = '0.6';
             // Its own gesture gate: this button lives outside the panel's shadow root, which does not exist
             // yet. A page that could click it would switch the extension back on where the reader had
             // switched it off.
             let _rg = null;
-            _reBtn.onclick = async () => {
-                if (_rg !== _reBtn) return;
+            const reEnable = async () => {
                 const _d = await chrome.storage.local.get('nostrcomments_disabled');
                 const arr = (Array.isArray(_d.nostrcomments_disabled) ? _d.nostrcomments_disabled : []).filter(o => o !== location.origin);
                 await chrome.storage.local.set({nostrcomments_disabled: arr});
-                _reBtn.remove();
+                chrome.runtime.onMessage.removeListener(onMsg);
+                _reHost.remove();
                 init();
             };
+            _reBtn.onclick = async () => { if (_rg === _reBtn) await reEnable(); };
+            // Only the extension's own pages can send these (a web page cannot message a content
+            // script), so the popup may switch the site back on without a gesture on the page.
+            const onMsg = (msg, sender, sendResponse) => {
+                if (!msg) return;
+                if (msg.t === 'nc-toggle') { sendResponse({ ok: false, siteOff: true }); return; }
+                if (msg.t === 'nc-enable') { reEnable().then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false })); return true; }
+            };
+            chrome.runtime.onMessage.addListener(onMsg);
             // In a shadow root, like the main button and for the same reason — but this one
             // matters more. If a site hides it, there is nothing left on that site to click: the
             // panel does not exist while the extension is disabled, and the per-site list is only
@@ -174,7 +190,13 @@
             _rs.addEventListener('click', e => { _rg = e.isTrusted === true ? e.target : null; }, true);
             _rs.addEventListener('click', () => { _rg = null; }, false);
             _rs.appendChild(_reBtn);
-            _running = { stop: () => _reHost.remove(), resume: () => document.documentElement.appendChild(_reHost) };
+            _running = {
+                stop: () => { _reHost.remove(); chrome.runtime.onMessage.removeListener(onMsg); },
+                resume: () => { document.documentElement.appendChild(_reHost); chrome.runtime.onMessage.addListener(onMsg); },
+            };
+        };
+        if (Array.isArray(_st.nostrcomments_disabled) && _st.nostrcomments_disabled.includes(location.origin)) {
+            showReEnable();
             return;
         }
 
@@ -526,7 +548,21 @@
         btn.classList.add('nc-' + btnCorner);
         btn.type = 'button';
         btn.setAttribute('aria-label', 'Open NostrComments');
-        btn.onmouseenter = () => { btn.classList.add('nc-hover'); dismiss.style.display = 'block'; quiet.style.display = 'block'; };
+        // On a touchscreen the browser fakes a hover on every tap, so × and − appeared right beside
+        // the finger that was dragging the button, and the next touch landed on one of them (reported
+        // 26 Oct 2026). They are a mouse convenience; on touch, Settings and the toolbar do the same.
+        // Decided from the pointer that actually arrived, not from (hover: none): headless and some
+        // desktop setups report no hover while a mouse is in use. A touch sends pointerenter and
+        // pointerdown before the browser's imitation mouseenter, so the flag is set in time.
+        let _touchSeen = false;
+        const _notePointer = e => { _touchSeen = e.pointerType === 'touch' || e.pointerType === 'pen'; };
+        btn.addEventListener('pointerenter', _notePointer, true);
+        btn.addEventListener('pointerdown', _notePointer, true);
+        btn.onmouseenter = () => {
+            btn.classList.add('nc-hover');
+            if (_touchSeen) return;
+            dismiss.style.display = 'block'; quiet.style.display = 'block';
+        };
         btn.onmouseleave = () => { btn.classList.remove('nc-hover'); dismiss.style.display = 'none'; quiet.style.display = 'none'; };
         const badge = document.createElement('span');
         badge.id = 'nc-badge';
@@ -1650,6 +1686,7 @@
             _siteDisabled = true;
             if (_running) _running.stop(); else { modal.style.display = 'none'; host.remove(); }
             btn.style.display = 'none';
+            showReEnable();
         }
         siteDisableBtn.onclick = async () => {
             // A page clicking this would switch the comment layer off on its own site — exactly what
@@ -2219,7 +2256,8 @@
         // went missing. The element still holds the whole panel, so re-attaching restores it.
         chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             if (!msg || msg.t !== 'nc-toggle') return;
-            if (_off || _siteDisabled) { sendResponse({ ok: false, off: true }); return; }
+            if (_siteDisabled) return;   // showReEnable()'s listener answers for this page now
+            if (_off) { sendResponse({ ok: false, off: true }); return; }
             if (!host.isConnected) document.documentElement.appendChild(host);
             if (modal.style.display === 'grid') closeModal(); else openPanel();
             // Answered synchronously. An unanswered message leaves the popup waiting on a channel

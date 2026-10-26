@@ -146,7 +146,20 @@ document.getElementById('open').onclick = async () => {
     try {
         [tab] = await api.tabs.query({ active: true, currentWindow: true });
         if (!tab) throw new Error('no active tab');
-        await api.tabs.sendMessage(tab.id, { t: 'nc-toggle' });
+        const res = await api.tabs.sendMessage(tab.id, { t: 'nc-toggle' });
+        // Switched off on this site (the × on the button, or Settings). Saying so, with the way back
+        // right here, beats closing as if something had opened.
+        if (res && res.siteOff) {
+            document.getElementById('hint').textContent = 'NostrComments is switched off on this site.';
+            const again = document.getElementById('enable-here');
+            again.hidden = false;
+            again.onclick = async () => {
+                again.disabled = true;
+                try { await api.tabs.sendMessage(tab.id, { t: 'nc-enable' }); } catch (err) {}
+                window.close();
+            };
+            return;
+        }
         window.close();
     } catch (e) {
         document.getElementById('hint').textContent =
