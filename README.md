@@ -196,8 +196,10 @@ to remove a comment, see [ABUSE.md](ABUSE.md): what can be removed, and by whom.
 
 ## Contributing
 
-Pull requests welcome. Please run `node tests/run.mjs` before opening one, and keep the three
-distributions in sync — `tests/parity.test.mjs` will tell you if you missed one.
+Pull requests welcome. [CONTRIBUTING.md](CONTRIBUTING.md) says where things are, how to run the
+tests and how the code is written, and issues labelled
+[good first issue](https://github.com/briskness-byte/NostrComments/labels/good%20first%20issue) are
+a good place to start.
 
 ## Support
 
