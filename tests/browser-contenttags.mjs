@@ -44,6 +44,8 @@ const THEM = newKey();
 const QUOTED = await sign(THEM, { kind: 1, created_at: Math.floor(Date.now() / 1000) - 3600, tags: [],
     content: 'Their speed test files sit behind the Cloudflare proxy, so the numbers say nothing. flurble' });
 relay.stored.push(QUOTED);
+// A name for THEM, so a mention of them can be drawn as @name.
+relay.stored.push(await sign(THEM, { kind: 0, created_at: Math.floor(Date.now() / 1000) - 7200, tags: [], content: JSON.stringify({ name: 'Mira' }) }));
 // Counts every time a relay answer includes it: that is the lookup happening.
 let quotedAsked = 0;
 const realFilter = relay.stored.filter;
@@ -219,6 +221,25 @@ if (BROWSER === 'chromium') {
 } else {
     console.log('\n(look-up button: Chromium only, it needs a test hostname on loopback)');
 }
+
+console.log('\n=== a mention notifies the person and reads as @name (NIP-27) ===');
+published.length = 0;
+const MTEXT = `Worth asking nostr:${toBech32('npub', QUOTED.pubkey)} about this.`;
+await js(`${ROOT}
+  const i = s.getElementById('input');
+  i.value = ${JSON.stringify(MTEXT)};
+  i.dispatchEvent(new Event('input', {bubbles:true}));
+  return 1;`);
+await nclick("s.getElementById('send')");
+await wait(4000);
+const mev = published.find(e => e.content === MTEXT);
+ok('the comment carries a p tag for the person mentioned', !!mev && tags(mev, 'p').some(t => t[1] === QUOTED.pubkey), mev && mev.tags);
+const mdrawn = await js(`${ROOT}
+  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('Worth asking'));
+  const a = c && c.querySelector('a.nc-mention');
+  return a ? { text: a.textContent, href: a.href } : null;`);
+ok('and it reads as @name', mdrawn && mdrawn.text === '@Mira', mdrawn);
+ok('linking to their profile', mdrawn && /^https:\/\/njump\.me\/npub1/.test(mdrawn.href), mdrawn);
 
 console.log('\n=== mutes apply to the card ===');
 await js(`${ROOT} s.getElementById('gear-btn').click(); s.getElementById('muteword-input').value = 'flurble'; return 1;`);

@@ -38,7 +38,8 @@ export async function run() {
         ok(`${name}: the blocks can be read out of content.js`, bech && ct && pr);
         if (!bech || !ct || !pr) continue;
         const document = fakeDocument();
-        const { contentTags, plainWithRefs } = new Function('document', `${bech}\n${ct}\n${pr}\nreturn { contentTags, plainWithRefs };`)(document);
+        const tb0 = src.indexOf('        function toBech32(hrp, hex) {'), tb1 = src.indexOf('        // bech32-to-hex-string: start', tb0);
+        const { contentTags, plainWithRefs } = new Function('document', `${src.slice(tb0, tb1)}\n${bech}\n${ct}\n${pr}\nreturn { contentTags, plainWithRefs };`)(document);
         const t = s => contentTags(s).filter(x => x[0] === 't').map(x => x[1]);
         const q = s => contentTags(s).filter(x => x[0] === 'q');
 
@@ -65,6 +66,16 @@ export async function run() {
         ok(`${name}: a bare nevent without nostr: is not tagged`, q(NEVENT).length === 0);
         ok(`${name}: hashtags and a quote together`, JSON.stringify(contentTags(`#vps\n\nnostr:${NEVENT}`)) === JSON.stringify([['t', 'vps'], ['q', NEVENT_ID]]));
 
+        // --- mentions (NIP-27) ---------------------------------------------------------------------
+        const PK = '46f3c7bb33cc3019049b76dc89dbb96e34c247bdda68b6ad8632682793ff8a1a';
+        const NPUB = 'npub1gmeu0wenescpjpymwmwgnkaedc6vy3aamf5tdtvxxf5z0yll3gdqatwl3v';
+        const p = s2 => contentTags(s2).filter(x => x[0] === 'p');
+        ok(`${name}: a mentioned npub becomes a p tag`, p(`thanks nostr:${NPUB}!`)[0]?.[1] === PK, p(`thanks nostr:${NPUB}!`));
+        ok(`${name}: the same person twice is one tag`, p(`nostr:${NPUB} and nostr:${NPUB}`).length === 1);
+        ok(`${name}: a bare npub without nostr: is not a mention`, p(NPUB).length === 0);
+        ok(`${name}: a broken npub is not a mention`, p('nostr:npub1qqqqqqqqqqqqqqqqqq').length === 0);
+        ok(`${name}: at most ten`, p(Array.from({ length: 12 }, () => 'nostr:' + NPUB).join(' ')).length === 1);
+
         // --- display ------------------------------------------------------------------------------
         const draw = s => { const f = document.frag(); plainWithRefs(f, s); return f.children; };
         const d1 = draw('Beware #scam here');
@@ -79,6 +90,9 @@ export async function run() {
         ok(`${name}: saying what it is`, /^↪ quoted note nevent/.test(a.textContent), a.textContent);
         ok(`${name}: an naddr is a quoted post`, /^↪ quoted post naddr/.test(draw(`nostr:${NADDR}`)[0].textContent));
         ok(`${name}: a broken reference stays text`, draw('nostr:nevent1qqqqqqqqqqqqqqqqqqqqqq').every(n => n.tag === '#text'));
+        const dm = draw(`hi nostr:${NPUB}`);
+        ok(`${name}: a mention is drawn as @ and a short npub when no name is known`, dm.length === 2 && dm[1].tag === 'a' && dm[1].className === 'nc-mention' && /^@npub1/.test(dm[1].textContent), dm[1]);
+        ok(`${name}: linking to the profile, without opener or referrer`, dm[1].href === 'https://njump.me/' + NPUB && dm[1].rel === 'noopener noreferrer');
         const all = draw(`<img src=x onerror=alert(1)> #tag nostr:${NEVENT}`);
         ok(`${name}: markup in the text stays text`, all[0].tag === '#text' && all[0].textContent.startsWith('<img'));
         ok(`${name}: and nothing here writes HTML`, !/innerHTML|outerHTML|insertAdjacentHTML/.test(pr));
@@ -105,7 +119,7 @@ export async function run() {
     // Every event that carries the reader's words gets them: the NIP-22 comment, the kind 1 reply
     // to a note, and the note "Share" posts to the reader's feed.
     for (const [name, src] of Object.entries(srcs)) {
-        ok(`${name}: comments and replies to notes carry the text's tags`, (src.match(/tags\.push\(\.\.\.contentTags\(text\)\);/g) || []).length === 2);
+        ok(`${name}: comments and replies to notes carry the text's tags`, (src.match(/for \(const t of contentTags\(text\)\) if \(!tags\.some\(x => x\[0\] === t\[0\] && x\[1\] === t\[1\]\)\) tags\.push\(t\);/g) || []).length === 2);
         ok(`${name}: and so does the note shared to the feed`, src.includes('tags: [...contentTags(ev.content), ...(labelClient'));
     }
     return { name: 'hashtags and quotes', pass, fail };

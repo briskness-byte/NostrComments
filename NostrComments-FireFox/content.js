@@ -445,6 +445,24 @@
             return { addr: `${kind}:${pubkey}:${addr}`, id: null };
         }
         // decodeLinkedEntity: end
+        // The public key a mention names: npub1… or nprofile1… (TLV 0), with or without nostr:. The
+        // relay hints of an nprofile are not read, for the same reason as a quote's.
+        function decodeProfileRef(uri) {
+            if (typeof uri !== 'string' || uri.length > 1000) return null;
+            const str = uri.replace(/^nostr:/i, '').trim().toLowerCase();
+            if (str.startsWith('npub1')) return fromBech32('npub', str);
+            if (!str.startsWith('nprofile1')) return null;
+            const bytes = _bech32Decode('nprofile', str);
+            if (!bytes || bytes.length > 500) return null;
+            let i = 0;
+            while (i + 2 <= bytes.length) {
+                const t = bytes[i], l = bytes[i + 1];
+                if (i + 2 + l > bytes.length) break;
+                if (t === 0 && l === 32) return bytes.slice(i + 2, i + 34).map(x => x.toString(16).padStart(2, '0')).join('');
+                i += 2 + l;
+            }
+            return null;
+        }
         // The relay hints (TLV 1) inside an nevent or naddr, as written. Only ever used when a reader
         // presses "look it up there" under a quote; see quoteCard.
         function linkedRelays(uri) {
@@ -1021,6 +1039,7 @@
         .nc-actions{margin-top:12px}
         .nc-img{max-width:100%;border-radius:10px;margin:8px 0;display:block;cursor:pointer}
         .nc-hashtag{color:#0c75bc;font-weight:500}
+        .c a.nc-mention{font-weight:600}
         #m.dark-mode .nc-hashtag{color:#60a5fa}
         .nc-quote{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em}
         .nc-qcard{display:block;margin:8px 0;padding:8px 12px;border-left:3px solid #c9d6e2;background:#f6f8fa;border-radius:6px;font-size:15px}
@@ -3669,6 +3688,13 @@
         // At most `ms` of waiting: a reply is not held up by a slow relay list.
         const inboxSoon = (pubkey, ms) => Promise.race([inboxRelays(pubkey), new Promise(r => setTimeout(() => r([]), ms))]);
 
+        // The name shown for a mention. Unknown profiles are asked for once, the same way as commenters'.
+        function mentionName(pubkey) {
+            if (!profiles.has(pubkey)) fetchProfiles([pubkey]);
+            const n = profiles.get(pubkey);
+            return typeof n === 'string' && n ? n.slice(0, 40) : null;
+        }
+
         // NIP-07 bridge (isolated world → main world via CustomEvent)
         const _nip07q = {};
         document.addEventListener('nc_nip07_res', ({detail}) => {
@@ -4582,13 +4608,25 @@
         // public viewer, and only when clicked; the quoted note is not fetched to show it inline.
         // plainWithRefs: start
         function plainWithRefs(frag, s) {
-            const re = /(?<![^\s(])#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,63})|nostr:((?:note|nevent|naddr)1[02-9ac-hj-np-z]{6,1000})/giu;
+            const re = /(?<![^\s(])#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,63})|nostr:((?:note|nevent|naddr)1[02-9ac-hj-np-z]{6,1000})|nostr:((?:npub|nprofile)1[02-9ac-hj-np-z]{6,1000})/giu;
             let last = 0, m;
             while ((m = re.exec(s)) !== null) {
                 if (m[1] != null && !/\p{L}/u.test(m[1])) continue;
                 if (m[2] != null && !decodeLinkedEntity(m[2])) continue;
+                const mentioned = m[3] != null ? decodeProfileRef(m[3]) : null;
+                if (m[3] != null && !mentioned) continue;
                 if (m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
-                if (m[1] != null) {
+                if (m[3] != null) {
+                    // @name when the profile is known (mentionName, outside this block), else a short npub.
+                    const a = document.createElement('a');
+                    a.className = 'nc-mention';
+                    const npub = toBech32('npub', mentioned);
+                    a.href = 'https://njump.me/' + npub;
+                    a.textContent = '@' + ((typeof mentionName === 'function' && mentionName(mentioned)) || (npub.slice(0, 12) + '…'));
+                    a.title = npub;
+                    a.target = '_blank'; a.rel = 'noopener noreferrer';
+                    frag.appendChild(a);
+                } else if (m[1] != null) {
                     const el = document.createElement('span'); el.className = 'nc-hashtag'; el.textContent = m[0]; frag.appendChild(el);
                 } else {
                     const ref = m[2].toLowerCase();
@@ -5379,6 +5417,9 @@
         // contentTags: start
         const HASHTAG_RE = /(?<![^\s(])#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,63})/gu;
         const NOSTR_REF_RE = /nostr:((?:note|nevent|naddr)1[02-9ac-hj-np-z]{6,1000})/gi;
+        // NIP-27 mentions: nostr:npub… or nostr:nprofile… becomes a p tag, so the person mentioned is
+        // notified in their own Nostr app — the most direct way to bring somebody into a thread.
+        const MENTION_RE = /nostr:((?:npub|nprofile)1[02-9ac-hj-np-z]{6,1000})/gi;
         function contentTags(text) {
             const out = [], seenT = new Set(), seenQ = new Set();
             if (typeof text !== 'string') return out;
@@ -5392,6 +5433,12 @@
                 const ref = ent && (ent.id || ent.addr);
                 if (!ref || seenQ.has(ref) || seenQ.size >= 5) continue;
                 seenQ.add(ref); out.push(["q", ref]);
+            }
+            const seenP = new Set();
+            for (const m of text.matchAll(MENTION_RE)) {
+                const pk = decodeProfileRef(m[1]);
+                if (!pk || seenP.has(pk) || seenP.size >= 10) continue;
+                seenP.add(pk); out.push(["p", pk]);
             }
             return out;
         }
@@ -5414,7 +5461,7 @@
                 // Keeps the reply in this page's thread for the next reader, the same way the note
                 // it answers got there.
                 tags.push(["r", pageUrl]);
-                tags.push(...contentTags(text));
+                for (const t of contentTags(text)) if (!tags.some(x => x[0] === t[0] && x[1] === t[1])) tags.push(t);
                 if (labelClient) tags.push(CLIENT_TAG);
                 ev = {kind:LEGACY_KIND, created_at:Math.floor(Date.now()/1000), tags, content:text, pubkey:myPub};
             } else {
@@ -5427,7 +5474,7 @@
                 } else {
                     tags.push(["i", pageUrl], ["k", "web"]);
                 }
-                tags.push(...contentTags(text));
+                for (const t of contentTags(text)) if (!tags.some(x => x[0] === t[0] && x[1] === t[1])) tags.push(t);
                 if (labelClient) tags.push(CLIENT_TAG);
                 ev = {kind:COMMENT_KIND, created_at:Math.floor(Date.now()/1000), tags, content:text, pubkey:myPub};
             }
