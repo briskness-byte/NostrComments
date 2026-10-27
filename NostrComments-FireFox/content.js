@@ -801,6 +801,14 @@
         #loadMore{background:#0d8bf0;color:white;border:none;display:none}
         input,select,textarea{padding:10px 14px;border:1px solid #ddd;border-radius:12px;font-size:15px}
         #input-wrapper{position:relative;margin:12px 0}
+        #mention-list{display:none;position:absolute;left:10px;bottom:calc(100% - 4px);z-index:5;min-width:220px;max-width:calc(100% - 20px);max-height:240px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.15);padding:4px}
+        #mention-list button{display:block;width:100%;text-align:left;padding:8px 10px;border:0;border-radius:7px;background:transparent;color:#14171a;font-size:14px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        #mention-list button.on,#mention-list button:hover{background:#e8f3fb}
+        #mention-list .nc-mnpub{color:#6b7280;font-size:12px;margin-left:6px}
+        #m.dark-mode #mention-list{background:#1c1c1f;border-color:#3f3f46}
+        #m.dark-mode #mention-list button{color:#e4e4e7}
+        #m.dark-mode #mention-list button.on,#m.dark-mode #mention-list button:hover{background:#16202e}
+        #m.dark-mode #mention-list .nc-mnpub{color:#9ca3af}
         #input{width:100%;min-height:88px;padding:14px 14px 46px;border:2px solid #e2e8f0;border-radius:14px;font-size:15px;background:#fafbfc;resize:none;box-sizing:border-box}
         #send{position:absolute;bottom:10px;right:10px;padding:10px 24px;border-radius:10px}
         .nc-hold{display:flex;align-items:center;gap:10px;max-width:100%;margin:8px 0;padding:10px 12px;background:#f4f4f5;border:1px dashed #c8c8cd;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;color:#5b5b60;text-align:left}
@@ -1300,6 +1308,7 @@
         <div id="reply-indicator"><span><span id="reply-to-label"></span><span id="reply-hint"></span></span><button id="reply-cancel">×</button></div>
         <div id="input-wrapper">
         <textarea id="input" placeholder="Write your comment…"></textarea>
+        <div id="mention-list" role="listbox" aria-label="People in this thread"></div>
         <button id="send">Post</button>
         </div>
         <div id="backup-bar"><span>Your key exists only in this browser. Clear the browser or switch computers, and this identity is gone. Back it up now.</span><button id="backup-yes" type="button">Back up my key</button><button id="backup-later" type="button">Later</button></div>
@@ -3773,6 +3782,79 @@
                 } catch(e) { fin(); }
             });
         }
+
+        // @ in the comment box: offers the people already in this thread (and whoever is being answered),
+        // and puts nostr:npub… in the text — which contentTags() turns into a p tag on posting. Only names
+        // already loaded for this thread, so typing @ asks no relay anything (the way Jumble searches
+        // its local profiles only). The trigger is the same as Jumble's: @ at the start, after a space
+        // or after punctuation, with the cursor right after the word, so emails and URLs stay as typed.
+        // mentionQuery: start
+        function mentionQuery(value, caret) {
+            const m = /(?:^|[\s([{"'*_>“‘])@([^\s@]{0,40})$/u.exec(String(value).slice(0, caret));
+            return m ? { from: caret - m[1].length - 1, to: caret, query: m[1].toLowerCase() } : null;
+        }
+        // mentionQuery: end
+        const mentionList = s.getElementById('mention-list');
+        let _mention = null, _mentionAt = 0;
+        function mentionCandidates(query) {
+            const seen = new Set(), out = [];
+            const add = pk => {
+                if (!pk || seen.has(pk) || pk === myPub || isMutedPk(pk)) return;
+                seen.add(pk);
+                const name = profiles.get(pk) || '', npub = toNpub(pk);
+                if (query && !name.toLowerCase().includes(query) && !npub.startsWith(query)) return;
+                out.push({ pk, name, npub });
+            };
+            if (replyTo) add(replyTo.pubkey);
+            for (const c of comments) { if (out.length >= 20) break; add(c.pubkey); }
+            return out.slice(0, 20);
+        }
+        function closeMentions() { _mention = null; mentionList.style.display = 'none'; mentionList.replaceChildren(); }
+        function paintMentions() {
+            mentionList.replaceChildren();
+            if (!_mention || !_mention.items.length) { mentionList.style.display = 'none'; return; }
+            _mention.items.forEach((it, i) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.setAttribute('role', 'option');
+                b.className = i === _mentionAt ? 'on' : '';
+                b.textContent = it.name || it.npub.slice(0, 16) + '…';
+                if (it.name) { const n = document.createElement('span'); n.className = 'nc-mnpub'; n.textContent = it.npub.slice(0, 12) + '…'; b.appendChild(n); }
+                // mousedown, not click: the box keeps its focus and its caret.
+                b.onmousedown = e => { e.preventDefault(); pickMention(i); };
+                mentionList.appendChild(b);
+            });
+            mentionList.style.display = 'block';
+        }
+        function pickMention(i) {
+            if (!_mention || !_mention.items[i]) return;
+            const { from, to } = _mention, v = input.value;
+            const ins = 'nostr:' + _mention.items[i].npub + ' ';
+            input.value = v.slice(0, from) + ins + v.slice(to);
+            const at = from + ins.length;
+            try { input.setSelectionRange(at, at); } catch(e) {}
+            closeMentions();
+            input.focus();
+        }
+        input.addEventListener('input', () => {
+            const q = input.selectionStart === input.selectionEnd ? mentionQuery(input.value, input.selectionStart) : null;
+            if (!q) return closeMentions();
+            const items = mentionCandidates(q.query);
+            if (!items.length) return closeMentions();
+            _mention = { ...q, items }; _mentionAt = 0;
+            paintMentions();
+        });
+        input.addEventListener('keydown', e => {
+            if (!_mention) return;
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const n = _mention.items.length;
+                _mentionAt = (_mentionAt + (e.key === 'ArrowDown' ? 1 : n - 1)) % n;
+                paintMentions();
+            } else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); pickMention(_mentionAt); }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeMentions(); }
+        });
+        input.addEventListener('blur', () => setTimeout(closeMentions, 150));
 
         // NIP-07 bridge (isolated world → main world via CustomEvent)
         const _nip07q = {};

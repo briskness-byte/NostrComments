@@ -116,6 +116,23 @@ export async function run() {
         ok(`${name}: garbage has none`, linkedRelays('nevent1qqqq').length === 0 && linkedRelays(42).length === 0);
     }
 
+    // The @ picker's trigger, the same rule as Jumble's: @ at the start, after a space or punctuation,
+    // with the cursor right after the word — so an email address or a URL never opens it.
+    for (const [name, src] of Object.entries(srcs)) {
+        const mq = block(src, 'mentionQuery');
+        ok(`${name}: mentionQuery can be read out`, !!mq);
+        if (!mq) continue;
+        const mentionQuery = new Function(`${mq}\nreturn mentionQuery;`)();
+        const at = v => mentionQuery(v, v.length);
+        ok(`${name}: @ at the start opens it`, at('@Mi')?.query === 'mi' && at('@Mi').from === 0, at('@Mi'));
+        ok(`${name}: after a space too`, at('Ask @mira')?.query === 'mira' && at('Ask @mira').from === 4);
+        ok(`${name}: a bare @ shows everyone`, at('hi @')?.query === '');
+        ok(`${name}: after a bracket`, at('(see @jo')?.query === 'jo');
+        ok(`${name}: an email address does not`, at('mail joe@example') === null);
+        ok(`${name}: nor a finished word`, at('@mira and more') === null);
+        ok(`${name}: the cursor decides, not the end of the text`, mentionQuery('@mi rest', 3)?.query === 'mi');
+    }
+
     // Every event that carries the reader's words gets them: the NIP-22 comment, the kind 1 reply
     // to a note, and the note "Share" posts to the reader's feed.
     for (const [name, src] of Object.entries(srcs)) {

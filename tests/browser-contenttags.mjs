@@ -45,6 +45,9 @@ const QUOTED = await sign(THEM, { kind: 1, created_at: Math.floor(Date.now() / 1
     content: 'Their speed test files sit behind the Cloudflare proxy, so the numbers say nothing. flurble' });
 relay.stored.push(QUOTED);
 // A name for THEM, so a mention of them can be drawn as @name.
+// Mira has also commented on the page, which is what puts her in the @ picker.
+relay.stored.push(await sign(THEM, { kind: 1111, created_at: Math.floor(Date.now() / 1000) - 3000, content: 'Mira was here first.',
+    tags: [['I', PAGE], ['K', 'web'], ['i', PAGE], ['k', 'web']] }));
 relay.stored.push(await sign(THEM, { kind: 0, created_at: Math.floor(Date.now() / 1000) - 7200, tags: [], content: JSON.stringify({ name: 'Mira' }) }));
 // Counts every time a relay answer includes it: that is the lookup happening.
 let quotedAsked = 0;
@@ -240,6 +243,30 @@ const mdrawn = await js(`${ROOT}
   return a ? { text: a.textContent, href: a.href } : null;`);
 ok('and it reads as @name', mdrawn && mdrawn.text === '@Mira', mdrawn);
 ok('linking to their profile', mdrawn && /^https:\/\/njump\.me\/npub1/.test(mdrawn.href), mdrawn);
+
+console.log('\n=== typing @ offers the people in this thread ===');
+published.length = 0;
+await js(`${ROOT} const i = s.getElementById('input'); i.focus(); i.value = 'Good point @Mi'; i.setSelectionRange(i.value.length, i.value.length);
+  i.dispatchEvent(new Event('input', {bubbles:true})); return 1;`);
+await wait(400);
+const picker = await js(`${ROOT} const l = s.getElementById('mention-list');
+  return { shown: getComputedStyle(l).display, items: [...l.querySelectorAll('button')].map(b => b.textContent) };`);
+ok('the picker opens', picker.shown === 'block', picker);
+ok('and offers Mira, who is in the thread', picker.items.some(t => t.startsWith('Mira')), picker.items);
+ok('but not the reader themselves', picker.items.length === 1, picker.items);
+await js(`${ROOT} s.getElementById('input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); return 1;`);
+await wait(300);
+const val = await js(`${ROOT} return s.getElementById('input').value;`);
+ok('Enter puts the mention in the text', val === 'Good point nostr:' + toBech32('npub', QUOTED.pubkey) + ' ', val);
+ok('and closes the picker', await js(`${ROOT} return getComputedStyle(s.getElementById('mention-list')).display;`) === 'none');
+await js(`${ROOT} const i = s.getElementById('input'); i.value = 'mail joe@Mira'; i.setSelectionRange(i.value.length, i.value.length); i.dispatchEvent(new Event('input', {bubbles:true})); return 1;`);
+await wait(300);
+ok('an email address does not open it', await js(`${ROOT} return getComputedStyle(s.getElementById('mention-list')).display;`) === 'none');
+await js(`${ROOT} const i = s.getElementById('input'); i.value = 'Good point nostr:' + ${JSON.stringify(toBech32('npub', QUOTED.pubkey))} + ' '; i.dispatchEvent(new Event('input', {bubbles:true})); return 1;`);
+await nclick("s.getElementById('send')");
+await wait(3500);
+const pev = published.find(e => e.content.startsWith('Good point nostr:'));
+ok('posted, it notifies her', !!pev && tags(pev, 'p').some(t => t[1] === QUOTED.pubkey), pev && pev.tags);
 
 console.log('\n=== mutes apply to the card ===');
 await js(`${ROOT} s.getElementById('gear-btn').click(); s.getElementById('muteword-input').value = 'flurble'; return 1;`);
