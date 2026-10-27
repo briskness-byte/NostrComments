@@ -92,13 +92,18 @@ export async function run() {
         ok('chrome does not offer Attest', !has('chrome', 'addon/attest/'));
         // Every place that names a signer has to name one that exists in this browser: the button,
         // the connect failure, and the refusal when nip07 is chosen with no signer present.
-        ok('chrome names nos2x on the signer button', has('chrome', '>Alby / nos2x</button>'));
-        ok('firefox names nos2x-fox there instead',
-           has('firefox', '>Alby / nos2x-fox</button>') && !has('firefox', '>Alby / nos2x</button>'));
+        // The settings switch is named for what it does, not after two signers (27 Oct 2026); the
+        // names sit underneath, and Attest — Firefox only, and ours — only in the Firefox build.
+        for (const k of ['chrome', 'firefox'])
+            ok(`${k} names the switch for what it does`, has(k, '>Browser signer</button>') && !/>Alby \/ nos2x/.test(srcs[k]));
+        ok('chrome lists nos2x under it, and not Attest',
+           has('chrome', 'Any Nostr signer extension works: Alby, nos2x and others.'));
+        ok('firefox lists nos2x-fox and Attest',
+           has('firefox', 'Any Nostr signer extension works: Alby, nos2x-fox, Attest and others.'));
         ok('chrome names nos2x when no signer answers',
-           has('chrome', 'Install Alby/nos2x') && has('chrome', 'install Alby or nos2x first'));
-        ok('firefox names nos2x-fox there too',
-           has('firefox', 'Install Alby/nos2x-fox') && has('firefox', 'install Alby or nos2x-fox first'));
+           has('chrome', 'Install one (Alby or nos2x)') && has('chrome', 'install one first (Alby or nos2x)'));
+        ok('firefox names nos2x-fox and Attest there too',
+           has('firefox', 'Install one (Alby, nos2x-fox or Attest)') && has('firefox', 'install one first (Alby, nos2x-fox or Attest)'));
         // Leaving to install one and coming back to a panel that still says nothing reads as
         // failure. Both say the same thing about it.
         for (const k of Object.keys(srcs))

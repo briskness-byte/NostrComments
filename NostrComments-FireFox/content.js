@@ -1184,8 +1184,9 @@
         <p class="set-p s-p4">Which key signs your comments. Switch to your signer to use whichever account is selected there.</p>
         <div class="s-box9">
         <button class="s-btn8" id="signer-local">Key stored here</button>
-        <button class="s-btn8" id="signer-nip07">Alby / nos2x-fox</button>
+        <button class="s-btn8" id="signer-nip07">Browser signer</button>
         </div>
+        <p class="set-p s-p5">Any Nostr signer extension works: Alby, nos2x-fox, Attest and others.</p>
         <p id="signer-note" class="set-p s-p5"></p>
         </div>
         </div>
@@ -4278,7 +4279,7 @@
                     declined: ['You declined in your signer', 'wait'],
                     noanswer: ['Your signer did not answer', 'wait'],
                     nokey:    ['Your signer has no key yet', 'wait'],
-                    nosigner: ['No Nostr signer in this browser. Install Alby/nos2x-fox, or make a key below.', 'wait'],
+                    nosigner: ['No Nostr signer in this browser. Install one (Alby, nos2x-fox or Attest), or make a key below.', 'wait'],
                 }[_connState] || ['Not connected', 'wait'];
                 status.textContent = say[0];
                 status.className = say[1];
@@ -4341,7 +4342,7 @@
             if (pref === 'nip07') {
                 let present = false;
                 try { present = await signerPresent(); } catch(e) {}
-                if (!present) return showMsg('No Nostr signer found — install Alby or nos2x-fox first');
+                if (!present) return showMsg('No Nostr signer found — install one first (Alby, nos2x-fox or Attest)');
                 _signerDeclined = false;
             } else if (!localWallet && !encPriv) {
                 // `localWallet` is whether the key is *loaded*, not whether it exists. Choosing the

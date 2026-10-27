@@ -100,7 +100,7 @@ await js(`${ROOT} s.getElementById('m').style.display='grid'; return 1;`); await
 const identity = () => js(`${ROOT} return JSON.stringify({
   status: s.getElementById('status').textContent,
   npub: s.getElementById('identity-npub').textContent });`);
-const SIGNER_BUTTON = 'alby / nos2x(-fox)?';
+const SIGNER_BUTTON = 'browser signer';
 // These are guarded controls (choosing which key signs), so a real gesture is required: focus the
 // button and press Enter, which the browser turns into a trusted click.
 const press = label => nclick(`[...s.querySelectorAll('button')].find(x => new RegExp(${JSON.stringify(label)}, 'i').test(x.textContent))`);
@@ -131,9 +131,9 @@ await js(`${ROOT} s.getElementById('m').style.display='grid';
   if (s.getElementById('settings').style.display !== 'block') s.getElementById('gear-btn').click();
   return 1;`);
 await wait(400);
-// The button names the signer this build recommends: "Alby / nos2x" on Chrome, "Alby / nos2x-fox" on Firefox
-// (Attest from 23.2.1 until October 2026; parity.test.mjs pins which). Matching only the Chrome wording made every check after
-// this one fail on Firefox, for a button that worked.
+// Since 27 Oct 2026 the button says what it does, "Browser signer", the same in both builds; the signers it
+// works with are listed underneath (parity.test.mjs pins which). It used to name two of them, and matching only
+// the Chrome wording once made every check after this one fail on Firefox, for a button that worked.
 ok('the signer can be chosen', await press(SIGNER_BUTTON) === true);
 await wait(1500);
 id = JSON.parse(await identity());
