@@ -1748,6 +1748,10 @@
         // A "no" in the signer stands for the rest of this page: it is not asked again by itself, only
         // when somebody presses the button. Asking on every panel open is a prompt nobody wanted.
         let _signerDeclined = false;
+        let _backupPending = false;     // the backup bar was offered and not yet answered
+        // fetchProfiles' batch (declared this early because profiles can be asked for during init)
+        const _profWant = new Set();
+        let _profFlush = null;
         const _connFailState = e => { const k = _signerFailure(e); return k === 'timeout' || k === 'unreachable' || k === 'busy' || k === 'login' ? 'noanswer' : k === 'nokey' ? 'nokey' : 'declined'; };
         (() => {
             const headline = document.createElement('div');
@@ -2680,7 +2684,7 @@
         // dull while it is the default one — somebody running their own relay has their domain in
         // there.
         function clearSettingsDom() {
-            for (const id of ['relay-list', 'muted-list', 'disabled-list', 'muteword-list', 'mythreads', 'notiflist']) {
+            for (const id of ['relay-list', 'muted-list', 'disabled-list', 'muteword-list', 'mythreads', 'notiflist', 'listmutes-note']) {
                 const el = s.getElementById(id);
                 if (el) el.replaceChildren();
             }
@@ -3487,10 +3491,22 @@
         let replyTo = null;
 
         // NIP-01 profile fetching
+        // Asked for in batches. Every caller used to send its own request to every relay — one per
+        // comment as a thread streamed in, one per mentioned name — so a thread of 150 strangers made
+        // over 300 profile requests (audit of 30 Oct 2026, N2). Names wanted within a short window are
+        // now asked for together, at most 150 per request.
         function fetchProfiles(pubkeys) {
-            const missing = [...new Set(pubkeys)].filter(p => !profiles.has(p));
+            for (const p of pubkeys) if (p && !profiles.has(p)) { profiles.set(p, null); _profWant.add(p); }
+            if (!_profWant.size || _profFlush) return;
+            _profFlush = setTimeout(() => {
+                _profFlush = null;
+                const all = [..._profWant];
+                _profWant.clear();
+                for (let i = 0; i < all.length; i += 150) _fetchProfilesNow(all.slice(i, i + 150));
+            }, 150);
+        }
+        function _fetchProfilesNow(missing) {
             if (!missing.length) return;
-            missing.forEach(p => profiles.set(p, null));
             // Every configured relay, not the first two. A commenter whose profile happened to live
             // on the third relay stayed an npub with no avatar for the whole session, because a
             // pubkey is marked as asked-for the moment we ask and is never asked about again. That
@@ -3551,6 +3567,11 @@
         const _quoteMissing = new Set(); // asked of every relay of the reader's, found on none
         const _seenQuote = new Set();   // kept apart from the thread's, see queueVerify
         let _quoteCards = 3;            // per comment; reset by renderMarkdown
+        // A thread can be filled with hundreds of different quotes, and every batch of twenty went to
+        // every relay at once: a thousand quotes were fifty lookups in parallel (audit of 30 Oct 2026,
+        // N1). Now one batch at a time, and at most QUOTE_MAX per page; beyond that a quote stays a link.
+        const QUOTE_MAX = 60;
+        let _quoteBusy = false;
         function quoteRefOf(bech) {
             const ent = decodeLinkedEntity(bech);
             return ent ? (ent.id || ent.addr) : null;
@@ -3567,7 +3588,7 @@
         function quoteCard(bech) {
             const ref = quoteRefOf(bech);
             if (!ref) return null;
-            if (!quoted.has(ref)) { _quoteWant.add(ref); return null; }
+            if (!quoted.has(ref)) { if (quoted.size + _quoteWant.size < QUOTE_MAX) _quoteWant.add(ref); return null; }
             const ev = quoted.get(ref);
             if (!ev) {
                 // Not on the reader's relays. The relay the quoting author named may have it, but
@@ -3672,12 +3693,15 @@
             });
         }
         function fetchQuotes() {
-            if (!_quoteWant.size || !panelOpen()) return;
+            if (_quoteBusy || !_quoteWant.size || !panelOpen()) return;
+            _quoteBusy = true;
             const refs = [..._quoteWant].slice(0, 20);
             refs.forEach(r => { _quoteWant.delete(r); quoted.set(r, null); });
-            // Verification is queued, so "done" waits for it before calling anything missing.
+            // Verification is queued, so "done" waits for it before calling anything missing. The next
+            // batch, if any, starts from the redraw this schedules.
             fetchQuotesFrom(refs, RELAYS, () => _vq.then(() => {
                 refs.forEach(r => { if (!quoted.get(r)) _quoteMissing.add(r); });
+                _quoteBusy = false;
                 scheduleRender();
             }));
         }
@@ -3731,8 +3755,16 @@
         const inboxSoon = (pubkey, ms) => Promise.race([inboxRelays(pubkey), new Promise(r => setTimeout(() => r([]), ms))]);
 
         // The name shown for a mention. Unknown profiles are asked for once, the same way as commenters'.
+        // Mentioned names go through fetchProfiles, which batches them; at most MENTION_MAX per page are
+        // looked up, so a thread cannot make the reader ask for every key it can name (audit of 30 Oct
+        // 2026, N2).
+        const MENTION_MAX = 100;
+        let _mentionAsked = 0;
         function mentionName(pubkey) {
-            if (!profiles.has(pubkey)) fetchProfiles([pubkey]);
+            if (!profiles.has(pubkey) && _mentionAsked < MENTION_MAX) {
+                _mentionAsked++;
+                fetchProfiles([pubkey]);
+            }
             const n = profiles.get(pubkey);
             return typeof n === 'string' && n ? n.slice(0, 40) : null;
         }
@@ -4249,7 +4281,11 @@
             const open = panelOpen();
             if (open === _panelWasOpen) return;
             _panelWasOpen = open;
-            if (!open) { clearIdentityDom(); clearSettingsDom(); notifBanner.replaceChildren(); notifBanner.style.display = 'none'; return; }
+            // The backup bar says the reader just posted with a key made here, so it waits with the
+            // rest (audit of 30 Oct 2026, N3); it comes back on the next open if still unanswered.
+            const _bb = s.getElementById('backup-bar');
+            if (!open) { clearIdentityDom(); clearSettingsDom(); notifBanner.replaceChildren(); notifBanner.style.display = 'none'; if (_bb) _bb.style.display = 'none'; return; }
+            if (_bb && _backupPending) _bb.style.display = 'flex';
             // Re-ask whether a signer is in the page. Cheaper and more reliable than polling: the
             // onboarding block is only worth being right about while somebody is looking at it, and
             // signers get switched on and off underneath us. This sits on the observer rather than
@@ -5669,10 +5705,12 @@
             backupAskedAt = Date.now(); rememberBackupAsked();
             // A bar under the box rather than a dialog over the comment just posted: the moment
             // somebody's first comment appears is not the moment to cover it (first-run review).
-            backupBar.style.display = 'flex';
+            _backupPending = true;
+            if (panelOpen()) backupBar.style.display = 'flex';
         }
         const backupBar = s.getElementById('backup-bar');
         s.getElementById('backup-later').onclick = () => {
+            _backupPending = false;
             backupBar.style.display = 'none';
             showMsg('You can back it up whenever you like under ⚙ Settings.');
         };
@@ -5681,6 +5719,7 @@
             // Shows the private key, so only for a real click: a page could press this as easily as
             // anything else in an open shadow root.
             if (!byUser(backupYes)) return;
+            _backupPending = false;
             backupBar.style.display = 'none';
             await openSettings();
             keypairSection.style.display = 'block';
