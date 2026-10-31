@@ -217,6 +217,11 @@ to remove a comment, see [ABUSE.md](ABUSE.md): what can be removed, and by whom.
 
 ## Contributing
 
+The code lives in three places, so no single host can take it down: here on GitHub, on
+[Codeberg](https://codeberg.org/briskness-byte/NostrComments), and on Nostr itself via ngit
+(`git clone nostr://npub1ewxm82gprxwkh9qznauyey6vwx62xetpsux3prnmddkyevasatgswmds9e/NostrComments`).
+Issues and pull requests go here.
+
 Pull requests welcome. [CONTRIBUTING.md](CONTRIBUTING.md) says where things are, how to run the
 tests and how the code is written, and issues labelled
 [good first issue](https://github.com/briskness-byte/NostrComments/labels/good%20first%20issue) are
