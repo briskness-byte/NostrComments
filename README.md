@@ -187,6 +187,27 @@ code across the Chrome and Firefox builds.
 chromium, drives the panel, and measures WCAG AA contrast against what is actually painted on
 screen. See [tests/README.md](tests/README.md) for what each suite covers.
 
+## Path to production-grade
+
+NostrComments is honestly built, but not yet production-grade: reliable, safe and unsurprising for
+people who have never heard of Nostr. What stands between here and there, ordered by impact:
+
+1. **Move the panel off the page.** It lives in an open shadow root on the site being discussed, so a
+   hostile page can read it and type into the comment box (it cannot fake a real click, which every
+   sensitive control checks). A browser sidebar takes the page out of the picture. The biggest step.
+2. **Web of trust, as weight rather than a wall.** People your network follows count for more and
+   float up; everyone else still shows, with a switch to see everything unfiltered.
+3. **An audited signature library and an outside audit.** The crypto is hand-rolled and tested
+   against the official vectors; the [published audits](docs/) were all done close to the project.
+4. **Password protection on by default**, still skippable
+   ([issue #7](https://github.com/briskness-byte/NostrComments/issues/7)).
+5. **Scheduled checks against real websites**, not only test pages that imitate them.
+6. **A steadier release rhythm**, with security fixes whenever they are needed.
+
+The first three are the largest pieces of work and depend on funding. Help with any of them, or with
+the [good first issues](https://github.com/briskness-byte/NostrComments/labels/good%20first%20issue),
+is welcome.
+
 ## Questions and ideas
 
 This page has a comment thread too. Open it with NostrComments installed and leave a comment, or
