@@ -52,7 +52,7 @@ export async function run() {
         ok('a search with no match gives nothing', filterRows(rows, 'no-such-site', 'newest').length === 0);
         ok('filtering does not reorder the stored rows', rows[0].url === historyRows(stored)[0].url);
 
-        ok('the reader link encodes the address', readerLink('https://news.example.com/story?id=7') === 'https://briskness-byte.github.io/thread/?url=' + encodeURIComponent('https://news.example.com/story?id=7'));
+        ok('the reader link encodes the address', readerLink('https://news.example.com/story?id=7') === 'https://nostrcomments.github.io/thread/?url=' + encodeURIComponent('https://news.example.com/story?id=7'));
         ok('and only for http(s)', readerLink('javascript:alert(1)') === null && safeHttpUrl('data:text/html,x') === null);
 
         // Same rule as the popup's readerLink, so both lead to the same thread.

@@ -74,7 +74,7 @@ how the extension works and which relays it uses, to help a report reach the peo
 There is no opt-out for a site, by design: a thread that the page's owner could switch off would
 be the comment section this project exists to replace. You can read the thread like anyone else —
 with the extension, or without installing anything at
-<https://briskness-byte.github.io/thread/> — and answer in it. For removing a specific comment,
+<https://nostrcomments.github.io/thread/> — and answer in it. For removing a specific comment,
 see relay operators above.
 
 ## Writing to the developer

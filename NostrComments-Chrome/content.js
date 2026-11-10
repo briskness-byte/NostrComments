@@ -5115,7 +5115,7 @@
                     // Most people who see a shared note do not have this extension, and to them the page
                     // address alone leads to a page with no thread on it. The reader opens the thread in
                     // any browser. A link in the text rather than a tag, for the reason given above.
-                    const readerUrl = 'https://briskness-byte.github.io/thread/?url=' + encodeURIComponent(pageUrl);
+                    const readerUrl = 'https://nostrcomments.github.io/thread/?url=' + encodeURIComponent(pageUrl);
                     const note = {
                         kind: 1,
                         created_at: Math.floor(Date.now() / 1000),

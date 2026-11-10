@@ -126,7 +126,7 @@ export async function run() {
         ok(`${name} popup has readerLink()`, start >= 0 && end > start);
         if (start < 0 || end < 0) continue;
         const readerLink = (0, eval)(`(${src.slice(start, end + 2)})`);
-        const R = 'https://briskness-byte.github.io/thread/?url=';
+        const R = 'https://nostrcomments.github.io/thread/?url=';
         ok(`${name}: a store page gets a reader link`,
            readerLink('https://addons.mozilla.org/en-US/firefox/') === R + encodeURIComponent('https://addons.mozilla.org/en-US/firefox/'),
            readerLink('https://addons.mozilla.org/en-US/firefox/'));

@@ -12,9 +12,9 @@ server of ours in between. No account, no email, no tracking.
 
 **Install:** [Firefox](https://addons.mozilla.org/en-US/firefox/addon/nostrcomments/) ·
 [Chrome, Brave, Edge](https://chromewebstore.google.com/detail/nostrcomments/ebmgdpicceaencegknannfaljhbfgido)  
-**Try it first:** [read any page's thread without installing anything](https://briskness-byte.github.io/thread/) ·
+**Try it first:** [read any page's thread without installing anything](https://nostrcomments.github.io/thread/) ·
 [watch the 66-second demo](https://www.youtube.com/watch?v=bywF8yWZa3o)  
-**Run a site?** [Show its thread under your articles](https://briskness-byte.github.io/embed/)
+**Run a site?** [Show its thread under your articles](https://nostrcomments.github.io/embed/)
 
 ## What it is for
 
@@ -30,10 +30,10 @@ so it stays reachable whether or not they want it to exist.
 
 **More ways in:**
 
-- **[The reader](https://briskness-byte.github.io/thread/)** — a static page that queries the same
+- **[The reader](https://nostrcomments.github.io/thread/)** — a static page that queries the same
   relays from your own browser and checks every comment's signature. Give it any address to see what
   has been said about it.
-- **[The embed](https://briskness-byte.github.io/embed/)** — a snippet a site owner pastes once,
+- **[The embed](https://nostrcomments.github.io/embed/)** — a snippet a site owner pastes once,
   read-only, that loads nothing until a visitor clicks. Readers see the comments without installing
   anything. The owner cannot moderate it, and the page says so up front.
 - **[The demo](https://www.youtube.com/watch?v=bywF8yWZa3o)** — sixty-six seconds: a thread on an
@@ -211,7 +211,7 @@ is welcome.
 ## Questions and ideas
 
 This page has a comment thread too. Open it with NostrComments installed and leave a comment, or
-[read the thread without installing anything](https://briskness-byte.github.io/thread/?url=https%3A%2F%2Fgithub.com%2Fbriskness-byte%2FNostrComments).
+[read the thread without installing anything](https://nostrcomments.github.io/thread/?url=https%3A%2F%2Fgithub.com%2Fbriskness-byte%2FNostrComments).
 Bugs go to [Issues](https://github.com/briskness-byte/NostrComments/issues). For abuse or a request
 to remove a comment, see [ABUSE.md](ABUSE.md): what can be removed, and by whom.
 

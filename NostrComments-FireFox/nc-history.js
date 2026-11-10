@@ -48,7 +48,7 @@ function readerLink(url) {
     try {
         const u = new URL(url);
         if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
-        return 'https://briskness-byte.github.io/thread/?url=' + encodeURIComponent(u.href);
+        return 'https://nostrcomments.github.io/thread/?url=' + encodeURIComponent(u.href);
     } catch (e) { return null; }
 }
 
