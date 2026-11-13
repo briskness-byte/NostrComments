@@ -49,7 +49,9 @@ an action you take, with one exception — reply notifications keep a subscripti
 open on their own, and are described as such:
 
 - **Loading comments:** the current page's URL is sent to relays as a query so
-  the extension can show comments for that page.
+  the extension can show comments for that page. It also asks for the thread of that site's homepage, so comments
+  about the site itself show up on its other pages; that adds nothing the page's own address did
+  not already say. Not done on large platforms such as YouTube or X.
 - **Posting a comment or vote:** your comment or vote, the page URL, and your
   Nostr public key are published to relays.
 - **Extra relays for what you post (on by default, and only for posting):** a

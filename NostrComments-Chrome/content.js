@@ -1047,6 +1047,17 @@
         .nc-actions{margin-top:12px}
         .nc-img{max-width:100%;border-radius:10px;margin:8px 0;display:block;cursor:pointer}
         .nc-hashtag{color:#0c75bc;font-weight:500}
+        #site-about{display:none;margin:0 0 10px}
+        #site-about-toggle{display:block;width:100%;text-align:left;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;background:#f7f9fa;color:#14171a;font-size:14px;cursor:pointer}
+        #site-about-list{display:none;margin-top:6px;padding:4px 12px;border-left:3px solid #c9d6e2}
+        .nc-sa-item{padding:8px 0;border-bottom:1px solid #eef2f5;font-size:14px}
+        .nc-sa-head{font-size:12px;color:#5b6570;margin-bottom:3px}
+        #site-about-list .nc-sa-go{display:block;padding:8px 0 4px;font-size:13px;color:#0c75bc;text-decoration:none}
+        #m.dark-mode #site-about-list .nc-sa-go{color:#60a5fa}
+        #m.dark-mode #site-about-toggle{background:#1c1c1f;border-color:#3f3f46;color:#e4e4e7}
+        #m.dark-mode #site-about-list{border-left-color:#3b4652}
+        #m.dark-mode .nc-sa-item{border-bottom-color:#2a2f36}
+        #m.dark-mode .nc-sa-head{color:#a3adb8}
         .nc-cw{display:block;width:100%;text-align:left;padding:10px 12px;border:1px dashed #b0bec5;border-radius:8px;background:transparent;color:#5b6570;font-size:14px;cursor:pointer}
         #m.dark-mode .nc-cw{border-color:#4a5563;color:#a3adb8}
         .c a.nc-mention{font-weight:600}
@@ -1303,6 +1314,7 @@
         </div>
         <div id="onboard"></div>
         <div id="pagekey"></div>
+        <div id="site-about"><button id="site-about-toggle" type="button"></button><div id="site-about-list"></div></div>
         <div id="list"></div>
         <button id="loadMore">Load more</button>
         <div id="msg"></div>
@@ -1748,6 +1760,9 @@
         // when somebody presses the button. Asking on every panel open is a prompt nobody wanted.
         let _signerDeclined = false;
         let _backupPending = false;     // the backup bar was offered and not yet answered
+        // "About this site" (see loadSiteAbout), declared this early because render() reads it.
+        const siteAbout = { home: null, items: new Map(), deleted: new Map(), open: false };
+        const _seenSite = new Set();
         // fetchProfiles' batch (declared this early because profiles can be asked for during init)
         const _profWant = new Set();
         let _profFlush = null;
@@ -3878,6 +3893,112 @@
         });
         input.addEventListener('blur', () => setTimeout(closeMentions, 150));
 
+        // "About this site": the thread of the site's homepage, offered above a page's own thread
+        // (13 Nov 2026). Warnings about a shop are mostly left on its homepage, and a reader on a
+        // product page, a checkout or wherever a redirect landed them saw none of them: relays match a
+        // page address exactly, so a page only ever got its own thread. The homepage is one more exact
+        // address, so this works for every comment already written, by any client, and tells the relays
+        // nothing the page address did not. Shown apart from the thread and read-only: a reply belongs
+        // on the page it answers. Skipped on platforms, where the homepage says nothing about the video
+        // or the post being read.
+        // siteHome: start
+        const SITE_ABOUT_SKIP = /(^|\.)(youtube\.com|youtu\.be|x\.com|twitter\.com|github\.com|reddit\.com|facebook\.com|instagram\.com|tiktok\.com|linkedin\.com|medium\.com|substack\.com|wikipedia\.org|bsky\.app|threads\.net|mastodon\.social|google\.[a-z.]+|amazon\.[a-z.]+|ebay\.[a-z.]+)$/i;
+        function siteHome(page) {
+            let u;
+            try { u = new URL(page); } catch (_) { return null; }
+            if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+            if (SITE_ABOUT_SKIP.test(u.hostname)) return null;
+            const home = normalizeUrl(u.origin + '/');
+            return home === page ? null : home;
+        }
+        // siteHome: end
+        function siteAboutVisible() {
+            return [...siteAbout.items.values()]
+                .filter(ev => !siteAbout.deleted.get(ev.id)?.has(ev.pubkey) && !isMutedPk(ev.pubkey) && !hitsMuted(ev.content))
+                .sort((a, b) => b.created_at - a.created_at);
+        }
+        function loadSiteAbout() {
+            const home = siteHome(pageUrl);
+            if (home === siteAbout.home) return paintSiteAbout();   // same site after a soft navigation
+            siteAbout.home = home; siteAbout.items.clear(); siteAbout.deleted.clear(); siteAbout.open = false;
+            paintSiteAbout();
+            if (!home) return;
+            const filters = [
+                {kinds:[COMMENT_KIND], "#I":[home], limit: 100},
+                {kinds:[LEGACY_KIND], "#r":[home], limit: 100},
+                {kinds:[5], "#r":[home], limit: 100},
+            ];
+            RELAYS.forEach(r => {
+                try {
+                    const ws = ncSocket(r);
+                    const sid = 'sa' + Math.random().toString(36).slice(2, 6);
+                    const t = setTimeout(() => { try { ws.close(); } catch(_) {} }, 10000);
+                    ws.onopen = () => ws.send(JSON.stringify(["REQ", sid, ...filters]));
+                    ws.onmessage = m => {
+                        let parsed;
+                        try { parsed = JSON.parse(m.data); } catch(e) { return; }
+                        const [type,,ev] = parsed;
+                        if (type === 'EOSE' || type === 'CLOSED') { clearTimeout(t); try { ws.close(); } catch(_) {} return; }
+                        if (type !== 'EVENT' || !wellFormed(ev) || siteAbout.home !== home) return;
+                        const about = ev.kind === COMMENT_KIND ? ev.tags.some(x => x[0] === 'I' && x[1] === home)
+                                    : ev.kind === LEGACY_KIND || ev.kind === 5 ? ev.tags.some(x => x[0] === 'r' && x[1] === home) : false;
+                        if (!about) return;
+                        queueVerify(ev, () => {
+                            if (siteAbout.home !== home) return;
+                            if (ev.kind === 5) {
+                                for (const x of ev.tags) if (x[0] === 'e' && x[1]) {
+                                    if (!siteAbout.deleted.has(x[1])) siteAbout.deleted.set(x[1], new Set());
+                                    siteAbout.deleted.get(x[1]).add(ev.pubkey);
+                                }
+                            } else {
+                                siteAbout.items.set(ev.id, ev);
+                                fetchProfiles([ev.pubkey]);
+                            }
+                            scheduleRender();
+                        }, _seenSite);
+                    };
+                } catch(e) {}
+            });
+        }
+        function paintSiteAbout() {
+            const box = s.getElementById('site-about');
+            if (!box) return;
+            const shown = siteAbout.home ? siteAboutVisible() : [];
+            if (!shown.length) { box.style.display = 'none'; return; }
+            const host = (() => { try { return new URL(siteAbout.home).hostname.replace(/^www\./, ''); } catch (_) { return 'this site'; } })();
+            const toggle = s.getElementById('site-about-toggle');
+            toggle.textContent = `💬 ${shown.length} ${shown.length === 1 ? 'comment' : 'comments'} about ${host} — ${siteAbout.open ? 'hide' : 'show'}`;
+            toggle.setAttribute('aria-expanded', siteAbout.open ? 'true' : 'false');
+            const list = s.getElementById('site-about-list');
+            list.replaceChildren();
+            if (siteAbout.open) {
+                for (const ev of shown.slice(0, 20)) {
+                    const item = document.createElement('div');
+                    item.className = 'nc-sa-item';
+                    const head = document.createElement('div');
+                    head.className = 'nc-sa-head';
+                    head.textContent = (profiles.get(ev.pubkey) || toNpub(ev.pubkey).slice(0, 12) + '…') + ' · ' + timeAgo(ev.created_at);
+                    item.appendChild(head);
+                    const cw = (ev.tags || []).find(x => x[0] === 'content-warning');
+                    const body = document.createElement('div');
+                    if (cw) body.textContent = cw[1] ? `Content warning: “${quoteThirdParty(cw[1])}” — open the homepage thread to read it.` : 'Content warning — open the homepage thread to read it.';
+                    else body.appendChild(renderMarkdown(ev.content));
+                    item.appendChild(body);
+                    list.appendChild(item);
+                }
+                // Replying happens where the comment lives, so the extension files it under that page.
+                const go = document.createElement('a');
+                go.className = 'nc-sa-go';
+                go.href = siteAbout.home;
+                go.target = '_blank'; go.rel = 'noopener noreferrer';
+                go.textContent = `Open the thread on ${host}'s homepage to reply →`;
+                list.appendChild(go);
+            }
+            list.style.display = siteAbout.open ? 'block' : 'none';
+            box.style.display = 'block';
+        }
+        s.getElementById('site-about-toggle').onclick = () => { siteAbout.open = !siteAbout.open; paintSiteAbout(); };
+
         // NIP-07 bridge (isolated world → main world via CustomEvent)
         const _nip07q = {};
         document.addEventListener('nc_nip07_res', ({detail}) => {
@@ -5382,8 +5503,15 @@
             // Deliberately not `shown.length`: typing in the search box narrows the thread, and
             // the count on the button should not drop to the number of matches.
             const count = comments.filter(visible).length;
-            badge.textContent = count > 99 ? '99+' : String(count);
-            badge.style.display = count > 0 ? 'block' : 'none';
+            // No comments on this page but some about the site: the button says so in grey, so a
+            // warning left on a shop's homepage is not invisible from its checkout.
+            const siteCount = count ? 0 : (siteAbout.home ? siteAboutVisible().length : 0);
+            const shownCount = count || siteCount;
+            badge.textContent = shownCount > 99 ? '99+' : String(shownCount);
+            badge.style.display = shownCount > 0 ? 'block' : 'none';
+            badge.style.background = count ? '#e53935' : '#6b7280';
+            btn.title = !count && siteCount ? `${siteCount} ${siteCount === 1 ? 'comment' : 'comments'} about this site, none on this page` : '';
+            paintSiteAbout();
             placeBtn();
             fetchQuotes();   // what the comments just drawn quote, if the panel is open
         }
@@ -5904,6 +6032,7 @@
             replyIndicator.style.display = 'none';
             input.placeholder = 'Write your comment…';
             render();
+            loadSiteAbout();
 
             let _eoseCount = 0, _repliesFetched = false, _eoseTimer;
             const _silent = new Map();     // per relay: the timer watching for a reply that never comes
