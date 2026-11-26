@@ -169,13 +169,22 @@ thing, and this tag can: it is what makes it possible to count how many distinct
 published with this extension. Nobody is identified by that count, and it is arrived at by reading
 public relays — the same way you could arrive at it yourself.
 
+Comments and replies also carry a site label (NIP-32): `["L","web-host"]` and
+`["l","example.com","web-host"]`, the host of the page without a leading `www.`. A relay can only
+match a tag exactly, so the page address alone cannot answer "what has been said anywhere on
+example.com"; this label can. It says nothing the page address in the same event does not already
+say. The note that Share posts does not carry it.
+
 The cost is that the tag is also a marker. A relay or a site can select on it and see exactly which
 of its visitors are running this extension. Events from here are already recognisable by their
 shape, so it adds less than it looks like it does, but it turns reading into filtering, and that is
 a real difference.
 
+As long as this extension is the only one writing the site label, it is the same kind of marker,
+so it follows the same switch.
+
 **You can switch this off.** In ⚙ Settings, *Label what you post with the name of this extension*
-stops the tag from being written. Two things it does not do: it cannot reach what you have already
+stops the tag and the site label from being written. Two things it does not do: it cannot reach what you have already
 published, because a published event is fixed, and it does not make you unrecognisable — a comment
 from here keeps a shape that a determined site can still spot. It is on by default, because the
 count is worth having and the label is what every other Nostr app writes too.

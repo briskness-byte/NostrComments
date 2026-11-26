@@ -129,12 +129,13 @@ export async function run() {
     // working. Somebody turning it off is asking not to be identifiable as a user of this extension
     // — so a refactor that writes the tag unconditionally is a privacy regression, in a spot where
     // the only symptom is an event nobody looks at. These assertions are the thing that notices.
+    // The site label rides in the same push, for the same reason (sitelabel.test.mjs).
     for (const [name, src] of Object.entries(srcs)) {
-        const writes = src.match(/tags\.push\(CLIENT_TAG\)/g) || [];
+        const writes = src.match(/tags\.push\(CLIENT_TAG[,)]/g) || [];
         ok(`${name}: the tag is written where a comment is built`, writes.length === 2);
         // Every push guarded, counted rather than spot-checked, so a third one added later cannot
         // slip past by being somewhere this test did not look.
-        const guarded = src.match(/if \(labelClient\) tags\.push\(CLIENT_TAG\)/g) || [];
+        const guarded = src.match(/if \(labelClient\) tags\.push\(CLIENT_TAG[,)]/g) || [];
         ok(`${name}: and every one of them asks first`, guarded.length === writes.length);
         // Sharing to your feed is a separate event with its own literal tag, and it was missed
         // once already by a change that only looked at buildEvent.

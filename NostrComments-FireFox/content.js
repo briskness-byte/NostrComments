@@ -1282,7 +1282,7 @@
         <div class="s-box10">
         <strong class="set-h s-h1">What your comments say about this app</strong>
         <label id="clienttag-label" class="set-check"><input type="checkbox" id="clienttag-toggle"><span>Label what you post with the name of this extension</span></label>
-        <details class="set-why"><summary>Why?</summary><p>On by default, the way most Nostr apps label what they write. It is what makes it possible to count how many people actually post from here, which download numbers cannot tell anyone. Turning it off drops the label from what you publish next. It does not change what you already published, and it does not make you invisible — these events keep the shape that gives them away.</p></details>
+        <details class="set-why"><summary>Why?</summary><p>On by default, the way most Nostr apps label what they write. It is what makes it possible to count how many people actually post from here, which download numbers cannot tell anyone. It also names the site a comment is about, so comments from all over one site can be found together. Turning it off drops both from what you publish next. It does not change what you already published, and it does not make you invisible — these events keep the shape that gives them away.</p></details>
         </div>
         </div>
         <div id="set-g-activity" class="set-g">
@@ -5782,6 +5782,31 @@
         }
         // contentTags: end
 
+        // Which site a comment is about, as a NIP-32 label (Nov 2026). The homepage thread shown above
+        // a page's own covers what was written on a site's front door; this covers the rest. A relay
+        // matches a tag value exactly, so the page address cannot be asked for "everything on
+        // example.com"; this label can: {"#L":["web-host"], "#l":["example.com"]}. It says nothing the
+        // page address in the I or r tag did not already say.
+        //
+        // The host is the address's own, lowercase as URL gives it, without a leading www. so the two
+        // spellings of one site meet; any other subdomain stays its own site, as in siteHome. Only
+        // http(s), and only a name with a dot: a label for localhost names no site anybody else has.
+        //
+        // Anyone can write any label, so a reader must only count it when it agrees with the event's
+        // own page tag. And while this extension is the only one writing it, the label marks a
+        // comment as coming from here just as the client tag does, so it follows the same setting.
+        // siteLabel: start
+        const SITE_LABEL_NS = 'web-host';
+        function siteLabelTags(page) {
+            let u;
+            try { u = new URL(page); } catch (_) { return []; }
+            if (u.protocol !== 'https:' && u.protocol !== 'http:') return [];
+            const host = u.hostname.replace(/\.$/, '').replace(/^www\./, '');
+            if (!host.includes('.')) return [];
+            return [["L", SITE_LABEL_NS], ["l", host, SITE_LABEL_NS]];
+        }
+        // siteLabel: end
+
         function buildEvent(text) {
             // Two shapes, and which one is used is decided by the parent, never by a setting.
             //
@@ -5800,7 +5825,7 @@
                 // it answers got there.
                 tags.push(["r", pageUrl]);
                 for (const t of contentTags(text)) if (!tags.some(x => x[0] === t[0] && x[1] === t[1])) tags.push(t);
-                if (labelClient) tags.push(CLIENT_TAG);
+                if (labelClient) tags.push(CLIENT_TAG, ...siteLabelTags(pageUrl));
                 ev = {kind:LEGACY_KIND, created_at:Math.floor(Date.now()/1000), tags, content:text, pubkey:myPub};
             } else {
                 // NIP-22: the root scope in uppercase, the parent in lowercase. For a top-level
@@ -5813,7 +5838,7 @@
                     tags.push(["i", pageUrl], ["k", "web"]);
                 }
                 for (const t of contentTags(text)) if (!tags.some(x => x[0] === t[0] && x[1] === t[1])) tags.push(t);
-                if (labelClient) tags.push(CLIENT_TAG);
+                if (labelClient) tags.push(CLIENT_TAG, ...siteLabelTags(pageUrl));
                 ev = {kind:COMMENT_KIND, created_at:Math.floor(Date.now()/1000), tags, content:text, pubkey:myPub};
             }
             return ev;

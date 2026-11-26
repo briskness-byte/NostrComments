@@ -21,6 +21,11 @@
 // Share note — that last one built its tag from a separate hard-coded literal, which is precisely
 // the sort of thing that gets missed.
 //
+// The site label (["L","web-host"] + ["l",<host>,"web-host"]) follows the same switch: while only
+// this extension writes it, it marks a comment as written here just as the client tag does. It
+// goes on comments and replies, never on the Share note, which is a note about a page, not a
+// comment on it.
+//
 //   node tests/browser-clienttag.mjs
 //   NC_BROWSER=firefox node tests/browser-clienttag.mjs
 //
@@ -83,6 +88,10 @@ const closeSettings = () => js(`${ROOT} s.getElementById('settings-close')?.clic
 const toggleState = () => js(`${ROOT} return s.getElementById('clienttag-toggle').checked;`);
 const clickToggle = async () => { await nclick("s.getElementById('clienttag-toggle')"); await wait(500); };
 const labelled = ev => (ev.tags || []).some(t => t[0] === 'client' && t[1] === 'NostrComments');
+const HOST = new URL(PAGE).hostname;
+const siteLabelled = ev => (ev.tags || []).some(t => t[0] === 'L' && t[1] === 'web-host')
+    && (ev.tags || []).some(t => t[0] === 'l' && t[1] === HOST && t[2] === 'web-host');
+const anySiteLabel = ev => (ev.tags || []).some(t => t[0] === 'L' || t[0] === 'l');
 
 const postComment = async text => {
     published.length = 0;
@@ -109,6 +118,7 @@ console.log('\n=== so a comment says where it came from ===');
 let ev = await postComment('A first comment, labelled.');
 ok('the comment is published', !!ev, published.map(e => e.kind));
 ok('and it carries the client tag', !!ev && labelled(ev), ev && ev.tags);
+ok('and the site label, naming this host', !!ev && siteLabelled(ev), ev && ev.tags);
 
 // --- the assertion this suite was written for -----------------------------------------------------------
 // No reload between the click and the post. If `labelClient` were captured at load time this would
@@ -125,6 +135,7 @@ ok('and it says what changed', /from now on/i.test(await js(`${ROOT} return s.ge
 ev = await postComment('A second comment, unlabelled.');
 ok('the comment is still published', !!ev, published.map(e => e.kind));
 ok('and it carries no client tag', !!ev && !labelled(ev), ev && ev.tags);
+ok('nor a site label', !!ev && !anySiteLabel(ev), ev && ev.tags);
 
 // --- what turning it off does not do ------------------------------------------------------------------
 // PRIVACY.md promises the label goes and says plainly that this is not a cloak. If the rest of the
@@ -149,6 +160,7 @@ await wait(3500);
 const reply = published.find(e => e.kind === 1111 && (e.tags || []).some(t => t[0] === 'e'));
 ok('the reply is published', !!reply, published.map(e => e.kind));
 ok('and carries no client tag', !!reply && !labelled(reply), reply && reply.tags);
+ok('nor a site label', !!reply && !anySiteLabel(reply), reply && reply.tags);
 
 // The Share note builds its tags from a separate literal rather than from CLIENT_TAG, which is
 // exactly why it is worth a browser assertion of its own.
@@ -161,6 +173,7 @@ await wait(3000);
 const note = published.find(e => e.kind === 1);
 ok('the note is published', !!note, published.map(e => e.kind));
 ok('and carries no client tag either', !!note && !labelled(note), note && note.tags);
+ok('nor a site label', !!note && !anySiteLabel(note), note && note.tags);
 
 // --- persistence ------------------------------------------------------------------------------------------
 // Storage cannot be read from here — this runs in the page, not the extension — so persistence is
@@ -188,6 +201,23 @@ ok('the box is ticked once more', (await toggleState()) === true);
 
 ev = await postComment('A fourth comment, labelled again.');
 ok('and the next post carries the tag again', !!ev && labelled(ev), ev && ev.tags);
+ok('and the site label again', !!ev && siteLabelled(ev), ev && ev.tags);
+
+console.log('\n=== a labelled reply carries the site label as well ===');
+published.length = 0;
+await closeSettings();
+await js(`${ROOT}
+  const c = [...s.getElementById('list').querySelectorAll('.c')].find(c => c.textContent.includes('A comment worth answering'));
+  [...c.querySelectorAll('button')].find(b => /Reply/i.test(b.textContent)).click();
+  const i = s.getElementById('input');
+  i.value = 'A labelled answer.';
+  i.dispatchEvent(new Event('input', {bubbles:true}));
+  return 1;`);
+await nclick("s.getElementById('send')");
+await wait(3500);
+const reply2 = published.find(e => e.kind === 1111 && e.content === 'A labelled answer.');
+ok('the reply is published', !!reply2, published.map(e => e.kind));
+ok('with the client tag and the site label', !!reply2 && labelled(reply2) && siteLabelled(reply2), reply2 && reply2.tags);
 
 // Both directions have to survive, not just the one somebody thought to try.
 await goto(site.url);
